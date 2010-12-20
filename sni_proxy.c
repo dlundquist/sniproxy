@@ -14,7 +14,7 @@
 #define SERVER_NAME_LEN 256
 
 void handle (int);
-const char *parse_tls_hostname(const uint8_t *, int);
+const char *parse_tls_header(const uint8_t *, int);
 const char *parse_server_name_extension(const uint8_t *, int);
 void hexdump(const void *, int);
 
@@ -53,7 +53,6 @@ main() {
 		}
 
 		handle(clientsockfd);
-		close(clientsockfd);
 	}
 }
 
@@ -70,7 +69,7 @@ handle (int sockfd) {
 		return;
 	}
 
-	hostname = parse_tls_hostname((uint8_t *) buffer, n);
+	hostname = parse_tls_header((uint8_t *)buffer, n);
 	if (hostname == NULL) {
 		fprintf(stderr, "Request did not include a hostname\n");
 		hexdump(buffer, n);
@@ -79,26 +78,27 @@ handle (int sockfd) {
 
 
 	fprintf(stderr, "Request for %s\n", hostname);
+	close(sockfd);
 }
 
 
 const char *
-parse_tls_hostname(const uint8_t* data, int data_len) {
+parse_tls_header(const uint8_t* data, int data_len) {
 	uint8_t tls_content_type;
 	uint8_t tls_version_major;
 	uint8_t tls_version_minor;
 	uint16_t tls_length;
-	const uint8_t* p;
+	const uint8_t* p = data;
 	int len;
 
 	/* Check that our TCP payload is atleast large enough for a TLS header */
 	if (data_len < 5)
 		return NULL;
 
-	tls_content_type = data[0];
-	tls_version_major = data[1];
-	tls_version_minor = data[2];
-	tls_length = (data[3] << 8) + data[4];
+	tls_content_type = p[0];
+	tls_version_major = p[1];
+	tls_version_minor = p[2];
+	tls_length = (p[3] << 8) + p[4];
 
 	if (tls_content_type != 0x16) {
 		fprintf(stderr, "Did not receive TLS handshake\n");
@@ -116,15 +116,17 @@ parse_tls_hostname(const uint8_t* data, int data_len) {
 	}
 
 	if (data_len < tls_length + 5) {
-		fprintf(stderr, "Did not receive complete TLS handshake\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 
+
+
 	/* Advance to first TLS payload */
-	p = data + 5;
+	p += 5;
 
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 
@@ -143,21 +145,21 @@ parse_tls_hostname(const uint8_t* data, int data_len) {
 	 */
 	p += 38;
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 
 	len = *p; /* Session ID Length */
 	p += 1 + len; /* Skip session ID block */
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 
 	len = *p << 8; /* Cipher Suites length high byte */
 	p ++;
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 	len += *p; /* Cipher Suites length low byte */
@@ -165,21 +167,23 @@ parse_tls_hostname(const uint8_t* data, int data_len) {
 	p += 1 + len;
 
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 	len = *p; /* Compression Methods length */
 
 	p += 1 + len;
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
+
+
 
 	len = *p << 8; /* Extensions length high byte */
 	p++;
 	if (p - data > data_len) {
-		fprintf(stderr, "Did not receive complete TLS handshake header\n");
+		fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 		return NULL;
 	}
 	len += *p; /* Extensions length low byte */
@@ -187,7 +191,7 @@ parse_tls_hostname(const uint8_t* data, int data_len) {
 
 	while (1) {
 		if (p - data + 4 > data_len) { /* 4 bytes for the extension header */
-			fprintf(stderr, "Did not receive complete TLS handshake header\n");
+			fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 			return NULL;
 		}
 
@@ -198,7 +202,7 @@ parse_tls_hostname(const uint8_t* data, int data_len) {
 			   our state and move p to beinging of the extension here */
 			p += 4;
 			if (p - data + len > data_len) {
-				fprintf(stderr, "Did not receive complete TLS handshake header\n");
+				fprintf(stderr, "Did not receive complete TLS handshake header: %d\n", __LINE__);
 				return NULL;
 			}
 			return parse_server_name_extension(p, len);
