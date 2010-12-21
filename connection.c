@@ -4,16 +4,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include "tls.h"
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
-/* TODO move this into a TLS module */
-static const char tls_alert[] = {
-	0x15, /* TLS Alert */
-	0x03, 0x01, /* TLS version  */
-	0x00, 0x02, /* Payload length */
-	0x02, 0x28, /* Fatal, handshake failure */
-};
 
 static void handle_connection_server_data(struct Connection *);
 static void handle_connection_client_data(struct Connection *);
@@ -33,9 +27,7 @@ accept_connection(int sockfd) {
 	if (con == NULL) {
 		fprintf(stderr, "calloc failed\n");
 
-		/* TODO move this into a TLS module */
-		send(sockfd, tls_alert, 7, 0);
-		close(sockfd);
+		close_tls_socket(sockfd);
 	} else {
 		con->client_sockfd = sockfd;
 		con->state = ACCEPTED;

@@ -6,12 +6,12 @@ all: sni_proxy
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
-sni_proxy: sni_proxy.o connection.o
+sni_proxy: sni_proxy.o connection.o tls.o
 	$(CC) -o $@ $^
 
 .PHONY: clean all
 
 clean:
-	rm -f *.o
+	rm -f *.o sni_proxy
 
 
