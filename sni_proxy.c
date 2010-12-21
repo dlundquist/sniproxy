@@ -6,9 +6,11 @@
 #include <unistd.h> /* close() */
 #include <ctype.h> /* isprint() in hexdump */
 #include <string.h> /* strncpy() */
+#include <sys/select.h>
+#include "connection.h"
 
 
-#define HTTPS_PORT 4343
+#define HTTPS_PORT 4343 /* for development as non-root user */
 #define BACKLOG 5
 #define BUFFER_LEN 512
 #define SERVER_NAME_LEN 256
@@ -42,7 +44,10 @@ main() {
 		return (-1);
 	}
 
-	listen(sockfd, BACKLOG);
+	if (listen(sockfd, BACKLOG) < 0) {
+		perror("ERROR listen();");
+		return -1;
+	}
 
 	clilen = sizeof(cli_addr);
 	while(1) {
@@ -56,7 +61,37 @@ main() {
 	}
 }
 
-const uint8_t tls_alert[] = {
+/* TODO move this into a server module */
+static volatile int running; /* For signal handler */
+
+void
+server(int sockfd) {
+	struct sockaddr_in client_addr;
+	int client_addr_len, retval, maxfd;
+	fd_set rfds;
+
+	running = 1;
+
+	while (running) {
+		client_addr_len = sizeof(client_addr);
+
+		maxfd = fd_set_connections(&rfds, sockfd);
+
+		retval = select(maxfd, &rfds, NULL, NULL, NULL);
+		if (retval < 0) {
+			perror("select");
+			return;
+		}
+
+		if (FD_ISSET (sockfd, &rfds))
+			accept_connection(sockfd);
+		
+		handle_connections(&rfds);
+	}
+}
+
+/* TODO move this into a TLS module */
+static const uint8_t tls_alert[] = {
 	0x15, /* TLS Alert */
 	0x03, 0x01, /* TLS version  */
 	0x00, 0x02, /* Payload length */
@@ -94,6 +129,7 @@ handle (int sockfd) {
 }
 
 
+/* TODO move this into a TLS module */
 const char *
 parse_tls_header(const uint8_t* data, int data_len) {
 	uint8_t tls_content_type;
@@ -225,6 +261,7 @@ parse_tls_header(const uint8_t* data, int data_len) {
 	return NULL;
 }
 
+/* TODO move this into a TLS module */
 const char *
 parse_server_name_extension(const uint8_t* buf, int buf_len) {
 	static char server_name[SERVER_NAME_LEN];
