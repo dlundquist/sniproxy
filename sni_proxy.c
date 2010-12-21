@@ -8,20 +8,19 @@
 #include <sys/select.h>
 #include "connection.h"
 #include "tls.h"
+#include "util.h"
+#include "backend.h"
 
 
 #define HTTPS_PORT 4343 /* for development as non-root user */
 #define BACKLOG 5
 
-void server(int);
-void handle (int);
-void hexdump(const void *, int);
+static void server(int);
 
 int
 main() {
-	int sockfd, clientsockfd;
-	unsigned int clilen;
-	struct sockaddr_in serv_addr, cli_addr;
+	int sockfd;
+	struct sockaddr_in serv_addr;
 
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -48,30 +47,20 @@ main() {
 
 
 	server(sockfd);
-	if (0) {
-		clilen = sizeof(cli_addr);
-		while(1) {
-			clientsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-			if (clientsockfd < 0)  {
-				perror("ERROR on accept");
-				return (-1);
-			}
 
-			handle(clientsockfd);
-		}
-	}
 	return (0);
 }
 
 /* TODO move this into a server module */
 static volatile int running; /* For signal handler */
 
-void
+static void
 server(int sockfd) {
 	int retval, maxfd;
 	fd_set rfds;
 
 	init_connections();
+	init_backends();
 
 	running = 1;
 
@@ -90,50 +79,3 @@ server(int sockfd) {
 		handle_connections(&rfds);
 	}
 }
-
-void
-handle (int sockfd) {
-	char buffer[BUFFER_LEN];
-	int n;
-	const char* hostname;
-
-	bzero(buffer, BUFFER_LEN);
-	n = read(sockfd, buffer, BUFFER_LEN);
-	if (n < 0) {
-		perror("ERROR reading from socket");
-		return;
-	}
-
-	hostname = parse_tls_header((uint8_t *)buffer, n);
-	if (hostname == NULL) {
-		close_tls_socket(sockfd);
-
-		fprintf(stderr, "Request did not include a hostname\n");
-		hexdump(buffer, n);
-		return;
-	}
-
-
-	fprintf(stderr, "Request for %s\n", hostname);
-	close(sockfd);
-}
-
-
-void hexdump(const void *ptr, int buflen) {
-	const unsigned char *buf = (const unsigned char*)ptr;
-	int i, j;
-	for (i=0; i<buflen; i+=16) {
-		printf("%06x: ", i);
-		for (j=0; j<16; j++) 
-			if (i+j < buflen)
-				printf("%02x ", buf[i+j]);
-			else
-				printf("   ");
-		printf(" ");
-		for (j=0; j<16; j++) 
-			if (i+j < buflen)
-				printf("%c", isprint(buf[i+j]) ? buf[i+j] : '.');
-		printf("\n");
-	}
-}
-

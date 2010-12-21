@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include "tls.h"
+#include "util.h"
+#include "backend.h"
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
@@ -152,8 +154,17 @@ handle_connection_client_data(struct Connection *con) {
 				return;
 			}
 			fprintf(stderr, "DEBUG: request for %s\n", hostname);
-			/* TODO lookup server for hostname and connect */
-			break;
+
+			/* lookup server for hostname and connect */
+			con->server_sockfd = lookup_backend_socket(hostname);
+			if (con->server_sockfd < 0) {
+				fprintf(stderr, "DEBUG: server connection failed to %s\n", hostname);
+				close_connection(con);
+				return;
+			}
+			con->state = CONNECTED;
+
+			/* Fall through */
 		case(CONNECTED):
 			n = send(con->server_sockfd, con->client_buffer, con->client_buffer_size, MSG_DONTWAIT);
 			if (n < 0) {
