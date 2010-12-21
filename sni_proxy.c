@@ -13,6 +13,7 @@
 #define HTTPS_PORT 4343 /* for development as non-root user */
 #define BACKLOG 5
 
+void server(int);
 void handle (int);
 void hexdump(const void *, int);
 
@@ -45,16 +46,21 @@ main() {
 		return -1;
 	}
 
-	clilen = sizeof(cli_addr);
-	while(1) {
-		clientsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-		if (clientsockfd < 0)  {
-			perror("ERROR on accept");
-			return (-1);
-		}
 
-		handle(clientsockfd);
+	server(sockfd);
+	if (0) {
+		clilen = sizeof(cli_addr);
+		while(1) {
+			clientsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+			if (clientsockfd < 0)  {
+				perror("ERROR on accept");
+				return (-1);
+			}
+
+			handle(clientsockfd);
+		}
 	}
+	return (0);
 }
 
 /* TODO move this into a server module */
@@ -62,18 +68,17 @@ static volatile int running; /* For signal handler */
 
 void
 server(int sockfd) {
-	struct sockaddr_in client_addr;
-	int client_addr_len, retval, maxfd;
+	int retval, maxfd;
 	fd_set rfds;
+
+	init_connections();
 
 	running = 1;
 
 	while (running) {
-		client_addr_len = sizeof(client_addr);
-
 		maxfd = fd_set_connections(&rfds, sockfd);
 
-		retval = select(maxfd, &rfds, NULL, NULL, NULL);
+		retval = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 		if (retval < 0) {
 			perror("select");
 			return;

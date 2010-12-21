@@ -14,10 +14,15 @@ enum State {
 
 struct Connection {
 	enum State state;
+
 	int client_sockfd;
+	char client_buffer[BUFFER_LEN];
+	int client_buffer_size;
+
 	int server_sockfd;
-	char buffer[BUFFER_LEN];
-	int buffer_size;
+	char server_buffer[BUFFER_LEN];
+	int server_buffer_size;
+
 	LIST_ENTRY(Connection) entries;
 };
 
