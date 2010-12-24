@@ -24,7 +24,7 @@ static const char *parse_server_name_extension(const uint8_t *, int);
 /* Send a TLS handshake failure alert and close a socket */
 void
 close_tls_socket(int sockfd) {
-	send(sockfd, tls_alert, 7, 0);
+	send(sockfd, tls_alert, sizeof(tls_alert), 0);
 	close(sockfd);
 }
 

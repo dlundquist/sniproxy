@@ -13,7 +13,7 @@ struct Backend {
 	LIST_ENTRY(Backend) entries;
 };
 
-void init_backends();
+void init_backends(const char *);
 int lookup_backend_socket(const char *);
 
 #endif

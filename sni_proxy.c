@@ -1,81 +1,62 @@
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <stdlib.h>
 #include <strings.h> /* bzero() */
-#include <unistd.h> /* close() */
-#include <ctype.h> /* isprint() in hexdump */
-#include <sys/select.h>
+#include <getopt.h>
 #include "connection.h"
 #include "tls.h"
 #include "util.h"
 #include "backend.h"
+#include "server.h"
 
 
-#define HTTPS_PORT 4343 /* for development as non-root user */
-#define BACKLOG 5
-
-static void server(int);
+static void usage();
 
 int
-main() {
-	int sockfd;
-	struct sockaddr_in serv_addr;
+main(int argc, char **argv) {
+	int opt, sockfd;
+	int background_flag = 1;
+	int port = 443;
+	const char *config_file = "/etc/sni_proxy.conf";
+	const char *bind_addr= "::";
+	const char *user= "nobody";
 
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-	if (sockfd < 0) {
-		perror("ERROR opening socket");
-		return -1;
+	while ((opt = getopt(argc, argv, "fb:p:c:u:")) != -1) {
+		switch (opt) {
+			case 'f': /* foreground */
+				background_flag = 0;
+				break;
+			case 'b':
+				bind_addr = optarg;
+				break;
+			case 'p':
+				port = atoi(optarg);
+				break;
+			case 'c':
+				config_file = optarg;
+				break;
+			case 'u':
+				user = optarg;
+				break;
+			default: 
+				usage();
+				exit(EXIT_FAILURE);
+		}
 	}
 
-	bzero((char *) &serv_addr, sizeof(serv_addr));
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(HTTPS_PORT);
 
-	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		perror("ERROR on binding");
-		return (-1);
-	}
+	init_backends(config_file);
 
-	if (listen(sockfd, BACKLOG) < 0) {
-		perror("ERROR listen();");
-		return -1;
-	}
+	sockfd = init_server(bind_addr, port);
 
+	/* TODO drop privileges */
 
-	server(sockfd);
+	run_server(sockfd);
 
 	return (0);
 }
 
-/* TODO move this into a server module */
-static volatile int running; /* For signal handler */
 
-static void
-server(int sockfd) {
-	int retval, maxfd;
-	fd_set rfds;
-
-	init_connections();
-	init_backends();
-
-	running = 1;
-
-	while (running) {
-		maxfd = fd_set_connections(&rfds, sockfd);
-
-		retval = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		if (retval < 0) {
-			perror("select");
-			return;
-		}
-
-		if (FD_ISSET (sockfd, &rfds))
-			accept_connection(sockfd);
-		
-		handle_connections(&rfds);
-	}
+static void usage() {
+	fprintf(stderr, "Usage: sni_proxy [-c <config_file] [-p <port>]\n");
 }

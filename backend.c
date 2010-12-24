@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "backend.h"
+#include "server.h"
 
 static LIST_HEAD(, Backend) backends;
 
@@ -15,7 +16,7 @@ static int open_backend_socket(struct Backend *);
 
 
 void
-init_backends() {
+init_backends(const char *config_file) {
 	LIST_INIT(&backends);
 	add_backend("localhost", "127.0.0.1", 443);
 	add_backend("example.com", "10.0.0.7", 443);
@@ -55,7 +56,7 @@ open_backend_socket(struct Backend *b) {
 static void
 add_backend(const char *hostname, const char *address, int port) {
 	struct Backend *be;
-	int retval, i;
+	int i;
 
 	be = calloc(1, sizeof(struct Backend));
 	if (be == NULL) {
@@ -66,23 +67,11 @@ add_backend(const char *hostname, const char *address, int port) {
 	for (i = 0; i < BACKEND_HOSTNAME_LEN && hostname[i] != '\0'; i++)
 		be->hostname[i] = toupper(hostname[i]);
 
-	retval = inet_pton(AF_INET, address, &((struct sockaddr_in *)&be->addr)->sin_addr);
-	if (retval == 1) {
-		((struct sockaddr_in *)&be->addr)->sin_family = AF_INET;
-		((struct sockaddr_in *)&be->addr)->sin_port = htons(port);
-		fprintf(stderr, "Parsed %s %s %d as IPv4\n", hostname, address, port);
-		LIST_INSERT_HEAD(&backends, be, entries);
+	if (parse_address(&be->addr, address, port) == 0) {
+		fprintf(stderr, "Unable to parse %s as an IP address\n", address);
 		return;
 	}
 
-	retval = inet_pton(AF_INET6, address, &((struct sockaddr_in6 *)&be->addr)->sin6_addr);
-	if (retval == 1) {
-		((struct sockaddr_in6 *)&be->addr)->sin6_family = AF_INET6;
-		((struct sockaddr_in6 *)&be->addr)->sin6_port = htons(port);
-		fprintf(stderr, "Parsed %s %s %d as IPv6\n", hostname, address, port);
-		LIST_INSERT_HEAD(&backends, be, entries);
-		return;
-	}
-
-	fprintf(stderr, "Unable to parse %s as an IP address\n", address);
+	fprintf(stderr, "Parsed %s %s %d\n", hostname, address, port);
+	LIST_INSERT_HEAD(&backends, be, entries);
 }

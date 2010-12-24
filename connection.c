@@ -10,6 +10,7 @@
 #include "backend.h"
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
+static int connection_count;
 
 
 static void handle_connection_server_data(struct Connection *);
@@ -20,6 +21,7 @@ static void close_connection(struct Connection *);
 void
 init_connections() {
 	LIST_INIT(&connections);
+	connection_count = 0;
 }
 
 
@@ -45,6 +47,7 @@ accept_connection(int sockfd) {
 		}
 		con->state = ACCEPTED;
 		LIST_INSERT_HEAD(&connections, con, entries);
+		connection_count ++;
 	}
 }
 
@@ -96,6 +99,7 @@ handle_connections(fd_set *rfds) {
 				break;
 			case(CLOSED):
 				LIST_REMOVE(iter, entries);
+				connection_count --;
 				break;
 			default:
 				fprintf(stderr, "Invalid state %d\n", iter->state);
