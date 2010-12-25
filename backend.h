@@ -7,13 +7,14 @@
 #define BACKEND_HOSTNAME_LEN 256
 
 struct Backend {
-	char hostname[BACKEND_HOSTNAME_LEN];
-	struct sockaddr_storage addr;
+    char hostname[BACKEND_HOSTNAME_LEN];
+    struct sockaddr_storage addr;
 
-	LIST_ENTRY(Backend) entries;
+    LIST_ENTRY(Backend) entries;
 };
 
 void init_backends(const char *);
+int load_config();
 int lookup_backend_socket(const char *);
 
 #endif

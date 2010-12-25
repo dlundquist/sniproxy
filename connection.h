@@ -7,23 +7,23 @@
 #define BUFFER_LEN 4096
 
 enum State {
-		ACCEPTED,
-		CONNECTED,
-		CLOSED
+    ACCEPTED,
+    CONNECTED,
+    CLOSED
 };
 
 struct Connection {
-	enum State state;
+    enum State state;
 
-	int client_sockfd;
-	char client_buffer[BUFFER_LEN];
-	int client_buffer_size;
+    int client_sockfd;
+    char client_buffer[BUFFER_LEN];
+    int client_buffer_size;
 
-	int server_sockfd;
-	char server_buffer[BUFFER_LEN];
-	int server_buffer_size;
+    int server_sockfd;
+    char server_buffer[BUFFER_LEN];
+    int server_buffer_size;
 
-	LIST_ENTRY(Connection) entries;
+    LIST_ENTRY(Connection) entries;
 };
 
 void init_connections();
