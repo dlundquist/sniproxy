@@ -6,6 +6,8 @@
 
 #define BUFFER_LEN 4096
 
+extern int connection_count;
+
 enum State {
     ACCEPTED,
     CONNECTED,

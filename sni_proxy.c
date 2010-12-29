@@ -1,7 +1,15 @@
+#include <getopt.h>
+#include <fcntl.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h> /* bzero() */
-#include <getopt.h>
+#include <syslog.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include "connection.h"
 #include "tls.h"
 #include "util.h"
@@ -10,6 +18,7 @@
 
 
 static void usage();
+static void daemonize(const char *, const char *, int);
 
 int
 main(int argc, char **argv) {
@@ -51,14 +60,86 @@ main(int argc, char **argv) {
     if (sockfd < 0)
         return -1;
 
-    /* TODO drop privileges */
+    if (background_flag)
+        daemonize(argv[0], user, sockfd);
 
     run_server(sockfd);
 
     return 0;
 }
 
+static void
+daemonize(const char *cmd, const char *username, int sockfd) {
+    int i, fd0, fd1, fd2;
+    pid_t pid;
+    struct rlimit rl;
+    struct passwd *user;
 
-static void usage() {
+    user = getpwnam(username);
+    if (user == NULL) {
+        perror("getpwnam()");
+        exit(1);
+    }
+
+    umask(0);
+
+    if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
+        perror("getrlimit()");
+        exit(1);
+    }
+
+    if ((pid = fork()) < 0) {
+        perror("fork()");
+        exit(1);
+    } else if (pid != 0) {
+        exit(0);
+    }
+
+    if (chdir("/") < 0) {
+        perror("chdir()");
+        exit(1);
+    }
+
+    if (setsid() < 0) {
+        perror("setsid()");
+        exit(1);
+    }
+
+
+    for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--)
+        if (i != sockfd)
+            close(i);
+
+    fd0 = open("/dev/null", O_RDWR);
+    fd1 = dup(fd0);
+    fd2 = dup(fd0);
+
+    openlog(cmd, LOG_CONS, LOG_DAEMON);
+    if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
+        fprintf(stderr, "Unexpected fila descriptors\n");
+        exit(2);
+    }
+
+    if (setgid(user->pw_gid) < 0) {
+        perror("setgid()");
+        exit(1);
+    }
+
+    if (setuid(user->pw_uid) < 0) {
+        perror("setuid()");
+        exit(1);
+    }
+
+    pid = fork();
+    if (pid < 0) {
+        perror("fork()");
+        exit(1);
+    } else if (pid > 0) {
+        exit(0);
+    }
+}
+
+static void
+usage() {
     fprintf(stderr, "Usage: sni_proxy [-c <config_file] [-p <port>]\n");
 }

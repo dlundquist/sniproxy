@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -ansi -Wall -Wextra -pedantic -O3
+CFLAGS = -ansi -Wall -Wextra -pedantic -O3 -g
 
 all: sni_proxy
 

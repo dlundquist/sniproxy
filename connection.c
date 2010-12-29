@@ -10,7 +10,7 @@
 #include "backend.h"
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
-static int connection_count;
+int connection_count;
 
 
 static void handle_connection_server_data(struct Connection *);
@@ -37,20 +37,22 @@ accept_connection(int sockfd) {
         fprintf(stderr, "calloc failed\n");
 
         close_tls_socket(sockfd);
-    } else {
-        client_addr_len = sizeof(client_addr);
-
-        con->client_sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
-        if (con->client_sockfd < 0) {
-            perror("ERROR on accept");
-            free(con);
-            return;
-        }
-        con->state = ACCEPTED;
-        LIST_INSERT_HEAD(&connections, con, entries);
-        connection_count ++;
     }
+
+    client_addr_len = sizeof(client_addr);
+    con->client_sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
+    if (con->client_sockfd < 0) {
+        perror("ERROR on accept");
+        free(con);
+        return;
+    }
+    con->state = ACCEPTED;
+
+    LIST_INSERT_HEAD(&connections, con, entries);
+    connection_count ++;
 }
+
+
 
 /*
  * Prepares the fd_set as a set of all active file descriptors in all our
