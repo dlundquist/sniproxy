@@ -139,5 +139,5 @@ daemonize(const char *cmd, const char *username, int sockfd) {
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sni_proxy [-c <config_file] [-p <port>]\n");
+    fprintf(stderr, "Usage: sni_proxy [-c <config>] [-f] [-b <address>] [-p <port>] [-u <user>]\n");
 }
