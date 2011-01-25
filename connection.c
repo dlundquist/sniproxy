@@ -6,6 +6,8 @@
 #include "util.h"
 #include "backend.h"
 
+#define MAX(X,Y) ((X) > (Y) ? : (X) : (Y))
+
 static LIST_HEAD(ConnectionHead, Connection) connections;
 int connection_count;
 
@@ -21,7 +23,6 @@ init_connections() {
     LIST_INIT(&connections);
     connection_count = 0;
 }
-
 
 void
 accept_connection(int sockfd) {
@@ -49,8 +50,6 @@ accept_connection(int sockfd) {
     connection_count ++;
 }
 
-
-
 /*
  * Prepares the fd_set as a set of all active file descriptors in all our
  * currently active connections and one additional file descriptior fd that
@@ -68,12 +67,12 @@ fd_set_connections(fd_set *fds, int fd) {
     LIST_FOREACH(iter, &connections, entries) {
         if (iter->state == ACCEPTED || iter->state == CONNECTED) {
             FD_SET(iter->client.sockfd, fds);
-            max = (max > iter->client.sockfd) ? max : iter->client.sockfd;
+            max = MAX(max, iter->client.sockfd);
         }
 
         if (iter->state == CONNECTED) {
             FD_SET(iter->server.sockfd, fds);
-            max = (max > iter->server.sockfd) ? max : iter->server.sockfd;
+            max = MAX(max, iter->server.sockfd);
         }
     }
 
@@ -124,9 +123,9 @@ handle_connection_server_data(struct Connection *con) {
     if (n < 0) {
         perror("send()");
         return;
-    } else {
-        con->server.buffer_size = 0;
     }
+    /* TODO handle case where n < con->server.buffer_size */
+    con->server.buffer_size = 0;
 }
 
 static void
@@ -171,6 +170,7 @@ handle_connection_client_data(struct Connection *con) {
                 perror("send()");
                 return;
             }
+            /* TODO handle case where n < con->client.buffer_size */
             con->client.buffer_size = 0;
             break;
         case(CLOSED):
