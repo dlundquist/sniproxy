@@ -8,28 +8,24 @@
 
 extern int connection_count;
 
-enum State {
-    ACCEPTED,
-    CONNECTED,
-    CLOSED
-};
-
 struct Connection {
-    enum State state;
+    enum State {
+        ACCEPTED,
+        CONNECTED,
+        CLOSED
+    } state;
 
-    int client_sockfd;
-    char client_buffer[BUFFER_LEN];
-    int client_buffer_size;
-
-    int server_sockfd;
-    char server_buffer[BUFFER_LEN];
-    int server_buffer_size;
+    struct {
+        int sockfd;
+        char buffer[BUFFER_LEN];
+        int buffer_size;
+    } client, server;
 
     LIST_ENTRY(Connection) entries;
 };
 
 void init_connections();
-void accept_connection(int sockfd);
+void accept_connection(int);
 int fd_set_connections(fd_set *, int);
 void handle_connections(fd_set *);
 

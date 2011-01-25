@@ -1,10 +1,7 @@
-#include "connection.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <unistd.h>
+#include "connection.h"
 #include "tls.h"
 #include "util.h"
 #include "backend.h"
@@ -40,8 +37,8 @@ accept_connection(int sockfd) {
     }
 
     client_addr_len = sizeof(client_addr);
-    con->client_sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
-    if (con->client_sockfd < 0) {
+    con->client.sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
+    if (con->client.sockfd < 0) {
         perror("ERROR on accept");
         free(con);
         return;
@@ -70,13 +67,13 @@ fd_set_connections(fd_set *fds, int fd) {
 
     LIST_FOREACH(iter, &connections, entries) {
         if (iter->state == ACCEPTED || iter->state == CONNECTED) {
-            FD_SET(iter->client_sockfd, fds);
-            max = (max > iter->client_sockfd) ? max : iter->client_sockfd;
+            FD_SET(iter->client.sockfd, fds);
+            max = (max > iter->client.sockfd) ? max : iter->client.sockfd;
         }
 
         if (iter->state == CONNECTED) {
-            FD_SET(iter->server_sockfd, fds);
-            max = (max > iter->server_sockfd) ? max : iter->server_sockfd;
+            FD_SET(iter->server.sockfd, fds);
+            max = (max > iter->server.sockfd) ? max : iter->server.sockfd;
         }
     }
 
@@ -90,13 +87,13 @@ handle_connections(fd_set *rfds) {
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
             case(ACCEPTED):
-                if (FD_ISSET (iter->client_sockfd, rfds))
+                if (FD_ISSET (iter->client.sockfd, rfds))
                     handle_connection_client_data(iter);
                 break;
             case(CONNECTED):
-                if (FD_ISSET (iter->server_sockfd, rfds))
+                if (FD_ISSET (iter->server.sockfd, rfds))
                     handle_connection_server_data(iter);
-                if (FD_ISSET (iter->client_sockfd, rfds))
+                if (FD_ISSET (iter->client.sockfd, rfds))
                     handle_connection_client_data(iter);
                 break;
             case(CLOSED):
@@ -112,7 +109,7 @@ static void
 handle_connection_server_data(struct Connection *con) {
     int n;
 
-    n = read(con->server_sockfd, con->server_buffer, BUFFER_LEN);
+    n = read(con->server.sockfd, con->server.buffer, BUFFER_LEN);
     if (n < 0) {
         perror("read()");
         return;
@@ -121,14 +118,14 @@ handle_connection_server_data(struct Connection *con) {
         return;
     }
 
-    con->server_buffer_size = n;
+    con->server.buffer_size = n;
 
-    n = send(con->client_sockfd, con->server_buffer, con->server_buffer_size, MSG_DONTWAIT);
+    n = send(con->client.sockfd, con->server.buffer, con->server.buffer_size, MSG_DONTWAIT);
     if (n < 0) {
         perror("send()");
         return;
     } else {
-        con->server_buffer_size = 0;
+        con->server.buffer_size = 0;
     }
 }
 
@@ -137,7 +134,7 @@ handle_connection_client_data(struct Connection *con) {
     int n;
     const char *hostname;
 
-    n = read(con->client_sockfd, con->client_buffer, BUFFER_LEN);
+    n = read(con->client.sockfd, con->client.buffer, BUFFER_LEN);
     if (n < 0) {
         perror("read()");
         return;
@@ -145,22 +142,22 @@ handle_connection_client_data(struct Connection *con) {
         close_connection(con);
         return;
     }
-    con->client_buffer_size = n;
+    con->client.buffer_size = n;
 
     switch(con->state) {
         case(ACCEPTED):
-            hostname = parse_tls_header((uint8_t *)con->client_buffer, con->client_buffer_size);
+            hostname = parse_tls_header((uint8_t *)con->client.buffer, con->client.buffer_size);
             if (hostname == NULL) {
                 close_connection(con);
                 fprintf(stderr, "Request did not include a hostname\n");
-                hexdump(con->client_buffer, con->client_buffer_size);
+                hexdump(con->client.buffer, con->client.buffer_size);
                 return;
             }
             fprintf(stderr, "DEBUG: request for %s\n", hostname);
 
             /* lookup server for hostname and connect */
-            con->server_sockfd = lookup_backend_socket(hostname);
-            if (con->server_sockfd < 0) {
+            con->server.sockfd = lookup_backend_socket(hostname);
+            if (con->server.sockfd < 0) {
                 fprintf(stderr, "DEBUG: server connection failed to %s\n", hostname);
                 close_connection(con);
                 return;
@@ -169,12 +166,12 @@ handle_connection_client_data(struct Connection *con) {
 
             /* Fall through */
         case(CONNECTED):
-            n = send(con->server_sockfd, con->client_buffer, con->client_buffer_size, MSG_DONTWAIT);
+            n = send(con->server.sockfd, con->client.buffer, con->client.buffer_size, MSG_DONTWAIT);
             if (n < 0) {
                 perror("send()");
                 return;
             }
-            con->client_buffer_size = 0;
+            con->client.buffer_size = 0;
             break;
         case(CLOSED):
             fprintf(stderr, "Received data from closed connection\n");
@@ -187,10 +184,10 @@ handle_connection_client_data(struct Connection *con) {
 static void
 close_connection(struct Connection *c) {
     if (c->state == CONNECTED)
-        if (close(c->server_sockfd) < 0)
+        if (close(c->server.sockfd) < 0)
             perror("close()");
 
-    if (close(c->client_sockfd) < 0)
+    if (close(c->client.sockfd) < 0)
         perror("close()");
 
     c->state = CLOSED;

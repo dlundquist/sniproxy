@@ -1,17 +1,12 @@
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h> /* close() */
 #include <sys/select.h>
-#include <strings.h>
-#include <string.h>
 #include <signal.h>
 #include <errno.h>
-#include "connection.h"
 #include "server.h"
-#include "backend.h"
+#include "connection.h"
+#include "config.h"
+#include "util.h"
 
 #define BACKLOG 5
 
@@ -20,26 +15,6 @@ static void sig_handler(int);
 static volatile int running; /* For signal handler */
 static volatile int sighup_received; /* For signal handler */
 
-
-size_t
-parse_address(struct sockaddr_storage* addr, const char* address, int port) {
-
-    memset(addr, 0, sizeof(struct sockaddr_storage));
-    if (inet_pton(AF_INET, address, &(((struct sockaddr_in *)addr)->sin_addr)) == 1) {
-        ((struct sockaddr_in *)addr)->sin_family = AF_INET;
-        ((struct sockaddr_in *)addr)->sin_port = htons(port);
-        return sizeof(struct sockaddr_in);
-    }
-
-    memset(addr, 0, sizeof(struct sockaddr_storage));
-    if (inet_pton(AF_INET6, address, &(((struct sockaddr_in6 *)addr)->sin6_addr)) == 1) {
-        ((struct sockaddr_in6 *)addr)->sin6_family = AF_INET6;
-        ((struct sockaddr_in6 *)addr)->sin6_port = htons(port);
-        return sizeof(struct sockaddr_in6);
-    }
-
-    return 0;
-}
 
 int
 init_server(const char* address, int port) {
@@ -70,7 +45,7 @@ init_server(const char* address, int port) {
 
 void
 run_server(int sockfd) {
-    int retval, maxfd;
+    int maxfd;
     fd_set rfds;
 
     init_connections();
@@ -85,8 +60,8 @@ run_server(int sockfd) {
     while (running) {
         maxfd = fd_set_connections(&rfds, sockfd);
 
-        retval = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-        if (retval < 0) {
+        if (select(maxfd + 1, &rfds, NULL, NULL, NULL) < 0) {
+            /* select() might have failed because we received a signal, so we need to check */
             if (errno != EINTR) {
                 perror("select");
                 return;
@@ -115,11 +90,11 @@ sig_handler(int sig) {
     switch(sig) {
         case(SIGHUP):
             sighup_received = 1;
-            signal(sig, sig_handler);
             break;
         case(SIGINT):
         case(SIGTERM):
             running = 0;
     }
+    signal(sig, sig_handler);
     /* Reinstall signal handler */
 }

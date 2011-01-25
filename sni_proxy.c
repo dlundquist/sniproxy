@@ -1,8 +1,8 @@
-#include <getopt.h>
-#include <fcntl.h>
-#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <pwd.h>
 #include <strings.h> /* bzero() */
 #include <syslog.h>
 #include <unistd.h>
@@ -10,10 +10,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include "connection.h"
-#include "tls.h"
-#include "util.h"
-#include "backend.h"
+#include "sni_proxy.h"
+#include "config.h"
 #include "server.h"
 
 
@@ -26,7 +24,7 @@ main(int argc, char **argv) {
     int background_flag = 1;
     int port = 443;
     const char *config_file = "/etc/sni_proxy.conf";
-    const char *bind_addr= "::";
+    const char *bind_addr = "::";
     const char *user= "nobody";
 
 
@@ -54,7 +52,7 @@ main(int argc, char **argv) {
     }
 
 
-    init_backends(config_file);
+    init_config(config_file);
 
     sockfd = init_server(bind_addr, port);
     if (sockfd < 0)

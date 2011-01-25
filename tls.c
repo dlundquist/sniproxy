@@ -4,7 +4,7 @@
  */
 #include <stdio.h>
 #include <string.h> /* strncpy() */
-#include <unistd.h>
+#include <unistd.h> /* close() */
 #include <sys/socket.h>
 #include "tls.h"
 

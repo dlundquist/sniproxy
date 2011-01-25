@@ -1,71 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <strings.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
+#include <strings.h> /* strncasecmp */
+#include <ctype.h> /* toupper */
 #include "backend.h"
-#include "server.h"
+#include "util.h"
 
 static LIST_HEAD(, Backend) backends;
-static const char *config_file;
 
 
-static void add_backend(const char *, const char *, int);
 static struct Backend* lookup_backend(const char *);
 static int open_backend_socket(struct Backend *);
 
 
 void
-init_backends(const char *config) {
+init_backends() {
     LIST_INIT(&backends);
-    config_file = config;
-    load_config();
-}
-
-int
-load_config() {
-    FILE *config;
-    int count = 0;
-    char line[256];
-    char *hostname;
-    char *address;
-    char *port;
-
-    if (config_file == NULL)
-        return -1;
-
-    config = fopen(config_file, "r");
-    if (config == NULL) {
-        fprintf(stderr, "Unable to open %s\n", config_file);
-        return -1;
-    }
-
-    while (fgets(line, sizeof(line), config) != NULL) {
-        hostname = strtok(line, " \t");
-        if (hostname == NULL)
-            goto fail;
-
-        address = strtok(NULL , " \t");
-        if (address == NULL)
-            goto fail;
-
-        port = strtok(NULL , " \t");
-        if (port == NULL)
-            goto fail;
-
-        add_backend(hostname, address, atoi(port));
-        count ++;
-        continue;
-
-    fail:
-        fprintf(stderr, "Error parsing line: %s", line);
-    }
-
-    fclose(config);
-    return count;
 }
 
 int
@@ -105,7 +54,6 @@ open_backend_socket(struct Backend *b) {
         return -1;
     }
 
-
     if (connect(sockfd, (struct sockaddr *)&b->addr, sizeof(b->addr)) < 0) {
         perror("connect()");
         return -1;
@@ -114,7 +62,7 @@ open_backend_socket(struct Backend *b) {
     return sockfd;
 }
 
-static void
+void
 add_backend(const char *hostname, const char *address, int port) {
     struct Backend *b;
     int i;
