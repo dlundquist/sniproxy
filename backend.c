@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h> /* strncasecmp */
-#include <ctype.h> /* toupper */
+#include <ctype.h> /* tolower */
 #include "backend.h"
 #include "util.h"
 
@@ -80,7 +80,7 @@ add_backend(const char *hostname, const char *address, int port) {
     }
 
     for (i = 0; i < BACKEND_HOSTNAME_LEN && hostname[i] != '\0'; i++)
-        b->hostname[i] = toupper(hostname[i]);
+        b->hostname[i] = tolower(hostname[i]);
 
     if (parse_address(&b->addr, address, port) == 0) {
         fprintf(stderr, "Unable to parse %s as an IP address\n", address);
