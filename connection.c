@@ -6,7 +6,7 @@
 #include "util.h"
 #include "backend.h"
 
-#define MAX(X,Y) ((X) > (Y) ? : (X) : (Y))
+#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 int connection_count;
@@ -26,27 +26,27 @@ init_connections() {
 
 void
 accept_connection(int sockfd) {
-    struct Connection *con;
+    struct Connection *c;
     struct sockaddr_in client_addr;
     unsigned int client_addr_len;
 
-    con = calloc(1, sizeof(struct Connection));
-    if (con == NULL) {
+    c = calloc(1, sizeof(struct Connection));
+    if (c == NULL) {
         fprintf(stderr, "calloc failed\n");
 
         close_tls_socket(sockfd);
     }
 
     client_addr_len = sizeof(client_addr);
-    con->client.sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
-    if (con->client.sockfd < 0) {
+    c->client.sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
+    if (c->client.sockfd < 0) {
         perror("ERROR on accept");
-        free(con);
+        free(c);
         return;
     }
-    con->state = ACCEPTED;
+    c->state = ACCEPTED;
 
-    LIST_INSERT_HEAD(&connections, con, entries);
+    LIST_INSERT_HEAD(&connections, c, entries);
     connection_count ++;
 }
 
@@ -65,14 +65,32 @@ fd_set_connections(fd_set *fds, int fd) {
     FD_SET(fd, fds);
 
     LIST_FOREACH(iter, &connections, entries) {
-        if (iter->state == ACCEPTED || iter->state == CONNECTED) {
-            FD_SET(iter->client.sockfd, fds);
-            max = MAX(max, iter->client.sockfd);
-        }
+        switch(iter->state) {
+            case(CONNECTED):
+                if (iter->server.sockfd > FD_SETSIZE) {
+                    fprintf(stderr, "File descriptor > than FD_SETSIZE, closing connection\n");
+                    close_connection(iter);
+                    break;
+                }
 
-        if (iter->state == CONNECTED) {
-            FD_SET(iter->server.sockfd, fds);
-            max = MAX(max, iter->server.sockfd);
+                FD_SET(iter->server.sockfd, fds);
+                max = MAX(max, iter->server.sockfd);
+                /* Fall through */
+            case(ACCEPTED):
+                if (iter->client.sockfd > FD_SETSIZE) {
+                    fprintf(stderr, "File descriptor > than FD_SETSIZE, closing connection\n");
+                    close_connection(iter);
+                    break;
+                }
+
+                FD_SET(iter->client.sockfd, fds);
+                max = MAX(max, iter->client.sockfd);
+                break;
+            case(CLOSED):
+                /* do nothing */
+                break;
+            default:
+                fprintf(stderr, "Invalid state %d\n", iter->state); 
         }
     }
 
@@ -85,13 +103,11 @@ handle_connections(fd_set *rfds) {
 
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
-            case(ACCEPTED):
-                if (FD_ISSET (iter->client.sockfd, rfds))
-                    handle_connection_client_data(iter);
-                break;
             case(CONNECTED):
                 if (FD_ISSET (iter->server.sockfd, rfds))
                     handle_connection_server_data(iter);
+                /* Fall through */
+            case(ACCEPTED):
                 if (FD_ISSET (iter->client.sockfd, rfds))
                     handle_connection_client_data(iter);
                 break;
