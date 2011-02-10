@@ -18,6 +18,7 @@
 static void usage();
 static void daemonize(const char *, const char *, int);
 
+
 int
 main(int argc, char **argv) {
     int opt, sockfd;
@@ -114,7 +115,7 @@ daemonize(const char *cmd, const char *username, int sockfd) {
 
     openlog(cmd, LOG_CONS, LOG_DAEMON);
     if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
-        fprintf(stderr, "Unexpected fila descriptors\n");
+        fprintf(stderr, "Unexpected file descriptors\n");
         exit(2);
     }
 
