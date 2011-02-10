@@ -84,6 +84,7 @@ add_backend(const char *hostname, const char *address, int port) {
 
     if (parse_address(&b->addr, address, port) == 0) {
         fprintf(stderr, "Unable to parse %s as an IP address\n", address);
+        free(b);
         return;
     }
 
