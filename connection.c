@@ -15,7 +15,6 @@ int connection_count;
 static void handle_connection_server_data(struct Connection *);
 static void handle_connection_client_data(struct Connection *);
 static void close_connection(struct Connection *);
-static void remove_connection(struct Connection *);
 
 
 void
@@ -100,6 +99,9 @@ fd_set_connections(fd_set *fds, int fd) {
 void
 handle_connections(fd_set *rfds) {
     struct Connection *iter;
+    LIST_HEAD(ConnectionHead, Connection) to_delete;
+
+    LIST_INIT(&to_delete);
 
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
@@ -112,11 +114,19 @@ handle_connections(fd_set *rfds) {
                     handle_connection_client_data(iter);
                 break;
             case(CLOSED):
-                remove_connection(iter);
+                LIST_REMOVE(iter, entries);
+                /* We can't free each node as we traverse the list, so shove each node onto a temporary list free them below */
+                LIST_INSERT_HEAD(&to_delete, iter, entries);
+                connection_count --;
                 break;
             default:
                 fprintf(stderr, "Invalid state %d\n", iter->state);
         }
+    }
+
+    while ((iter = to_delete.lh_first) != NULL) {
+        LIST_REMOVE(iter, entries);
+        free(iter);
     }
 }
 
@@ -207,11 +217,4 @@ close_connection(struct Connection *c) {
         perror("close()");
 
     c->state = CLOSED;
-}
-
-static void
-remove_connection(struct Connection *c) {
-    LIST_REMOVE(c, entries);
-    free(c);
-    connection_count --;
 }
