@@ -17,6 +17,16 @@ init_backends() {
     LIST_INIT(&backends);
 }
 
+void
+free_backends() {
+    struct Backend *iter;
+
+    while ((iter = backends.lh_first) != NULL) {
+    	LIST_REMOVE(iter, entries);
+    	free(iter);
+    }
+}
+
 int
 lookup_backend_socket(const char *hostname) {
     struct Backend *b;

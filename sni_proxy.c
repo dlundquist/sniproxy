@@ -64,6 +64,8 @@ main(int argc, char **argv) {
 
     run_server(sockfd);
 
+    free_config();
+
     return 0;
 }
 
