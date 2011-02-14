@@ -28,5 +28,6 @@ void init_connections();
 void accept_connection(int);
 int fd_set_connections(fd_set *, int);
 void handle_connections(fd_set *);
+void free_connections();
 
 #endif

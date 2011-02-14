@@ -14,8 +14,8 @@ struct Backend {
 };
 
 void init_backends();
+void free_backends();
 void add_backend(const char *, const char *, int);
-int load_config();
 int lookup_backend_socket(const char *);
 
 #endif

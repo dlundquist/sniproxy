@@ -83,6 +83,8 @@ run_server(int sockfd) {
 
     if (close(sockfd) < 0)
         perror("close()");
+
+    free_connections();
 }
 
 static void

@@ -13,6 +13,11 @@ init_config(const char *config) {
     return load_config();
 }
 
+void
+free_config() {
+    free_backends();
+}
+
 int
 load_config() {
     FILE *config;

@@ -24,6 +24,17 @@ init_connections() {
 }
 
 void
+free_connections() {
+    struct Connection *iter;
+
+    while ((iter = connections.lh_first) != NULL) {
+    	LIST_REMOVE(iter, entries);
+	close_connection(iter);
+    	free(iter);
+    }
+}
+
+void
 accept_connection(int sockfd) {
     struct Connection *c;
     struct sockaddr_in client_addr;
