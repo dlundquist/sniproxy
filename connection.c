@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "connection.h"
+#include "http.h"
 #include "tls.h"
 #include "util.h"
 #include "backend.h"
@@ -9,7 +10,8 @@
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
-int connection_count;
+static int connection_count;
+static int tls_enabled;
 
 
 static void handle_connection_server_data(struct Connection *);
@@ -18,8 +20,9 @@ static void close_connection(struct Connection *);
 
 
 void
-init_connections() {
+init_connections(int tls_flag) {
     LIST_INIT(&connections);
+    tls_enabled = tls_flag;
     connection_count = 0;
 }
 
@@ -44,7 +47,10 @@ accept_connection(int sockfd) {
     if (c == NULL) {
         fprintf(stderr, "calloc failed\n");
 
-        close_tls_socket(sockfd);
+        if (tls_enabled)
+            close_tls_socket(sockfd);
+        else
+            close(sockfd);
     }
 
     client_addr_len = sizeof(client_addr);
@@ -182,7 +188,11 @@ handle_connection_client_data(struct Connection *con) {
 
     switch(con->state) {
         case(ACCEPTED):
-            hostname = parse_tls_header((uint8_t *)con->client.buffer, con->client.buffer_size);
+            if (tls_enabled)
+                hostname = parse_tls_header((uint8_t *)con->client.buffer, con->client.buffer_size);
+            else
+                hostname = parse_http_header(con->client.buffer, con->client.buffer_size);
+
             if (hostname == NULL) {
                 close_connection(con);
                 fprintf(stderr, "Request did not include a hostname\n");

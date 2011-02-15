@@ -6,8 +6,6 @@
 
 #define BUFFER_LEN 4096
 
-extern int connection_count;
-
 struct Connection {
     enum State {
         ACCEPTED,
@@ -24,7 +22,7 @@ struct Connection {
     LIST_ENTRY(Connection) entries;
 };
 
-void init_connections();
+void init_connections(int);
 void accept_connection(int);
 int fd_set_connections(fd_set *, int);
 void handle_connections(fd_set *);

@@ -45,11 +45,11 @@ init_server(const char* address, int port) {
 }
 
 void
-run_server(int sockfd) {
+run_server(int sockfd, int tls_flag) {
     int maxfd;
     fd_set rfds;
 
-    init_connections();
+    init_connections(tls_flag);
     running = 1;
 
     if (listen(sockfd, BACKLOG) < 0) {

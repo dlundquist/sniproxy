@@ -23,16 +23,20 @@ int
 main(int argc, char **argv) {
     int opt, sockfd;
     int background_flag = 1;
+    int tls_flag = 1;
     int port = 443;
     const char *config_file = "/etc/sni_proxy.conf";
     const char *bind_addr = "::";
     const char *user= "nobody";
 
 
-    while ((opt = getopt(argc, argv, "fb:p:c:u:")) != -1) {
+    while ((opt = getopt(argc, argv, "fhb:p:c:u:")) != -1) {
         switch (opt) {
             case 'f': /* foreground */
                 background_flag = 0;
+                break;
+            case 'h':
+                tls_flag = 0;
                 break;
             case 'b':
                 bind_addr = optarg;
@@ -62,7 +66,7 @@ main(int argc, char **argv) {
     if (background_flag)
         daemonize(argv[0], user, sockfd);
 
-    run_server(sockfd);
+    run_server(sockfd, tls_flag);
 
     free_config();
 
