@@ -64,7 +64,7 @@ open_backend_socket(struct Backend *b) {
         return -1;
     }
 
-    if (connect(sockfd, (struct sockaddr *)&b->addr, sizeof(b->addr)) < 0) {
+    if (connect(sockfd, (struct sockaddr *)&b->addr, b->addr_len) < 0) {
         perror("connect()");
         return -1;
     }
@@ -92,7 +92,8 @@ add_backend(const char *hostname, const char *address, int port) {
     for (i = 0; i < BACKEND_HOSTNAME_LEN && hostname[i] != '\0'; i++)
         b->hostname[i] = tolower(hostname[i]);
 
-    if (parse_address(&b->addr, address, port) == 0) {
+    b->addr_len = parse_address(&b->addr, address, port);
+    if (b->addr_len == 0) {
         fprintf(stderr, "Unable to parse %s as an IP address\n", address);
         free(b);
         return;

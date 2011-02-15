@@ -19,13 +19,14 @@ static volatile int sighup_received; /* For signal handler */
 int
 init_server(const char* address, int port) {
     struct sockaddr_storage addr;
-    int sockfd;
+    int sockfd, addr_len;
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
     signal(SIGHUP, sig_handler);
 
-    if (parse_address(&addr, address, port) == 0) {
+    addr_len = parse_address(&addr, address, port);
+    if (addr_len == 0) {
         perror("Error parsing address");
         return -1;
     }
@@ -36,7 +37,7 @@ init_server(const char* address, int port) {
         return -1;
     }
 
-    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    if (bind(sockfd, (struct sockaddr *)&addr, addr_len) < 0) {
         perror("ERROR on binding");
         return -1;
     }

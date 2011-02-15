@@ -1,9 +1,13 @@
 #include <stdio.h>
+#include <stddef.h>
 #include <ctype.h>
 #include <string.h> /* memset */
 #include <sys/socket.h> /* sockaddr_storage */
+#include <sys/un.h>
 #include <arpa/inet.h>
 #include "util.h"
+
+#define UNIX_PATH_MAX 108
 
 
 void
@@ -41,6 +45,15 @@ parse_address(struct sockaddr_storage* addr, const char* address, int port) {
         ((struct sockaddr_in6 *)addr)->sin6_port = htons(port);
         return sizeof(struct sockaddr_in6);
     }
+
+    if (strncmp("unix:", address, 5) == 0) {
+        memset(addr, 0, sizeof(struct sockaddr_storage));
+        ((struct sockaddr_un *)addr)->sun_family = AF_UNIX;
+        strncpy(((struct sockaddr_un *)addr)->sun_path, address + 5, UNIX_PATH_MAX);
+
+        return offsetof(struct sockaddr_un, sun_path) + strlen(((struct sockaddr_un *)addr)->sun_path);
+    }
+
 
     return 0;
 }

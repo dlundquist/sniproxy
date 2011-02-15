@@ -8,6 +8,7 @@
 
 struct Backend {
     char hostname[BACKEND_HOSTNAME_LEN];
+    int addr_len;
     struct sockaddr_storage addr;
 
     LIST_ENTRY(Backend) entries;
