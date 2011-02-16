@@ -7,27 +7,48 @@
 
 
 static int next_header(const char **, int *);
+static char *get_header(const char *, const char *, int);
 
 
 const char *
-parse_http_header(const char* data, int data_len) {
-    static char server_name[SERVER_NAME_LEN];
-    int len, i;
+parse_http_header(const char* data, int len) {
+    char *hostname;
+    int i;
+
+    hostname = get_header("Host: ", data, len);
+    printf("%s\n", hostname);
+    if (hostname == NULL)
+        return hostname;
+
+    /* 
+     *  if the user specifies the port in the request, it is included here.
+     *  Host: example.com:80
+     *  so we trim off port portion
+     */
+    for (i = strlen(hostname); i > 0; i--)
+        if (hostname[i] == ':') {
+            hostname[i] = '\0';
+            break;
+        }
+
+    return hostname;
+}
+
+static char *
+get_header(const char *header, const char *data, int data_len) {
+    static char header_data[SERVER_NAME_LEN];
+    int len, header_len;
+
+    header_len = strlen(header);
 
     /* loop through headers stopping at first blank line */
     while ((len = next_header(&data, &data_len)) != 0)
-        if (len > 6 && strncmp("Host: ", data, 6) == 0) {
-            strncpy (server_name, data + 6, len - 6);
-            server_name[len - 6] = '\0';
+        if (len > header_len && strncmp(header, data, header_len) == 0) {
+            strncpy (header_data, data + header_len, len - header_len);
+            /* Null terminate the string */
+            header_data[len - header_len] = '\0';
 
-            /* trim off port portion */
-            for (i = len - 1; i > 0; i--)
-                if (server_name[i] == ':') {
-                    server_name[i] = '\0';
-                    break;
-                }
-
-            return server_name;
+            return header_data;
         }
 
     return NULL;
