@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <string.h> /* strncpy() */
+#include <strings.h> /* strncasecmp() */
+#include <ctype.h> /* isblank() */
 #include "http.h"
 #include "util.h"
 
-#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 #define SERVER_NAME_LEN 256
 
 
@@ -16,8 +17,7 @@ parse_http_header(const char* data, int len) {
     char *hostname;
     int i;
 
-    hostname = get_header("Host: ", data, len);
-    printf("%s\n", hostname);
+    hostname = get_header("Host:", data, len);
     if (hostname == NULL)
         return hostname;
 
@@ -44,9 +44,19 @@ get_header(const char *header, const char *data, int data_len) {
 
     /* loop through headers stopping at first blank line */
     while ((len = next_header(&data, &data_len)) != 0)
-        if (len > header_len && strncmp(header, data, header_len) == 0) {
-            strncpy (header_data, data + header_len, MIN(len - header_len, SERVER_NAME_LEN));
-            /* Null terminate the string */
+        if (len > header_len && strncasecmp(header, data, header_len) == 0) {
+            /* Eat leading whitespace */
+            while (header_len < len && isblank(data[header_len]))
+                header_len++;
+
+            /* Check if we have enought room before copying */
+            if (len - header_len >= SERVER_NAME_LEN) {
+                /* too big */
+                return NULL;
+            }
+            strncpy (header_data, data + header_len, len - header_len);
+            
+            /* null terminate the header data */
             header_data[len - header_len] = '\0';
 
             return header_data;

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -ansi -Wall -Wextra -pedantic -O3 -g -I ../src -L ../src
+CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -g -I ../src -L ../src
 TESTS = http.test
 
 all: ${TESTS}
