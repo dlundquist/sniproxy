@@ -14,3 +14,6 @@ all: ${TESTS}
 
 clean:
 	rm -f *.o *.test
+
+test: all
+	./run_tests.sh
