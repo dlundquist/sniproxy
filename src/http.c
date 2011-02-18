@@ -3,6 +3,7 @@
 #include "http.h"
 #include "util.h"
 
+#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 #define SERVER_NAME_LEN 256
 
 
@@ -44,7 +45,7 @@ get_header(const char *header, const char *data, int data_len) {
     /* loop through headers stopping at first blank line */
     while ((len = next_header(&data, &data_len)) != 0)
         if (len > header_len && strncmp(header, data, header_len) == 0) {
-            strncpy (header_data, data + header_len, len - header_len);
+            strncpy (header_data, data + header_len, MIN(len - header_len, SERVER_NAME_LEN));
             /* Null terminate the string */
             header_data[len - header_len] = '\0';
 
