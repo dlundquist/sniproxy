@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "config.h"
 #include "table.h"
 
+#define BUFFER_SIZE 256
 
 enum Token {
     ERROR,
     SEPERATOR,
-    COMMENT,
     OBRACE,
     CBRACE,
     LISTEN,
@@ -19,123 +20,250 @@ enum Token {
     ENDCONFIG,
 };
 
-static const char *config_file;
 
-
+static int parse_listen_stanza(struct Config *, FILE *);
+static int parse_table_stanza(struct Config *, FILE *);
 static enum Token next_token(FILE *, char *, size_t);
 static void chomp_line(FILE *);
 static int next_word(FILE *, char *, int);
 
 
+struct Config *
+init_config(const char *filename) {
+    struct Config *c;
 
-int
-init_config(const char *config) {
-    config_file = config;
-    init_tables();
-    return load_config();
+    c = calloc(1, sizeof(struct Config));
+    if (c == NULL) {
+        perror("malloc()");
+        return NULL;
+    }
+
+    c->filename = strdup(filename);
+    if (c->filename == NULL) {
+        free(c);
+        perror("malloc()");
+        return NULL;
+    }
+
+    reload_config(c);
+
+    return(c);
 }
 
 void
-free_config() {
-    free_tables();
+free_config(struct Config *c) {
+    assert(c != NULL);
+
+    free(c->filename);
+    /* TODO free nested objects */
+
+    free(c);
 }
+
 
 int
-load_config() {
+reload_config(struct Config *c) {
     FILE *config;
-    int count = 0;
-    char line[256];
-    char *hostname;
-    char *address;
-    char *port;
-    struct Table *default_table;
+    int done = 0;
+    enum Token token;
+    char buffer[BUFFER_SIZE];
 
-    if (config_file == NULL)
-        return -1;
+    assert(c != NULL);
+    assert(c->filename != NULL);
 
-    config = fopen(config_file, "r");
+    config = fopen(c->filename, "r");
     if (config == NULL) {
-        fprintf(stderr, "Unable to open %s\n", config_file);
+        fprintf(stderr, "Unable to open %s\n", c->filename);
         return -1;
     }
 
-    default_table = lookup_table("default");
-    if (default_table == NULL)
-        default_table = add_table("default");
+    while(done == 0) {
+        token = next_token(config, buffer, sizeof(buffer));
+        switch (token) {
+            case SEPERATOR:
+                /* no op */
+                break;
+            case USER:
+                if (c->user != NULL)
+                    fprintf(stderr, "Warning: user already specified\n");
+               
+                token = next_token(config, buffer, sizeof(buffer));
+                if (token != WORD) {
+                    fprintf(stderr, "Error parsing config near %s\n", buffer);
+                    return -1;
+                }
 
-    while (fgets(line, sizeof(line), config) != NULL) {
-        /* skip blank and comment lines */
-        if (line[0] == '#' || line[0] == '\n')
-            continue;
-	
-        hostname = strtok(line, " \t");
-        if (hostname == NULL)
-            goto fail;
+                c->user = strdup(buffer);
+                if (c->user == NULL) {
+                    perror("malloc()");
+                    return -1;
+                }
+                break;
+            case LISTEN:
+                parse_listen_stanza(c, config);
+                break;
+            case TABLE:
+                parse_table_stanza(c, config);
+                break;
+            case ENDCONFIG:
+                done = 1;
+                break;
+            default:
+                fprintf(stderr, "Error parsing config near %s\n", buffer);
+                return -1;
+        }
+    }
+    fclose(config);
 
-        address = strtok(NULL , " \t");
-        if (address == NULL)
-            goto fail;
 
-        port = strtok(NULL , " \t");
-        if (port == NULL)
-            goto fail;
+    /* TODO validate config */
 
-        add_table_backend(default_table, hostname, address, atoi(port));
-        count ++;
-        continue;
+}
 
-fail:
-        fprintf(stderr, "Error parsing line: %s", line);
+static int
+parse_listen_stanza(struct Config *c, FILE *file) {
+    enum {
+        ADDRESS,
+        BLOCK,
+        PROTOCOL,
+        TABLE,
+        DONE
+    } state = ADDRESS;
+    enum Token token;
+    char buffer[BUFFER_SIZE];
+    struct Listener *listener;
+
+    listener = calloc(1, sizeof(struct Listener));
+    if (listener == NULL) {
+        fprintf(stderr, "malloc failed\n");
+        return -1;
     }
 
-    fclose(config);
-    return count;
+    while(state != DONE) {
+        token = next_token(file, buffer, sizeof(buffer));
+        switch(state) {
+            case ADDRESS:
+                switch(token) {
+                    case OBRACE:
+                        state = BLOCK;
+                        break;
+                    case WORD:
+                        parse_listener_address_token(listener, buffer);
+                        break;
+                    default:
+                        return -1;
+                }
+                break;
+            case BLOCK:
+                switch(token) {
+                    case SEPERATOR:
+                        break;
+                    case TABLE:
+                        state = TABLE;
+                        break;
+                    case PROTOCOL:
+                        state = PROTOCOL;
+                        break;
+                    case CBRACE:
+                        state = DONE;
+                        break;
+                    default:
+                        return -1;
+                }
+                break;
+            case PROTOCOL:
+                switch(token) {
+                    case SEPERATOR:
+                        state = BLOCK;
+                        break;
+                    case WORD:
+                        parse_listener_protocol_token(listener, buffer);
+                        break;
+                    default:
+                        return -1;
+                }
+            case TABLE:
+                switch(token) {
+                    case SEPERATOR:
+                        state = BLOCK;
+                        break;
+                    case WORD:
+                        parse_listener_table_token(listener, buffer);
+                        break;
+                    default:
+                        return -1;
+                }
+        }
+    }
+    if (valid_listener(listener) <= 0)
+        return -1;
+     
 }
+
+static int
+parse_table_stanza(struct Config *c, FILE *file) {
+    enum {
+        NAME,
+        BLOCK,
+        DONE
+    } state;
+}
+
+
 
 /*
  * next_token() returns the next token based on the current position of config file
  * advancing the position to immidiatly after the token.
- *
- *
  */
 static enum Token
-next_token(FILE *config, char *buf, size_t len) {
+next_token(FILE *config, char *buffer, size_t buffer_len) {
     int ch;
+    int token_len;
 
-    if (config == NULL)
-        return ERROR;
+    assert(config != NULL);
 
     while ((ch = getc(config)) != EOF) {
         switch(ch) {
+            case '#': /* comment */
+                chomp_line(config);
+                /* fall through */
+            case ' ':
+                /* fall through */
+            case '\t':
+                /* no op */
+                break;
+            case ';':
+                /* fall through */
             case '\n':
                 /* fall through */
             case '\r':
                 return SEPERATOR;
-            case ' ':
-                /* fall through */
-            case '\t':
-                /* white space */
-                break;
             case '{':
                 return OBRACE;
             case '}':
                 return CBRACE;
-            case '#':
-                chomp_line(config);
-                return COMMENT;
             default:
+                /* Rewind one byte, so next_word() can fetch the begining of the word */
                 fseek(config, -1, SEEK_CUR);
-                if (next_word(config, buf, len) <= 0)
+
+                token_len = next_word(config, buffer, buffer_len);
+                if (token_len <= 0)
                     return ERROR;
-                /* TODO check for tokens: USER, PROTOCOL, LISTEN, TABLE */
+
+                if (strncmp("user", buffer, token_len) == 0)
+                    return USER;
+                if (strncmp("listen", buffer, token_len) == 0)
+                    return LISTEN;
+                if (token_len > 5 && strncmp("protocol", buffer, token_len - 1) == 0)
+                    return PROTOCOL;
+                if (strncmp("table", buffer, token_len) == 0)
+                    return TABLE;
+
                 return WORD;
         }
     }
     return ENDCONFIG;
 }
-
-
-
 
 static void 
 chomp_line(FILE *file) {
@@ -146,13 +274,13 @@ chomp_line(FILE *file) {
             return;
 }
 
-int
+static int
 next_word(FILE *file, char *buffer, int buffer_len) {
     int ch;
     int len = 0;
     int quoted = 0;
     int escaped = 0;
-   
+
     while ((ch = getc(file)) != EOF && len < buffer_len) {
         if (escaped) {
             escaped = 0;
@@ -164,19 +292,21 @@ next_word(FILE *file, char *buffer, int buffer_len) {
             case '\\':
                 escaped = 1;
                 break;
-            case '\"':
-                quoted = 1 - quoted;
+                case '\"':
+                    quoted = 1 - quoted;
                 break;
             case ' ':
             case '\t':
+            case ';':
             case '\n':
             case '\r':
             case '#':
             case '{':
             case '}':
                 if (quoted == 0) {
-                    /* rewind the file one character, incase there isn't whitespace after the word */
+                    /* rewind the file one character, so we don't eat part of the next token */
                     fseek(file, -1, SEEK_CUR);
+
                     buffer[len] = '\0';
                     len ++;
                     return len;
@@ -187,7 +317,8 @@ next_word(FILE *file, char *buffer, int buffer_len) {
                 len ++;
         }
     }
-    /* rewind our file to our starting point */
-    fseek(file, -len, SEEK_CUR);
+    /* We reached the end of the file, or filled our buffer */
     return -1;
 }
+
+
