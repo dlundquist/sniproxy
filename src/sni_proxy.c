@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <signal.h>
 #include "sni_proxy.h"
 #include "config.h"
 #include "server.h"
@@ -65,6 +66,11 @@ main(int argc, char **argv) {
 
     if (background_flag)
         daemonize(argv[0], user, sockfd);
+
+	openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
+
+	/* ignore SIGPIPE, or it will kill us */
+	signal(SIGPIPE, SIG_IGN);
 
     run_server(sockfd, tls_flag);
 
