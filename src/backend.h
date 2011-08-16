@@ -3,15 +3,18 @@
 
 #include <netinet/in.h>
 #include <sys/queue.h>
+#include <pcre.h>
 
-#define BACKEND_HOSTNAME_LEN 256
+#define HOSTNAME_REGEX_LEN 256
+#define BACKEND_ADDRESS_LEN 256
 
 struct Backend {
-    char hostname[BACKEND_HOSTNAME_LEN];
-    int addr_len;
-    struct sockaddr_storage addr;
+	char hostname[HOSTNAME_REGEX_LEN];
+	pcre *hostname_re;
+	char address[BACKEND_ADDRESS_LEN];
+	int port;
 
-    LIST_ENTRY(Backend) entries;
+    TAILQ_ENTRY(Backend) entries;
 };
 
 void init_backends();

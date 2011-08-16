@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3
+CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -I/usr/local/include -L/usr/local/lib
 
 all: sni_proxy
 
@@ -7,7 +7,7 @@ all: sni_proxy
 	$(CC) $(CFLAGS) -c $<
 
 sni_proxy: connection.o tls.o util.o backend.o server.o sni_proxy.o config.o http.o
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -lpcre -o $@ $^
 
 .PHONY: clean all
 

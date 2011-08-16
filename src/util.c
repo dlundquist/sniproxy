@@ -5,6 +5,7 @@
 #include <sys/socket.h> /* sockaddr_storage */
 #include <sys/un.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include "util.h"
 
 #define UNIX_PATH_MAX 108

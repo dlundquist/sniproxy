@@ -194,12 +194,11 @@ handle_connection_client_data(struct Connection *con) {
                 hostname = parse_http_header(con->client.buffer, con->client.buffer_size);
 
             if (hostname == NULL) {
-                close_connection(con);
                 fprintf(stderr, "Request did not include a hostname\n");
                 hexdump(con->client.buffer, con->client.buffer_size);
-                return;
-            }
-            fprintf(stderr, "DEBUG: request for %s\n", hostname);
+            } else {
+            	fprintf(stderr, "DEBUG: request for %s\n", hostname);
+			}
 
             /* lookup server for hostname and connect */
             con->server.sockfd = lookup_backend_socket(hostname);

@@ -37,6 +37,10 @@ load_config() {
     }
 
     while (fgets(line, sizeof(line), config) != NULL) {
+		/* skip blank and comment lines */
+		if (line[0] == '#' || line[0] == '\n')
+			continue;
+	
         hostname = strtok(line, " \t");
         if (hostname == NULL)
             goto fail;
