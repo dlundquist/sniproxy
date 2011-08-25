@@ -67,10 +67,10 @@ main(int argc, char **argv) {
     if (background_flag)
         daemonize(argv[0], user, sockfd);
 
-	openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
+    openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
-	/* ignore SIGPIPE, or it will kill us */
-	signal(SIGPIPE, SIG_IGN);
+    /* ignore SIGPIPE, or it will kill us */
+    signal(SIGPIPE, SIG_IGN);
 
     run_server(sockfd, tls_flag);
 

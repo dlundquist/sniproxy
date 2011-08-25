@@ -9,6 +9,9 @@
 #include <errno.h>
 #include <syslog.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #include "backend.h"
 #include "util.h"
 
@@ -26,12 +29,17 @@ init_backends() {
 
 void
 free_backends() {
-	struct Backend *iter, *temp;
+    struct Backend *iter;
+#ifdef TAILQ_FOREACH_SAFE
+    struct Backend *temp;
 
-	TAILQ_FOREACH_SAFE(iter, &backends, entries, temp) {
-		TAILQ_REMOVE(&backends, iter, entries);
-    	free(iter);
-	}
+    TAILQ_FOREACH_SAFE(iter, &backends, entries, temp) {
+#else
+    while((iter = TAILQ_FIRST(&backends)) != NULL) {
+#endif
+        TAILQ_REMOVE(&backends, iter, entries);
+        free(iter);
+    }
 }
 
 int
@@ -50,18 +58,18 @@ lookup_backend_socket(const char *hostname) {
 static struct Backend *
 lookup_backend(const char *hostname) {
     struct Backend *iter;
-	const char *my_hostname = hostname;
-	
-	if (my_hostname == NULL)
-		my_hostname = "";
+    const char *my_hostname = hostname;
+
+    if (my_hostname == NULL)
+        my_hostname = "";
 
     TAILQ_FOREACH(iter, &backends, entries) {
-		if (pcre_exec(iter->hostname_re, NULL, my_hostname, strlen(my_hostname), 0, 0, NULL, 0) >= 0) {
-			syslog(LOG_DEBUG, "%s matched %s", iter->hostname, my_hostname);
+        if (pcre_exec(iter->hostname_re, NULL, my_hostname, strlen(my_hostname), 0, 0, NULL, 0) >= 0) {
+            syslog(LOG_DEBUG, "%s matched %s", iter->hostname, my_hostname);
             return iter;
-		} else {
-			syslog(LOG_DEBUG, "%s didn't match %s", iter->hostname, my_hostname);
-		}
+        } else {
+            syslog(LOG_DEBUG, "%s didn't match %s", iter->hostname, my_hostname);
+        }
     }
     return NULL;
 }
@@ -72,53 +80,52 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
     int error;
     int s;
     const char *cause = NULL;
-	char portstr[8];
+    char portstr[8];
 
-	const char *target_hostname = b->address;
-	if (strcmp(target_hostname, "*") == 0)
-		target_hostname = req_hostname;
+    const char *target_hostname = b->address;
+    if (strcmp(target_hostname, "*") == 0)
+        target_hostname = req_hostname;
 
-	snprintf(portstr, 8, "%d", b->port);
-	syslog(LOG_DEBUG, "Connecting to %s:%s", target_hostname, portstr);
+    snprintf(portstr, 8, "%d", b->port);
+    syslog(LOG_DEBUG, "Connecting to %s:%s", target_hostname, portstr);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     error = getaddrinfo(target_hostname, portstr, &hints, &res0);
     if (error) {
-		syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
-		return -1;
+        syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
+        return -1;
     }
     s = -1;
     for (res = res0; res; res = res->ai_next) {
-		s = socket(res->ai_family, res->ai_socktype,
-			res->ai_protocol);
-		if (s < 0) {
-			cause = "socket";
-			continue;
-		}
+        s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+        if (s < 0) {
+            cause = "socket";
+            continue;
+        }
 
-		if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
-			cause = "connect";
-			close(s);
-			s = -1;
-			continue;
-		}
+        if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
+            cause = "connect";
+            close(s);
+            s = -1;
+            continue;
+        }
 
-		break;  /* okay we got one */
+        break;  /* okay we got one */
     }
     if (s < 0)
-		syslog(LOG_ERR, "%s error: %s", cause, strerror(errno));
-    
+        syslog(LOG_ERR, "%s error: %s", cause, strerror(errno));
+
     freeaddrinfo(res0);
-	return s;
+    return s;
 }
 
 void
 add_backend(const char *hostname, const char *address, int port) {
     struct Backend *b;
-	const char *reerr;
-	int reerroffset;
+    const char *reerr;
+    int reerroffset;
     int i;
 
     b = calloc(1, sizeof(struct Backend));
@@ -127,19 +134,19 @@ add_backend(const char *hostname, const char *address, int port) {
         return;
     }
 
-	strncpy(b->hostname, hostname, HOSTNAME_REGEX_LEN - 1);
+    strncpy(b->hostname, hostname, HOSTNAME_REGEX_LEN - 1);
 
-	b->hostname_re = pcre_compile(hostname, 0, &reerr, &reerroffset, NULL);
-	if (b->hostname_re == NULL) {
-		syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
-		free(b);
-		return;
-	}
+    b->hostname_re = pcre_compile(hostname, 0, &reerr, &reerroffset, NULL);
+    if (b->hostname_re == NULL) {
+        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+        free(b);
+        return;
+    }
 
-	for (i = 0; i < BACKEND_ADDRESS_LEN && address[i] != '\0'; i++)
+    for (i = 0; i < BACKEND_ADDRESS_LEN && address[i] != '\0'; i++)
         b->address[i] = tolower(address[i]);
 
-	b->port = port;
+    b->port = port;
 
     syslog(LOG_DEBUG, "Parsed %s %s %d", hostname, address, port);
     TAILQ_INSERT_TAIL(&backends, b, entries);

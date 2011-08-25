@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -I/usr/local/include -L/usr/local/lib
+CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3
 
 all: sni_proxy
 

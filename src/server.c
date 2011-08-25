@@ -20,7 +20,7 @@ int
 init_server(const char* address, int port) {
     struct sockaddr_storage addr;
     int sockfd, addr_len;
-	int reuseval = 1;
+    int reuseval = 1;
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -38,7 +38,8 @@ init_server(const char* address, int port) {
         return -1;
     }
 
-	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseval, sizeof(reuseval));
+    /* set SO_REUSEADDR on server socket to facilitate restart */
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseval, sizeof(reuseval));
 
     if (bind(sockfd, (struct sockaddr *)&addr, addr_len) < 0) {
         perror("ERROR on binding");
