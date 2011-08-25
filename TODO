@@ -1,6 +1,4 @@
-* Improved logging - currently logs to STDERR which as a daemon is /dev/null
 * Improved configuration syntax allowing multiple listening ports/address per daemon.
 * Move from select() to poll() or epoll() to support more than FD_SETSIZE / 2 connections
 * HTTP interface for backend servers to determine remote IP and port of connection
-* Wildcard maching of backends
 * Output buffering and out of band TCP data proxying -- I haven't seen a case where the lack of this has caused any issues yet.
