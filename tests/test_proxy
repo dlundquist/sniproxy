@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Start the proxy in forground HTTP mode on a high port with our test config, this shouldn't require privileges
+../src/sni_proxy -f -h -c test_proxy.conf -p 8080 &
+
+# Make several requests through the proxy specifying the host header
+curl -v -H 'Host: www.example.com' http://localhost:8080/
+curl -v -H 'Host: www.example.net' http://localhost:8080/
+
+# kill off the server
+jobs -p | xargs kill
