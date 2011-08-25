@@ -15,7 +15,7 @@
 #include "backend.h"
 #include "util.h"
 
-static TAILQ_HEAD(, Backend) backends;
+static STAILQ_HEAD(, Backend) backends;
 
 
 static struct Backend* lookup_backend(const char *);
@@ -24,20 +24,22 @@ static int open_backend_socket(struct Backend *, const char *);
 
 void
 init_backends() {
-    TAILQ_INIT(&backends);
+    STAILQ_INIT(&backends);
 }
+
+#ifndef STAILQ_FOREACH_SAFE
+#define STAILQ_FOREACH_SAFE(var, head, field, tvar)                     \
+    for ((var) = STAILQ_FIRST((head));                          \
+        (var) && ((tvar) = STAILQ_NEXT((var), field), 1);               \
+        (var) = (tvar))
+#endif
 
 void
 free_backends() {
-    struct Backend *iter;
-#ifdef TAILQ_FOREACH_SAFE
-    struct Backend *temp;
+    struct Backend *iter, *temp;
 
-    TAILQ_FOREACH_SAFE(iter, &backends, entries, temp) {
-#else
-    while((iter = TAILQ_FIRST(&backends)) != NULL) {
-#endif
-        TAILQ_REMOVE(&backends, iter, entries);
+    STAILQ_FOREACH_SAFE(iter, &backends, entries, temp) {
+        STAILQ_REMOVE_HEAD(&backends, entries);
         free(iter);
     }
 }
@@ -58,17 +60,16 @@ lookup_backend_socket(const char *hostname) {
 static struct Backend *
 lookup_backend(const char *hostname) {
     struct Backend *iter;
-    const char *my_hostname = hostname;
 
-    if (my_hostname == NULL)
-        my_hostname = "";
+    if (hostname == NULL)
+        hostname = "";
 
-    TAILQ_FOREACH(iter, &backends, entries) {
-        if (pcre_exec(iter->hostname_re, NULL, my_hostname, strlen(my_hostname), 0, 0, NULL, 0) >= 0) {
-            syslog(LOG_DEBUG, "%s matched %s", iter->hostname, my_hostname);
+    STAILQ_FOREACH(iter, &backends, entries) {
+        if (pcre_exec(iter->hostname_re, NULL, hostname, strlen(hostname), 0, 0, NULL, 0) >= 0) {
+            syslog(LOG_DEBUG, "%s matched %s", iter->hostname, hostname);
             return iter;
         } else {
-            syslog(LOG_DEBUG, "%s didn't match %s", iter->hostname, my_hostname);
+            syslog(LOG_DEBUG, "%s didn't match %s", iter->hostname, hostname);
         }
     }
     return NULL;
@@ -77,7 +78,7 @@ lookup_backend(const char *hostname) {
 static int
 open_backend_socket(struct Backend *b, const char *req_hostname) {
     int sockfd = -1, error;
-    struct addrinfo hints, *res, *res0;
+    struct addrinfo hints, *results, *iter;
     const char *cause = NULL;
     char portstr[6]; /* port numbers are < 65536 */
 
@@ -92,20 +93,20 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    error = getaddrinfo(target_hostname, portstr, &hints, &res0);
+    error = getaddrinfo(target_hostname, portstr, &hints, &results);
     if (error != 0) {
         syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
         return -1;
     }
 
-    for (res = res0; res; res = res->ai_next) {
-        sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    for (iter = results; iter; iter = iter->ai_next) {
+        sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol);
         if (sockfd < 0) {
             cause = "socket";
             continue;
         }
 
-        if (connect(sockfd, res->ai_addr, res->ai_addrlen) < 0) {
+        if (connect(sockfd, iter->ai_addr, iter->ai_addrlen) < 0) {
             cause = "connect";
             close(sockfd);
             sockfd = -1;
@@ -117,7 +118,7 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
     if (sockfd < 0)
         syslog(LOG_ERR, "%s error: %s", cause, strerror(errno));
 
-    freeaddrinfo(res0);
+    freeaddrinfo(results);
     return sockfd;
 }
 
@@ -149,5 +150,5 @@ add_backend(const char *hostname, const char *address, int port) {
     b->port = port;
 
     syslog(LOG_DEBUG, "Parsed %s %s %d", hostname, address, port);
-    TAILQ_INSERT_TAIL(&backends, b, entries);
+    STAILQ_INSERT_TAIL(&backends, b, entries);
 }

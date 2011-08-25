@@ -14,7 +14,7 @@ struct Backend {
 	char address[BACKEND_ADDRESS_LEN];
 	int port;
 
-    TAILQ_ENTRY(Backend) entries;
+    STAILQ_ENTRY(Backend) entries;
 };
 
 void init_backends();
