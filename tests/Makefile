@@ -1,10 +1,10 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -g -I ../src -L ../src
-TESTS = http.test
+TESTS = http.test tls.test
 
 all: ${TESTS}
 
-%.test: %.c ../src/%.c
+%.test: %.o ../src/%.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c %.h
