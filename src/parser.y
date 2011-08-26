@@ -6,29 +6,32 @@ int yylex (void);
 void yyerror (const char *);
 %}
 
-%token
+%token COMMENT
+%token USER
+%token LISTEN
+%token SOCKET
 
 %%
 
 COMMENT: # COMMENT
 
-USER: "user" WORD
+user: "user" WORD
 
-LISTEN: "listen" SOCKET LISTEN_BLOCK
+listen: "listen" socket listen_block
 
-SOCKET: IPV6_SOCKET | IPV4_SOCKET | UNIX_SOCKET
+socket: ipv6_socket | ipv4_socket | unix_socket
 
-IPV6_SOCKET: IPV6_ADDR PORT | IPV6_ADDR
+ipv6_socket: ipv6_addr port | ipv6_addr
 
-IPV4_SOCKET: IPV4_ADDR PORT | IPV4_ADDR
+ipv4_socket: ipv4_addr port | ipv4_addr
 
-LISTEN_BLOCK: OPEN_BLOCK LISTEN_OPTIONS CLOSE_BLOCK
+listen_block: '{' listen_options '}'
 
-LISTEN_OPTIONS: LISTEN_OPTIONS LISTEN_OPTION | LISTEN_OPTION
+listen_options: listen_options listen_option | listen_optioN
 
-LISTEN_OPTION: LISTEN_PROTOCOL | LISTEN_TABLE
+listen_option: listen_protocol | listen_table
 
-LISTEN_PROTOCOL: "proto" PROTOCOL_NAME | "protocol" PROTOCOL_NAME
+listen_protocol: "proto" protocol_name | "protocol" protocol_namE
 
 PROTOCOL_NAME: "http" | "tls"
 
@@ -85,6 +88,5 @@ table {
     example.net 192.0.2.20
 }
 */
-
-
 %%
+
