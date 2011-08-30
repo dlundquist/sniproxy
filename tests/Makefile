@@ -13,7 +13,7 @@ all: ${TESTS}
 .PHONY: clean all
 
 clean:
-	rm -f *.o *.test
+	rm -f *.o ${TESTS}
 
 test: all
 	./run_tests.sh
