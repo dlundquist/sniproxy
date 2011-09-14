@@ -9,11 +9,12 @@
 #define BACKEND_ADDRESS_LEN 256
 
 struct Backend {
-	char hostname[HOSTNAME_REGEX_LEN];
-	pcre *hostname_re;
-	char address[BACKEND_ADDRESS_LEN];
-	int port;
+    char hostname[HOSTNAME_REGEX_LEN];
+    char address[BACKEND_ADDRESS_LEN];
+    int port;
 
+    /* Runtime fields */
+    pcre *hostname_re;
     STAILQ_ENTRY(Backend) entries;
 };
 

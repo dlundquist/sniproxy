@@ -60,7 +60,7 @@ main(int argc, char **argv) {
 
     init_config(config_file);
 
-    sockfd = init_server(bind_addr, port);
+    sockfd = init_server(bind_addr, port, tls_flag);
     if (sockfd < 0)
         return -1;
 
@@ -69,10 +69,7 @@ main(int argc, char **argv) {
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
-    /* ignore SIGPIPE, or it will kill us */
-    signal(SIGPIPE, SIG_IGN);
-
-    run_server(sockfd, tls_flag);
+    run_server();
 
     free_config();
 

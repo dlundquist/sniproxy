@@ -4,11 +4,12 @@
 #include <sys/queue.h>
 
 struct Table {
-    char char * name;
+    const char *name;
 
     /* Runtime fields */
     STAILQ_HEAD(, Backend) backends;
     SLIST_ENTRY(Table) entries;
 };
 
+int lookup_table_server_socket(const struct Table *, const char *);
 #endif

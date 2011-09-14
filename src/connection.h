@@ -3,6 +3,7 @@
 
 #include <sys/queue.h>
 #include <sys/select.h>
+#include "listener.h"
 
 #define BUFFER_LEN 4096
 
@@ -18,12 +19,13 @@ struct Connection {
         char buffer[BUFFER_LEN];
         int buffer_size;
     } client, server;
+    struct Listener * listener;
 
     LIST_ENTRY(Connection) entries;
 };
 
-void init_connections(int);
-void accept_connection(int);
+void init_connections();
+void accept_connection(struct Listener *);
 int fd_set_connections(fd_set *, int);
 void handle_connections(fd_set *);
 void free_connections();

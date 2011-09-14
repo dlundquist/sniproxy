@@ -6,7 +6,7 @@ all: sni_proxy
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c $<
 
-sni_proxy: connection.o tls.o util.o backend.o server.o sni_proxy.o config.o http.o
+sni_proxy: backend.o table.o connection.o tls.o http.o util.o listener.o server.o sni_proxy.o config.o
 	$(CC) $(CFLAGS) -lpcre -o $@ $^
 
 .PHONY: clean all

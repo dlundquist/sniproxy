@@ -55,6 +55,5 @@ parse_address(struct sockaddr_storage* addr, const char* address, int port) {
         return offsetof(struct sockaddr_un, sun_path) + strlen(((struct sockaddr_un *)addr)->sun_path);
     }
 
-
     return 0;
 }

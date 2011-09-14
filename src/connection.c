@@ -13,14 +13,19 @@
 #include "http.h"
 #include "tls.h"
 #include "util.h"
-#include "backend.h"
 
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
-static LIST_HEAD(ConnectionHead, Connection) connections;
-static int connection_count;
-static int tls_enabled;
+/* Linux may not include _SAFE macros */
+#ifndef LIST_FOREACH_SAFE
+#define LIST_FOREACH_SAFE(var, head, field, tvar)           \
+    for ((var) = LIST_FIRST((head));                \
+        (var) && ((tvar) = LIST_NEXT((var), field), 1);     \
+        (var) = (tvar))
+#endif
 
+
+static LIST_HEAD(ConnectionHead, Connection) connections;
 
 static void handle_connection_server_data(struct Connection *);
 static void handle_connection_client_data(struct Connection *);
@@ -28,10 +33,8 @@ static void close_connection(struct Connection *);
 
 
 void
-init_connections(int tls_flag) {
+init_connections() {
     LIST_INIT(&connections);
-    tls_enabled = tls_flag;
-    connection_count = 0;
 }
 
 void
@@ -46,7 +49,7 @@ free_connections() {
 }
 
 void
-accept_connection(int sockfd) {
+accept_connection(struct Listener *listener) {
     struct Connection *c;
     struct sockaddr_in client_addr;
     unsigned int client_addr_len;
@@ -54,24 +57,20 @@ accept_connection(int sockfd) {
     c = calloc(1, sizeof(struct Connection));
     if (c == NULL) {
         syslog(LOG_CRIT, "calloc failed");
-
-        if (tls_enabled)
-            close_tls_socket(sockfd);
-        else
-            close(sockfd);
+        return;
     }
 
     client_addr_len = sizeof(client_addr);
-    c->client.sockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
+    c->client.sockfd = accept(listener->sockfd, (struct sockaddr *) &client_addr, &client_addr_len);
     if (c->client.sockfd < 0) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
         free(c);
         return;
     }
     c->state = ACCEPTED;
+    c->listener = listener;
 
     LIST_INSERT_HEAD(&connections, c, entries);
-    connection_count ++;
 }
 
 /*
@@ -81,12 +80,8 @@ accept_connection(int sockfd) {
  * Returns the highest file descriptor in the set.
  */
 int
-fd_set_connections(fd_set *fds, int fd) {
+fd_set_connections(fd_set *fds, int max) {
     struct Connection *iter;
-    int max = fd;
-
-    FD_ZERO(fds);
-    FD_SET(fd, fds);
 
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
@@ -123,12 +118,9 @@ fd_set_connections(fd_set *fds, int fd) {
 
 void
 handle_connections(fd_set *rfds) {
-    struct Connection *iter;
-    LIST_HEAD(ConnectionHead, Connection) to_delete;
+    struct Connection *iter, *tmp;
 
-    LIST_INIT(&to_delete);
-
-    LIST_FOREACH(iter, &connections, entries) {
+    LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
         switch(iter->state) {
             case(CONNECTED):
                 if (FD_ISSET (iter->server.sockfd, rfds))
@@ -140,18 +132,11 @@ handle_connections(fd_set *rfds) {
                 break;
             case(CLOSED):
                 LIST_REMOVE(iter, entries);
-                /* We can't free each node as we traverse the list, so shove each node onto a temporary list free them below */
-                LIST_INSERT_HEAD(&to_delete, iter, entries);
-                connection_count --;
+                free(iter);
                 break;
             default:
                 syslog(LOG_WARNING, "Invalid state %d", iter->state);
         }
-    }
-
-    while ((iter = to_delete.lh_first) != NULL) {
-        LIST_REMOVE(iter, entries);
-        free(iter);
     }
 }
 
@@ -200,10 +185,7 @@ handle_connection_client_data(struct Connection *con) {
 
     switch(con->state) {
         case(ACCEPTED):
-            if (tls_enabled)
-            hostname = parse_tls_header((uint8_t *)con->client.buffer, con->client.buffer_size);
-            else
-                hostname = parse_http_header(con->client.buffer, con->client.buffer_size);
+            hostname = con->listener->parse_packet(con->client.buffer, con->client.buffer_size);
 
             /* identify peer address */
             peeraddr_len = sizeof(peeraddr);
@@ -227,7 +209,7 @@ handle_connection_client_data(struct Connection *con) {
             }
 
             /* lookup server for hostname and connect */
-            con->server.sockfd = lookup_backend_socket(hostname);
+            con->server.sockfd = lookup_server_socket(con->listener, hostname);
             if (con->server.sockfd < 0) {
                 syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
                 close_connection(con);
@@ -255,9 +237,9 @@ handle_connection_client_data(struct Connection *con) {
 
 static void
 close_connection(struct Connection *c) {
-    if (c->state == CONNECTED)
-        if (close(c->server.sockfd) < 0)
-            syslog(LOG_INFO, "close failed: %s", strerror(errno));
+    /* The server socket is not open yet, when before we are in the CONNECTED state */
+    if (c->state == CONNECTED && close(c->server.sockfd) < 0)
+        syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     if (close(c->client.sockfd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
