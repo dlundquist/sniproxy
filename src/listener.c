@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <syslog.h>
 #include "listener.h"
+#include "connection.h"
 
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
@@ -37,7 +38,7 @@ fd_set_listeners(fd_set *fds, int max) {
 }
 
 void
-handle_connections(fd_set *rfds) {
+handle_listeners(fd_set *rfds) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, &listeners, entries) {
