@@ -52,12 +52,12 @@ const unsigned char bad_data_2[] = { 0x16, 0x03, 0x01, 0x00,
             0x00, 0x00, 0x0e, 0x00 };
 
 struct test_packet good[] = {
-    { (char)good_data_1, sizeof(good_data_1) }
+    { (char *)good_data_1, sizeof(good_data_1) }
 };
 
 struct test_packet bad[] = {
-    { (char)bad_data_1, sizeof(bad_data_1) },
-    { (char)bad_data_2, sizeof(bad_data_2) }
+    { (char *)bad_data_1, sizeof(bad_data_1) },
+    { (char *)bad_data_2, sizeof(bad_data_2) }
 };
 
 int main() {
