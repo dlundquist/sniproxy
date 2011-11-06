@@ -2,7 +2,6 @@
 
 use strict;
 use warnings;
-use Data::Dumper;
 use POSIX ":sys_wait_h";
 
 $SIG{CHLD} = \&REAPER;
