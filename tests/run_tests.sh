@@ -1,6 +1,6 @@
 #!/bin/sh
 
-find . -name \*.test -type f -executable | \
+find . -name \*.test -perm /u+x -type f | \
 while read TEST
 do
     ${TEST} || (echo "Failure in test ${TEST}"; exit 1)
