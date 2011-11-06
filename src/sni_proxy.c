@@ -57,12 +57,12 @@ main(int argc, char **argv) {
         }
     }
 
-
     init_config(config_file);
 
     sockfd = init_server(bind_addr, port, tls_flag);
     if (sockfd < 0)
         return -1;
+
 
     if (background_flag)
         daemonize(argv[0], user, sockfd);

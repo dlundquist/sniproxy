@@ -12,7 +12,7 @@ struct Listener {
         TLS,
         HTTP
     } protocol;
-    const char *table_name;
+    char table_name[TABLE_NAME_LEN];
 
     /* Runtime fields */
     int sockfd;
@@ -23,10 +23,10 @@ struct Listener {
 };
 
 void init_listeners();
+void free_listeners();
+struct Listener *add_listener(const struct sockaddr *, size_t, int, const char *);
 int fd_set_listeners(fd_set *, int);
 void handle_listeners(fd_set *);
-void close_listeners();
-void free_listeners();
 
 static inline int lookup_server_socket(const struct Listener *listener, const char *hostname) {
     return lookup_table_server_socket(listener->table, hostname);

@@ -9,8 +9,6 @@
 #include "config.h"
 #include "util.h"
 
-#define BACKLOG 5
-
 static void sig_handler(int);
 
 static volatile int running; /* For signal handler */
@@ -20,7 +18,8 @@ static volatile int sighup_received; /* For signal handler */
 int
 init_server(const char *address, int port, int tls_flag) {
     struct sockaddr_storage addr;
-    int sockfd, addr_len;
+    int addr_len;
+    struct Listener *listener;
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -37,28 +36,9 @@ init_server(const char *address, int port, int tls_flag) {
         return -1;
     }
 
-    sockfd = add_listener(addr, addr_len, tls_flag);
+    listener = add_listener((const struct sockaddr *)&addr, addr_len, tls_flag, "default");
 
-    /*
-    sockfd = socket(addr.ss_family, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        perror("ERROR opening socket");
-        return -1;
-    }
-    // set SO_REUSEADDR on server socket to facilitate restart
-    int reuseval = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseval, sizeof(reuseval));
-    
-    if (bind(sockfd, (struct sockaddr *)&addr, addr_len) < 0) {
-        perror("ERROR on binding");
-        return -1;
-    }
-    if (listen(sockfd, BACKLOG) < 0) {
-        perror("ERROR listen();");
-        return;
-    }
-    */
-    return sockfd;
+    return listener->sockfd;
 }
 
 void
@@ -93,7 +73,6 @@ run_server() {
         handle_connections(&rfds);
     }
 
-    close_listeners();
     free_listeners();
     free_connections();
 }

@@ -2,19 +2,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include "config.h"
+#include "table.h"
 
 static const char *config_file;
 
 int
 init_config(const char *config) {
     config_file = config;
-    init_backends();
+    init_tables();
     return load_config();
 }
 
 void
 free_config() {
-    free_backends();
+    free_tables();
 }
 
 int
@@ -25,6 +26,7 @@ load_config() {
     char *hostname;
     char *address;
     char *port;
+    struct Table *default_table;
 
     if (config_file == NULL)
         return -1;
@@ -34,6 +36,10 @@ load_config() {
         fprintf(stderr, "Unable to open %s\n", config_file);
         return -1;
     }
+
+    default_table = lookup_table("default");
+    if (default_table == NULL)
+        default_table = add_table("default");
 
     while (fgets(line, sizeof(line), config) != NULL) {
         /* skip blank and comment lines */
@@ -52,7 +58,7 @@ load_config() {
         if (port == NULL)
             goto fail;
 
-        add_backend(hostname, address, atoi(port));
+        add_table_backend(default_table, hostname, address, atoi(port));
         count ++;
         continue;
 

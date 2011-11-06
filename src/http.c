@@ -2,10 +2,16 @@
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
 #include <ctype.h> /* isblank() */
+#include <unistd.h>
 #include "http.h"
 #include "util.h"
 
 #define SERVER_NAME_LEN 256
+
+static const char http_503[] = "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
+    "Content-Type: text/html\r\n"
+    "Connection: close\r\n\r\n"
+    "Backend not avaliable";
 
 
 static int next_header(const char **, int *);
@@ -33,6 +39,12 @@ parse_http_header(const char* data, int len) {
         }
 
     return hostname;
+}
+
+void
+close_http_socket(int sockfd) {
+    send(sockfd, http_503, sizeof(http_503), 0);
+    close(sockfd);
 }
 
 static char *

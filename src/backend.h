@@ -1,7 +1,6 @@
 #ifndef BACKEND_H
 #define BACKEND_H
 
-#include <netinet/in.h>
 #include <sys/queue.h>
 #include <pcre.h>
 
@@ -18,9 +17,6 @@ struct Backend {
     STAILQ_ENTRY(Backend) entries;
 };
 
-void init_backends();
-void free_backends();
-void add_backend(const char *, const char *, int);
-int lookup_backend_socket(const char *);
+int open_backend_socket(struct Backend *, const char *);
 
 #endif
