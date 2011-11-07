@@ -16,12 +16,91 @@
 #include "util.h"
 
 
-#ifndef STAILQ_FOREACH_SAFE
-#define STAILQ_FOREACH_SAFE(var, head, field, tvar)                     \
-    for ((var) = STAILQ_FIRST((head));                          \
-        (var) && ((tvar) = STAILQ_NEXT((var), field), 1);               \
-        (var) = (tvar))
-#endif
+static void free_backend(struct Backend *);
+
+
+struct Backend *
+add_backend(struct Backend_head *head, const char *hostname, const char *address, int port) {
+    struct Backend *backend;
+    const char *reerr;
+    int i, len, reerroffset;
+
+    backend = calloc(1, sizeof(struct Backend));
+    if (backend == NULL) {
+        syslog(LOG_CRIT, "calloc failed");
+        return NULL;
+    }
+
+    len = strlen(hostname) + 1;
+    backend->hostname = malloc(len);
+    if (backend->hostname == NULL) {
+        syslog(LOG_CRIT, "malloc failed");
+        free_backend(backend);
+        return NULL;
+    }
+    strncpy(backend->hostname, hostname, len);
+
+    len = strlen(address) + 1;
+    backend->address = malloc(len);
+    if (backend->address == NULL) {
+        syslog(LOG_CRIT, "strdup failed");
+        free_backend(backend);
+        return NULL;
+    }
+    /* Store address as lower case */
+    for (i = 0; i < len && address[i] != '\0'; i++)
+        backend->address[i] = tolower(address[i]);
+    backend->address[len] = '\0';
+
+    backend->port = port;
+
+    backend->hostname_re = pcre_compile(hostname, 0, &reerr, &reerroffset, NULL);
+    if (backend->hostname_re == NULL) {
+        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+        free_backend(backend);
+        return NULL;
+    }
+
+    syslog(LOG_DEBUG, "Parsed %s %s %d", hostname, address, port);
+    STAILQ_INSERT_TAIL(head, backend, entries);
+
+    return backend;
+}
+
+struct Backend *
+lookup_backend(const struct Backend_head *head, const char *hostname) {
+    struct Backend *iter;
+
+    if (hostname == NULL)
+        hostname = "";
+
+    STAILQ_FOREACH(iter, head, entries) {
+        if (pcre_exec(iter->hostname_re, NULL, hostname, strlen(hostname), 0, 0, NULL, 0) >= 0) {
+            syslog(LOG_DEBUG, "%s matched %s", iter->hostname, hostname);
+            return iter;
+        } else {
+            syslog(LOG_DEBUG, "%s didn't match %s", iter->hostname, hostname);
+        }
+    }
+    return NULL;
+}
+
+void
+remove_backend(struct Backend_head *head, struct Backend *backend) {
+    STAILQ_REMOVE(head, backend, Backend, entries);
+    free_backend(backend);
+}
+
+static void
+free_backend(struct Backend *backend) {
+    if (backend->hostname != NULL)
+        free(backend->hostname);
+    if (backend->address != NULL)
+        free(backend->address);
+    if (backend->hostname_re != NULL)
+        pcre_free(backend->hostname_re);
+    free(backend);
+}
 
 int
 open_backend_socket(struct Backend *b, const char *req_hostname) {
@@ -69,4 +148,3 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
     freeaddrinfo(results);
     return sockfd;
 }
-

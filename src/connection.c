@@ -14,6 +14,7 @@
 #include "tls.h"
 #include "util.h"
 
+
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 /* Linux may not include _SAFE macros */
@@ -27,9 +28,11 @@
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
+
 static void handle_connection_server_data(struct Connection *);
 static void handle_connection_client_data(struct Connection *);
 static void close_connection(struct Connection *);
+static void free_connection(struct Connection *);
 
 
 void
@@ -41,10 +44,9 @@ void
 free_connections() {
     struct Connection *iter;
 
-    while ((iter = connections.lh_first) != NULL) {
+    while ((iter = LIST_FIRST(&connections)) != NULL) {
         LIST_REMOVE(iter, entries);
-        close_connection(iter);
-        free(iter);
+        free_connection(iter);
     }
 }
 
@@ -245,4 +247,10 @@ close_connection(struct Connection *c) {
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     c->state = CLOSED;
+}
+
+static void
+free_connection(struct Connection *c) {
+    close_connection(c);
+    free(c);
 }

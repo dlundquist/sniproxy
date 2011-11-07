@@ -4,12 +4,11 @@
 #include <sys/queue.h>
 #include <pcre.h>
 
-#define HOSTNAME_REGEX_LEN 256
-#define BACKEND_ADDRESS_LEN 256
+STAILQ_HEAD(Backend_head, Backend);
 
 struct Backend {
-    char hostname[HOSTNAME_REGEX_LEN];
-    char address[BACKEND_ADDRESS_LEN];
+    char *hostname;
+    char *address;
     int port;
 
     /* Runtime fields */
@@ -18,5 +17,8 @@ struct Backend {
 };
 
 int open_backend_socket(struct Backend *, const char *);
+struct Backend *add_backend(struct Backend_head *, const char *, const char *, int);
+struct Backend *lookup_backend(const struct Backend_head *, const char *);
+void remove_backend(struct Backend_head *, struct Backend *);
 
 #endif
