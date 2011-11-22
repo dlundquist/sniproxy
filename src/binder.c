@@ -15,6 +15,8 @@ static pid_t binder_pid;
 
 
 static void run_binder(char *, int);
+static int parse_ancillary_data(struct msghdr *);
+
 
 struct binder_request {
     struct sockaddr_storage address;
@@ -28,8 +30,10 @@ start_binder(char *arg0) {
     pid_t pid;
 
     /* Do not start binder if we are not running as root */
+    /*
     if (getuid() != 0)
         return;
+    */
 
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) {
         perror("sockpair()");
@@ -38,6 +42,7 @@ start_binder(char *arg0) {
 
     pid = fork();
     if (pid == -1) { /* error case */
+        perror("fork()");
         close(sockets[0]);
         close(sockets[1]);
         return;
@@ -54,19 +59,22 @@ start_binder(char *arg0) {
 
 int
 bind_socket(struct sockaddr *addr, size_t addr_len) {
-    int fd = -1;
     struct binder_request request;
     struct msghdr msg;
     struct iovec iov[1];
-    struct cmsghdr *cmsg;
     char data_buf[256];
     char control_buf[64];
+
+    if (binder_pid <= 0) {
+        fprintf(stderr, "Binder not started\n");
+        return -1;
+    }
 
     if (addr_len > sizeof(request.address)) {
         fprintf(stderr, "addr_len is too long\n");
         return -1;
     }
-    memcpy(&(request.address), addr, addr_len);
+    memcpy(&request.address, addr, addr_len);
     request.address_len = addr_len;
 
     if (send(binder_sock, &request, sizeof(request), 0) < 0) {
@@ -88,13 +96,7 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
         return -1;
     }
 
-    for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-            fd = *((int *)CMSG_DATA(cmsg));
-        }
-    }
-
-    return fd;
+    return parse_ancillary_data(&msg);
 }
 
 void
@@ -107,14 +109,15 @@ stop_binder() {
 
 /* This function is invoked right after the binder is forked */
 static void run_binder(char *arg0, int sock_fd) {
-    int running = 1;
-    int fd;
-    ssize_t len;
+    int running = 1, fd, len;
+    int *fdptr;
     struct msghdr msg;
     struct iovec iov[1];
     struct cmsghdr *cmsg;
     char control_data[64];
     char buffer[256];
+
+    printf("Binder started\n");
 
     while (running) {
         len = recv(sock_fd, buffer, sizeof(buffer), 0);
@@ -124,8 +127,10 @@ static void run_binder(char *arg0, int sock_fd) {
         }
 
         if (len < sizeof(struct binder_request)) {
-            perror("Incomplete request");
-            return;
+            fprintf(stderr, "Incomplete request\n");
+            memset(buffer, 0, sizeof(buffer));
+            strncpy(buffer, "Incomplete error:", sizeof(buffer));
+            goto error;
         }
 
         struct binder_request *req = (struct binder_request *)buffer;
@@ -159,12 +164,18 @@ static void run_binder(char *arg0, int sock_fd) {
         cmsg->cmsg_level = SOL_SOCKET;
         cmsg->cmsg_type = SCM_RIGHTS;
         cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-        *((int *)CMSG_DATA(cmsg)) = fd;
+        fdptr = (int *)CMSG_DATA(cmsg);
+        *fdptr = fd;
+        memcpy(fdptr, &fd, sizeof(fd));
+        msg.msg_controllen = cmsg->cmsg_len;
 
         if (sendmsg(sock_fd, &msg, 0) < 0) {
             perror("sendmsg()");
             return;
         }
+
+        close(fd);
+
         continue;
 
 error:
@@ -176,3 +187,20 @@ error:
         }
     }
 }
+
+static int
+parse_ancillary_data(struct msghdr *m) {
+    struct cmsghdr *cmsg;
+    int fd = -1;
+    int *fdptr;
+
+    for (cmsg = CMSG_FIRSTHDR(m); cmsg != NULL; cmsg = CMSG_NXTHDR(m, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            fdptr = (int *)CMSG_DATA(cmsg);
+            memcpy(&fd, fdptr, sizeof(fd));
+        }
+    }
+
+    return fd;
+}
+
