@@ -51,4 +51,6 @@ test_binder(int port) {
         perror("listen:");
         exit(1);
     }
+
+    return 0;
 }

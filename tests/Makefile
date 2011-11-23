@@ -8,7 +8,7 @@ all: ${TESTS}
 	$(CC) $(CFLAGS) -o $@ $^
 
 %.o: %.c %.h
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 .PHONY: clean all
 
