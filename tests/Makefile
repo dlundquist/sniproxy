@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -g -I ../src -L ../src
-TESTS = http.test tls.test config.test
+TESTS = http.test tls.test config.test binder.test
 
 all: ${TESTS}
 
