@@ -103,7 +103,7 @@ void
 stop_binder() {
     close(binder_sock);
 
-    /* wait() */
+    /* TODO wait() */
 }
 
 
@@ -117,17 +117,15 @@ static void run_binder(char *arg0, int sock_fd) {
     char control_data[64];
     char buffer[256];
 
-    printf("Binder started\n");
-
     while (running) {
         len = recv(sock_fd, buffer, sizeof(buffer), 0);
         if (len < 0) {
             perror("recv()");
             return;
-        }
-
-        if (len < sizeof(struct binder_request)) {
-            fprintf(stderr, "Incomplete request\n");
+        } else if (len == 0) {
+            /* socket was closed */
+            continue;
+        } else if (len < sizeof(struct binder_request)) {
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "Incomplete error:", sizeof(buffer));
             goto error;
