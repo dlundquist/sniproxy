@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -D_POSIX_SOURCE=1
 LIBS = -lpcre
 
-all: sni_proxy binder.o
+all: sni_proxy
 
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c $<
