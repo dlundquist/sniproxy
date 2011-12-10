@@ -4,19 +4,8 @@
 #include "cfg_parser.h"
 #include "cfg_tokenizer.h"
 
-
-struct Keyword {
-    const char *keyword;
-    void *(*create)(void *);
-    int (*parse_arg)(void *, char *, size_t);
-    struct Keyword *block_syntax;
-    int (*finalize)(void *);
-};
-
-struct Keyword *syntax;
-
 int
-parse_config(void *context, FILE *cfg) {
+parse_config(void *context, FILE *cfg, struct Keyword *syntax) {
     enum Token token;
     struct Keyword *keyword = NULL;
     void *keyword_obj = NULL;
@@ -26,38 +15,40 @@ parse_config(void *context, FILE *cfg) {
         switch(token) {
             case ERROR:
                 return -1;
-            case EOL:
-                if (keyword != NULL && keyword_obj != NULL)
-                    keyword->finalize(keyword_obj);
-                keyword = NULL;
-                keyword_obj = NULL;
-                break;
             case WORD:
                 if (keyword == NULL) {
-                    for(struct Keyword *iter = syntax; keyword_obj == NULL && iter->keyword != NULL; iter++) {
+                    for(struct Keyword *iter = syntax; keyword_obj == NULL && iter->keyword; iter++) {
                         if (strncmp(iter->keyword, buffer, strlen(buffer)) == 0) {
                             keyword = iter;
-                            keyword_obj = keyword->create(context);
+                            if (keyword->create)
+                                keyword_obj = keyword->create(context);
                         }            
                     }
-                    if (keyword == NULL || keyword_obj == NULL) {
+                    if (keyword == NULL) {
                         printf("unknown keyword %s\n", buffer);
                         exit(1);
                     }
                 } else {
-                    keyword->parse_arg(keyword_obj, buffer, sizeof(buffer));
+                    if (keyword && keyword_obj && keyword->parse_arg)
+                        keyword->parse_arg(keyword_obj, buffer, sizeof(buffer));
                 }
                 break;
             case OBRACE:
-                if (keyword != NULL && keyword_obj != NULL)
-                    parse_config(context, cfg);
+                if (keyword && keyword_obj && keyword->block_syntax)
+                    parse_config(context, cfg, keyword->block_syntax);
                 else {
                     printf("block without context\n");
                     exit(1);
                 }
                 break;
+            case EOL:
+                if (keyword && keyword_obj && keyword->finalize)
+                    keyword->finalize(keyword_obj);
+                keyword = NULL;
+                keyword_obj = NULL;
+                break;
             case CBRACE:
-                if (keyword != NULL && keyword_obj != NULL)
+                if (keyword && keyword_obj && keyword->finalize)
                     keyword->finalize(keyword_obj);
                 keyword = NULL;
                 keyword_obj = NULL;
