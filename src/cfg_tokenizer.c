@@ -23,14 +23,14 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
 
     while ((ch = getc(config)) != EOF) {
         switch(ch) {
-            case '#': /* comment */
-                chomp_line(config);
-                /* fall through */
             case ' ':
                 /* fall through */
             case '\t':
                 /* no op */
                 break;
+            case '#': /* comment */
+                chomp_line(config);
+                /* fall through */
             case ';':
                 /* fall through */
             case '\n':

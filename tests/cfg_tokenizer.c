@@ -1,38 +1,70 @@
 #include <stdio.h>
+#include <string.h>
+#include <assert.h>
 #include "cfg_tokenizer.h"
 
-#define LEN 256
+
+struct Result {
+    enum Token type;
+    char *value;
+};
+
+struct Test {
+    char *config;
+    struct Result *results;
+    int len;
+};
+
+char config1[] = "# Comment\n"
+                 "numbers {\n"
+                 "   one\n"
+                 "   two\n"
+                 "   three\n"
+                 "}";
+struct Result results1[] = {
+    { EOL, NULL },
+    { WORD, "numbers" },
+    { OBRACE, NULL },
+    { EOL, NULL },
+    { WORD, "one" },
+    { EOL, NULL },
+    { WORD, "two" },
+    { EOL, NULL },
+    { WORD, "three" },
+    { EOL, NULL },
+    { CBRACE, NULL },
+    { END, NULL },
+};
+
+struct Test tests[] = {
+    { config1, results1, sizeof(results1) / sizeof(struct Result) },
+    { NULL, NULL, 0 } /* End of tests */
+};
 
 int main() {
     FILE *cfg;
-    char buffer[LEN];
+    char buffer[256];
     enum Token token;
 
-    cfg = fopen("../sni_proxy.conf", "r");
+    cfg = tmpfile();
     if (cfg == NULL) {
-        perror("fopen:");
+        perror("tmpfile");
         return 1;
     }
 
-    while((token = next_token(cfg, buffer, LEN)) != END) {
-        switch(token) {
-            case ERROR:
-                return 2;
-            case EOL:
-                printf("seperator\n");
-                break;
-            case OBRACE:
-                printf("open block\n");
-                break;
-            case CBRACE:
-                printf("end block\n");
-                break;
-            case WORD:
-                printf("word: %s\n", buffer);
-                break;
-            case END:
-                break;
+    for (struct Test *test = tests; test->config; test++) {
+        fprintf(cfg, "%s", test->config);
+        rewind(cfg);
+
+        for (int i = 0; i < test->len; i++) {
+            token = next_token(cfg, buffer, sizeof(buffer));
+            assert(token == test->results[i].type);
+            if (test->results[i].value)
+                assert(strncmp(buffer, test->results[i].value, sizeof(buffer)) == 0);
         }
+        rewind(cfg);
     }
+
     fclose(cfg);
+    return (0);
 }
