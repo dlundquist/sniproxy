@@ -32,25 +32,24 @@ add_backend(struct Backend_head *head, const char *hostname, const char *address
     }
 
     len = strlen(hostname) + 1;
-    backend->hostname = malloc(len);
+    backend->hostname = calloc(1, len);
     if (backend->hostname == NULL) {
-        syslog(LOG_CRIT, "malloc failed");
+        syslog(LOG_CRIT, "calloc failed");
         free_backend(backend);
         return NULL;
     }
     strncpy(backend->hostname, hostname, len);
 
     len = strlen(address) + 1;
-    backend->address = malloc(len);
+    backend->address = calloc(1, len);
     if (backend->address == NULL) {
-        syslog(LOG_CRIT, "strdup failed");
+        syslog(LOG_CRIT, "calloc failed");
         free_backend(backend);
         return NULL;
     }
     /* Store address as lower case */
     for (i = 0; i < len && address[i] != '\0'; i++)
         backend->address[i] = tolower(address[i]);
-    backend->address[len] = '\0';
 
     backend->port = port;
 
