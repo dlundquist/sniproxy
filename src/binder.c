@@ -124,6 +124,7 @@ static void run_binder(char *arg0, int sock_fd) {
             return;
         } else if (len == 0) {
             /* socket was closed */
+            running = 0;
             continue;
         } else if (len < sizeof(struct binder_request)) {
             memset(buffer, 0, sizeof(buffer));
