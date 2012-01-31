@@ -122,7 +122,6 @@ daemonize(const char *cmd, const char *username, int sockfd) {
     fd1 = dup(fd0);
     fd2 = dup(fd0);
 
-    openlog(cmd, LOG_CONS, LOG_DAEMON);
     if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
         fprintf(stderr, "Unexpected file descriptors\n");
         exit(2);
