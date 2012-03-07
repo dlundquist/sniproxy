@@ -23,7 +23,8 @@ struct Backend *
 add_backend(struct Backend_head *head, const char *hostname, const char *address, int port) {
     struct Backend *backend;
     const char *reerr;
-    int i, len, reerroffset;
+    int reerroffset;
+    char *ch;
 
     backend = calloc(1, sizeof(struct Backend));
     if (backend == NULL) {
@@ -31,25 +32,23 @@ add_backend(struct Backend_head *head, const char *hostname, const char *address
         return NULL;
     }
 
-    len = strlen(hostname) + 1;
-    backend->hostname = calloc(1, len);
+    backend->hostname = strdup(hostname);
     if (backend->hostname == NULL) {
-        syslog(LOG_CRIT, "calloc failed");
+        syslog(LOG_CRIT, "strdup failed");
         free_backend(backend);
         return NULL;
     }
-    strncpy(backend->hostname, hostname, len);
 
-    len = strlen(address) + 1;
-    backend->address = calloc(1, len);
+    backend->address = strdup(address);
     if (backend->address == NULL) {
-        syslog(LOG_CRIT, "calloc failed");
+        syslog(LOG_CRIT, "strdup failed");
         free_backend(backend);
         return NULL;
     }
     /* Store address as lower case */
-    for (i = 0; i < len && address[i] != '\0'; i++)
-        backend->address[i] = tolower(address[i]);
+    for (ch = backend->address; *ch == '\0'; ch++)
+        *ch = tolower(*ch);
+    
 
     backend->port = port;
 
