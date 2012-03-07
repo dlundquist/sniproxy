@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h> /* memcpy() */
 #include <errno.h> /* errno */
+#include <alloca.h>
 #include "binder.h"
 
 /*
@@ -14,18 +15,17 @@ static int binder_sock; /* socket to binder */
 static pid_t binder_pid;
 
 
-static void run_binder(char *, int);
+static void run_binder(int);
 static int parse_ancillary_data(struct msghdr *);
 
 
 struct binder_request {
-    struct sockaddr_storage address;
     size_t address_len;
+    struct sockaddr address[];
 };
 
-
 void
-start_binder(char *arg0) {
+start_binder() {
     int sockets[2];
     pid_t pid;
 
@@ -48,7 +48,7 @@ start_binder(char *arg0) {
         return;
     } else if (pid == 0) { /* child */
         close(sockets[0]);
-        run_binder(arg0, sockets[1]);
+        run_binder(sockets[1]);
         exit(0);
     } else { /* parent */
         close(sockets[1]);
@@ -59,9 +59,10 @@ start_binder(char *arg0) {
 
 int
 bind_socket(struct sockaddr *addr, size_t addr_len) {
-    struct binder_request request;
+    struct binder_request *request;
     struct msghdr msg;
     struct iovec iov[1];
+    size_t request_len;
     char data_buf[256];
     char control_buf[64];
 
@@ -70,14 +71,13 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
         return -1;
     }
 
-    if (addr_len > sizeof(request.address)) {
-        fprintf(stderr, "addr_len is too long\n");
-        return -1;
-    }
-    memcpy(&request.address, addr, addr_len);
-    request.address_len = addr_len;
+    request_len = sizeof(request) + addr_len;
+    request = alloca(request_len);
 
-    if (send(binder_sock, &request, sizeof(request), 0) < 0) {
+    request->address_len = addr_len;
+    memcpy(&request->address, addr, addr_len);
+
+    if (send(binder_sock, request, request_len, 0) < 0) {
         perror("send()");
         return -1;
     }
@@ -108,7 +108,7 @@ stop_binder() {
 
 
 /* This function is invoked right after the binder is forked */
-static void run_binder(char *arg0, int sock_fd) {
+static void run_binder(int sock_fd) {
     int running = 1, fd, len;
     int *fdptr;
     struct msghdr msg;
@@ -126,7 +126,7 @@ static void run_binder(char *arg0, int sock_fd) {
             /* socket was closed */
             running = 0;
             continue;
-        } else if (len < sizeof(struct binder_request)) {
+        } else if (len < (int)sizeof(struct binder_request)) {
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "Incomplete error:", sizeof(buffer));
             goto error;
@@ -134,7 +134,7 @@ static void run_binder(char *arg0, int sock_fd) {
 
         struct binder_request *req = (struct binder_request *)buffer;
 
-        fd = socket(req->address.ss_family, SOCK_STREAM, 0);
+        fd = socket(req->address[0].sa_family, SOCK_STREAM, 0);
         if (fd < 0) {
             perror("ERROR opening socket:");
             memset(buffer, 0, sizeof(buffer));
@@ -142,7 +142,7 @@ static void run_binder(char *arg0, int sock_fd) {
             goto error;
         }
 
-        if (bind(fd, (struct sockaddr *)&(req->address.ss_family), req->address_len) < 0) {
+        if (bind(fd, req->address, req->address_len) < 0) {
             perror("ERROR on binding:");
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "ERROR on binding:", sizeof(buffer));
