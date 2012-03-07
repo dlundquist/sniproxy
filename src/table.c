@@ -84,10 +84,8 @@ static void
 free_table(struct Table *table) {
     struct Backend *iter;
 
-    while ((iter = STAILQ_FIRST(&table->backends)) != NULL) {
-        STAILQ_REMOVE_HEAD(&table->backends, entries);
-        free(iter);
-    }
+    while ((iter = STAILQ_FIRST(&table->backends)) != NULL)
+        remove_backend(&table->backends, iter);
     free(table->name);
     free(table);
 }
