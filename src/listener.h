@@ -12,7 +12,7 @@ struct Listener {
         TLS,
         HTTP
     } protocol;
-    char table_name[TABLE_NAME_LEN];
+    char *table_name;
 
     /* Runtime fields */
     int sockfd;

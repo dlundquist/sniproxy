@@ -17,7 +17,7 @@
 
 
 static void usage();
-static void daemonize(const char *, const char *, int);
+static void daemonize(const char *, int);
 
 
 int
@@ -65,7 +65,7 @@ main(int argc, char **argv) {
 
 
     if (background_flag)
-        daemonize(argv[0], user, sockfd);
+        daemonize(user, sockfd);
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
@@ -77,7 +77,7 @@ main(int argc, char **argv) {
 }
 
 static void
-daemonize(const char *cmd, const char *username, int sockfd) {
+daemonize(const char *username, int sockfd) {
     int i, fd0, fd1, fd2;
     pid_t pid;
     struct rlimit rl;
@@ -122,7 +122,6 @@ daemonize(const char *cmd, const char *username, int sockfd) {
     fd1 = dup(fd0);
     fd2 = dup(fd0);
 
-    openlog(cmd, LOG_CONS, LOG_DAEMON);
     if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
         fprintf(stderr, "Unexpected file descriptors\n");
         exit(2);

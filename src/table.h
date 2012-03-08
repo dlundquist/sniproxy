@@ -7,7 +7,7 @@
 #define TABLE_NAME_LEN 20
 
 struct Table {
-    char name[TABLE_NAME_LEN];
+    char *name;
 
     /* Runtime fields */
     struct Backend_head backends;

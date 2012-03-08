@@ -168,7 +168,6 @@ static const char *
 parse_server_name_extension(const char* buf, int buf_len) {
     static char server_name[SERVER_NAME_LEN];
     const char* p = buf;
-    int ext_len;
     char name_type;
     int name_len;
 
@@ -177,7 +176,6 @@ parse_server_name_extension(const char* buf, int buf_len) {
         return NULL;
     }
 
-    ext_len = ((unsigned char)p[0] << 8) + (unsigned char)p[1];
     p += 2;
 
     while(1) {

@@ -36,12 +36,12 @@ add_table(const char *name) {
         syslog(LOG_CRIT, "calloc failed");
         return NULL;
     }
-    if (strlen(name) >= sizeof(table->name)) {
-        syslog(LOG_CRIT, "table name \"%s\" too long", name);
+    table->name = strdup(name);
+    if (table->name == NULL) {
+        syslog(LOG_CRIT, "strdup failed");
         free(table);
         return NULL;
     }
-    strncpy(table->name, name, sizeof(table->name));
     STAILQ_INIT(&table->backends);
 
     SLIST_INSERT_HEAD(&tables, table, entries);
@@ -84,8 +84,8 @@ static void
 free_table(struct Table *table) {
     struct Backend *iter;
 
-    while ((iter = STAILQ_FIRST(&table->backends)) != NULL) {
-        STAILQ_REMOVE_HEAD(&table->backends, entries);
-        free(iter);
-    }
+    while ((iter = STAILQ_FIRST(&table->backends)) != NULL)
+        remove_backend(&table->backends, iter);
+    free(table->name);
+    free(table);
 }

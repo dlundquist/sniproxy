@@ -20,13 +20,14 @@ sub REAPER {
 }
 
 sub start_proxy {
+    my @wrapper = @_;
     # Start the proxy in forground HTTP mode on a high port with our test config, this shouldn't require privileges
 
     my $pid = fork();
     if (not defined $pid) {
         die("fork: $!");
     } elsif ($pid == 0) {
-        exec('../src/sni_proxy', '-f', '-h', '-c', 'test_proxy.conf', '-p', '8080')
+        exec(@wrapper, '../src/sni_proxy', '-f', '-h', '-c', 'test_proxy.conf', '-p', '8080')
             or die("exec: $!");
     } else {
         $children{$pid} = { 
@@ -90,7 +91,7 @@ sub reap_children {
 }
 
 sub main {
-    start_proxy();
+    start_proxy(@ARGV);
 
     sleep 1;
     

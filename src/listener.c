@@ -13,7 +13,8 @@
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
 
-static void close_listener(struct Listener * listener);
+static void close_listener(struct Listener *);
+static void free_listener(struct Listener *);
 
 
 static SLIST_HEAD(, Listener) listeners;
@@ -68,20 +69,19 @@ add_listener(const struct sockaddr * addr, size_t addr_len, int tls_flag, const 
 
     if (addr_len > sizeof(listener->addr)) {
         syslog(LOG_CRIT, "addr too long");
-        free (listener);
+        free_listener(listener);
         return NULL;
     }
     memcpy(&listener->addr, addr, addr_len);
     listener->addr_len = addr_len;
     listener->protocol = tls_flag ? TLS : HTTP;
-    
-    if (strlen(table_name) >= sizeof(listener->table_name)) {
-        syslog(LOG_CRIT, "table name \"%s\" too long", table_name);
-        free (listener);
+
+    listener->table_name = strdup(table_name); 
+    if (listener->table_name == NULL) {
+        syslog(LOG_CRIT, "could not allocate table_name");
+        free_listener(listener);
         return NULL;
     }
-    strncpy(listener->table_name, table_name, sizeof(listener->table_name));
-
 
     // Runtime initialization below
     listener->table = lookup_table(listener->table_name);
@@ -91,7 +91,7 @@ add_listener(const struct sockaddr * addr, size_t addr_len, int tls_flag, const 
     listener->sockfd = socket(listener->addr.ss_family, SOCK_STREAM, 0);
     if (listener->sockfd < 0) {
         syslog(LOG_CRIT, "socket failed");
-        free (listener);
+        free_listener(listener);
         return NULL;
     }
 
@@ -102,14 +102,14 @@ add_listener(const struct sockaddr * addr, size_t addr_len, int tls_flag, const 
     if (bind(listener->sockfd, (struct sockaddr *)&listener->addr, listener->addr_len) < 0) {
         syslog(LOG_CRIT, "bind failed");
         close(listener->sockfd);
-        free (listener);
+        free_listener(listener);
         return NULL;
     }
 
     if (listen(listener->sockfd, BACKLOG) < 0) {
         syslog(LOG_CRIT, "listen failed");
         close(listener->sockfd);
-        free (listener);
+        free_listener(listener);
         return NULL;
     }
 
@@ -124,7 +124,7 @@ add_listener(const struct sockaddr * addr, size_t addr_len, int tls_flag, const 
             break;
         default:
             syslog(LOG_CRIT, "invalid protocol");
-            free (listener);
+            free_listener(listener);
             return NULL;
     }
 
@@ -138,6 +138,13 @@ close_listener(struct Listener * listener) {
     close(listener->sockfd);
 }
 
+static void
+free_listener(struct Listener *listener) {
+    if (listener->table_name != NULL)
+        free (listener->table_name);
+    free (listener);
+}
+
 void
 free_listeners() {
     struct Listener *iter;
@@ -145,6 +152,6 @@ free_listeners() {
     while ((iter = SLIST_FIRST(&listeners)) != NULL) {
         SLIST_REMOVE_HEAD(&listeners, entries);
         close_listener(iter);
-        free(iter);
+        free_listener(iter);
     }
 }
