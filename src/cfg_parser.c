@@ -5,7 +5,7 @@
 #include "cfg_tokenizer.h"
 
 int
-parse_config(void *context, FILE *cfg, struct Keyword *syntax) {
+parse_config(void *context, FILE *cfg, struct Keyword *grammar) {
     enum Token token;
     struct Keyword *keyword = NULL;
     void *keyword_obj = NULL;
@@ -17,14 +17,25 @@ parse_config(void *context, FILE *cfg, struct Keyword *syntax) {
                 return -1;
             case WORD:
                 if (keyword == NULL) {
-                    for(struct Keyword *iter = syntax; keyword_obj == NULL && iter->keyword; iter++) {
+                    for(struct Keyword *iter = grammar; keyword_obj == NULL &&
+                            iter->keyword; iter++) {
+
                         if (strncmp(iter->keyword, buffer, strlen(buffer)) == 0) {
                             keyword = iter;
                             if (keyword->create)
                                 keyword_obj = keyword->create(context);
+                            else
+                                keyword_obj = context;
                         }            
                     }
-                    if (keyword == NULL) {
+                    if (keyword == NULL && grammar->keyword == NULL &&
+                            grammar->create != NULL) {
+                        /* Special case for wildcard grammers i.e. tables */
+                        keyword = grammar;
+                        keyword_obj = keyword->create(context);
+                        keyword->parse_arg(keyword_obj, buffer, sizeof(buffer));
+
+                    } else if (keyword == NULL) {
                         printf("unknown keyword %s\n", buffer);
                         exit(1);
                     }
@@ -34,8 +45,8 @@ parse_config(void *context, FILE *cfg, struct Keyword *syntax) {
                 }
                 break;
             case OBRACE:
-                if (keyword && keyword_obj && keyword->block_syntax)
-                    parse_config(context, cfg, keyword->block_syntax);
+                if (keyword && keyword_obj && keyword->block_grammar)
+                    parse_config(keyword_obj, cfg, keyword->block_grammar);
                 else {
                     printf("block without context\n");
                     exit(1);

@@ -1,53 +1,127 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h> /* strcasecmp() */
 #include <assert.h>
+#include <sys/queue.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <arpa/inet.h>
+#include "cfg_parser.h"
 #include "config.h"
-#include "table.h"
+#include "util.h"
 
-#define BUFFER_SIZE 256
 
-enum Token {
-    ERROR,
-    SEPERATOR,
-    OBRACE,
-    CBRACE,
-    LISTEN,
-    USER,
-    PROTOCOL,
-    TABLE,
-    WORD,
-    ENDCONFIG,
+struct ListenerConfig {
+    struct Config *config;
+    char *address;
+    char *port;
+    char *table_name;
+    char *protocol;
 };
 
+struct TableConfig {
+    struct Config *config;
+    char *name;
+    STAILQ_HEAD(, TableEntryConfig) entries;
+};
 
-static int parse_listen_stanza(struct Config *, FILE *);
-static int parse_table_stanza(struct Config *, FILE *);
-static enum Token next_token(FILE *, char *, size_t);
-static void chomp_line(FILE *);
-static int next_word(FILE *, char *, int);
+struct TableEntryConfig {
+    struct TableConfig *table;
+    char *hostname;
+    char *address;
+    char *port;
+    STAILQ_ENTRY(TableEntryConfig) entries;
+};
 
+static int accept_username(struct Config *, char *, size_t);
+
+static struct ListenerConfig *begin_listener(struct Config *);
+static int accept_listener_arg(struct ListenerConfig *, char *, size_t);
+static int accept_listener_table_name(struct ListenerConfig *, char *, size_t);
+static int accept_listener_protocol(struct ListenerConfig *, char *, size_t);
+static int end_listener(struct ListenerConfig *);
+
+static struct TableConfig *begin_table(struct Config *);
+static int accept_table_arg(struct TableConfig *, char *, size_t);
+static int end_table(struct TableConfig *);
+
+static struct TableEntryConfig *begin_table_entry(struct TableConfig *);
+static int accept_table_entry_arg(struct TableEntryConfig *, char *, size_t);
+static int end_table_entry(struct TableEntryConfig *);
+
+static struct Keyword listener_stanza_grammar[] = {
+    { "protocol",
+            NULL,
+            (int(*)(void *, char *, size_t))accept_listener_protocol,
+            NULL,
+            NULL},
+    { "table",
+            NULL,
+            (int(*)(void *, char *, size_t))accept_listener_table_name,
+            NULL,
+            NULL},
+    { NULL, NULL, NULL, NULL, NULL }
+};
+
+static struct Keyword table_stanza_grammar[] = {
+    { NULL,
+            (void *(*)(void *))begin_table_entry,
+            (int(*)(void *, char *, size_t))accept_table_entry_arg,
+            NULL,
+            (int(*)(void *))end_table_entry},
+};
+
+static struct Keyword global_grammar[] = {
+    { "username",
+            NULL,
+            (int(*)(void *, char *, size_t))accept_username,
+            NULL,
+            NULL},
+    { "listener",
+            (void *(*)(void *))begin_listener,
+            (int(*)(void *, char *, size_t))accept_listener_arg,
+            listener_stanza_grammar,
+            (int(*)(void *))end_listener},
+    { "table",
+            (void *(*)(void *))begin_table,
+            (int(*)(void *, char *, size_t))accept_table_arg,
+            table_stanza_grammar,
+            (int(*)(void *))end_table},
+    { NULL, NULL, NULL, NULL, NULL }
+};
 
 struct Config *
 init_config(const char *filename) {
-    struct Config *c;
+    FILE *file;
+    struct Config *config;
 
-    c = calloc(1, sizeof(struct Config));
-    if (c == NULL) {
+    config = malloc(sizeof(struct Config));
+    if (config == NULL) {
         perror("malloc()");
         return NULL;
     }
 
-    c->filename = strdup(filename);
-    if (c->filename == NULL) {
-        free(c);
+    config->filename = NULL;
+    config->user = NULL;
+    SLIST_INIT(&config->listeners);
+    SLIST_INIT(&config->tables);
+
+
+    config->filename = strdup(filename);
+    if (config->filename == NULL) {
         perror("malloc()");
+        free_config(config);
         return NULL;
     }
 
-    reload_config(c);
+    file = fopen(config->filename, "r");
+    
+    parse_config((void *)config, file, global_grammar);
 
-    return(c);
+    fclose(file);
+
+    return(config);
 }
 
 void
@@ -63,6 +137,7 @@ free_config(struct Config *c) {
 
 int
 reload_config(struct Config *c) {
+/*
     FILE *config;
     int done = 0;
     enum Token token;
@@ -81,7 +156,9 @@ reload_config(struct Config *c) {
         token = next_token(config, buffer, sizeof(buffer));
         switch (token) {
             case SEPERATOR:
+*/
                 /* no op */
+/*
                 break;
             case USER:
                 if (c->user != NULL)
@@ -115,210 +192,256 @@ reload_config(struct Config *c) {
     }
     fclose(config);
 
-
+*/
+    if (c == NULL)
+        return 1;
     /* TODO validate config */
+    return 0;
+}
 
+static void print_listener_config(struct Listener *);
+static void print_table_config(struct Table *);
+
+void print_config(struct Config *config) {
+    struct Listener *listener = NULL;
+    struct Table *table = NULL;
+
+    printf("# Config loaded from %s\n\n", config->filename);
+
+    if (config->user)
+        printf("username %s\n\n", config->user);
+
+    SLIST_FOREACH(listener, &config->listeners, entries) {
+        print_listener_config(listener);
+    }
+
+    SLIST_FOREACH(table, &config->tables, entries) {
+        print_table_config(table);
+    }
+}
+
+static void
+print_listener_config(struct Listener *listener) {
+    char addr_str[INET_ADDRSTRLEN];
+    union {
+        struct sockaddr_storage *storage;
+        struct sockaddr_in *sin;
+        struct sockaddr_in6 *sin6;
+        struct sockaddr_un *sun;
+    } addr;
+    
+    addr.storage = &listener->addr;
+
+    if (addr.storage->ss_family == AF_UNIX) {
+        printf("listener unix:%s {\n", addr.sun->sun_path);
+    } else if (addr.storage->ss_family == AF_INET) {
+        inet_ntop(AF_INET, &addr.sin->sin_addr, addr_str, listener->addr_len);
+        printf("listener %s %d {\n", addr_str, ntohs(addr.sin->sin_port));
+    } else {
+        inet_ntop(AF_INET6, &addr.sin6->sin6_addr, addr_str, listener->addr_len);
+        printf("listener %s %d {\n", addr_str, ntohs(addr.sin6->sin6_port));
+    }
+
+    if (listener->protocol == TLS)
+        printf("\tprotocol tls\n");
+    else
+        printf("\tprotocol http\n");
+
+    if (listener->table_name)
+        printf("\ttable %s\n", listener->table_name);
+
+
+    printf("}\n\n");
+}
+
+static void
+print_table_config(struct Table *table) {
+    struct Backend *backend;
+
+    if (table->name == NULL)
+        printf("table {\n");
+    else
+        printf("table %s {\n", table->name);
+
+    STAILQ_FOREACH(backend, &table->backends, entries) {
+        if (backend->port == 0)
+            printf("\t%s %s\n", backend->hostname, backend->address);
+        else 
+            printf("\t%s %s %d\n", backend->hostname, backend->address, backend->port);
+    }
+    printf("}\n\n");
 }
 
 static int
-parse_listen_stanza(struct Config *c, FILE *file) {
-    enum {
-        ADDRESS,
-        BLOCK,
-        PROTOCOL,
-        TABLE,
-        DONE
-    } state = ADDRESS;
-    enum Token token;
-    char buffer[BUFFER_SIZE];
-    struct Listener *listener;
+accept_username(struct Config *config, char *username, size_t len) {
+        config->user = strndup(username, len);
+        return 0;
+}
 
-    listener = calloc(1, sizeof(struct Listener));
+static struct ListenerConfig *
+begin_listener(struct Config *config) {
+    struct ListenerConfig *listener;
+
+    listener = calloc(1, sizeof(struct ListenerConfig));
     if (listener == NULL) {
-        fprintf(stderr, "malloc failed\n");
-        return -1;
+        perror("calloc");
+        return NULL;
     }
 
-    while(state != DONE) {
-        token = next_token(file, buffer, sizeof(buffer));
-        switch(state) {
-            case ADDRESS:
-                switch(token) {
-                    case OBRACE:
-                        state = BLOCK;
-                        break;
-                    case WORD:
-                        parse_listener_address_token(listener, buffer);
-                        break;
-                    default:
-                        return -1;
-                }
-                break;
-            case BLOCK:
-                switch(token) {
-                    case SEPERATOR:
-                        break;
-                    case TABLE:
-                        state = TABLE;
-                        break;
-                    case PROTOCOL:
-                        state = PROTOCOL;
-                        break;
-                    case CBRACE:
-                        state = DONE;
-                        break;
-                    default:
-                        return -1;
-                }
-                break;
-            case PROTOCOL:
-                switch(token) {
-                    case SEPERATOR:
-                        state = BLOCK;
-                        break;
-                    case WORD:
-                        parse_listener_protocol_token(listener, buffer);
-                        break;
-                    default:
-                        return -1;
-                }
-            case TABLE:
-                switch(token) {
-                    case SEPERATOR:
-                        state = BLOCK;
-                        break;
-                    case WORD:
-                        parse_listener_table_token(listener, buffer);
-                        break;
-                    default:
-                        return -1;
-                }
-        }
-    }
-    if (valid_listener(listener) <= 0)
-        return -1;
-     
+    listener->config = config;
+    listener->address = NULL;
+    listener->port = NULL;
+    listener->table_name = NULL;
+    listener->protocol = NULL;
+
+    return listener;
 }
 
 static int
-parse_table_stanza(struct Config *c, FILE *file) {
-    enum {
-        NAME,
-        BLOCK,
-        DONE
-    } state;
-}
+accept_listener_arg(struct ListenerConfig *listener, char *arg, size_t len) {
+    if (listener->address == NULL)
+        if (isnumeric(arg))
+            listener->port = strndup(arg, len);
+        else
+            listener->address = strndup(arg, len);
+    else if (listener->port == NULL && isnumeric(arg))
+        listener->port = strndup(arg, len);
+    else
+        return -1;
 
-
-
-/*
- * next_token() returns the next token based on the current position of config file
- * advancing the position to immidiatly after the token.
- */
-static enum Token
-next_token(FILE *config, char *buffer, size_t buffer_len) {
-    int ch;
-    int token_len;
-
-    assert(config != NULL);
-
-    while ((ch = getc(config)) != EOF) {
-        switch(ch) {
-            case '#': /* comment */
-                chomp_line(config);
-                /* fall through */
-            case ' ':
-                /* fall through */
-            case '\t':
-                /* no op */
-                break;
-            case ';':
-                /* fall through */
-            case '\n':
-                /* fall through */
-            case '\r':
-                return SEPERATOR;
-            case '{':
-                return OBRACE;
-            case '}':
-                return CBRACE;
-            default:
-                /* Rewind one byte, so next_word() can fetch the begining of the word */
-                fseek(config, -1, SEEK_CUR);
-
-                token_len = next_word(config, buffer, buffer_len);
-                if (token_len <= 0)
-                    return ERROR;
-
-                if (strncmp("user", buffer, token_len) == 0)
-                    return USER;
-                if (strncmp("listen", buffer, token_len) == 0)
-                    return LISTEN;
-                if (token_len > 5 && strncmp("protocol", buffer, token_len - 1) == 0)
-                    return PROTOCOL;
-                if (strncmp("table", buffer, token_len) == 0)
-                    return TABLE;
-
-                return WORD;
-        }
-    }
-    return ENDCONFIG;
-}
-
-static void 
-chomp_line(FILE *file) {
-    int ch;
-
-    while ((ch = getc(file)) != EOF)
-        if (ch == '\n' || ch == '\r')
-            return;
+    return 0;
 }
 
 static int
-next_word(FILE *file, char *buffer, int buffer_len) {
-    int ch;
-    int len = 0;
-    int quoted = 0;
-    int escaped = 0;
+accept_listener_table_name(struct ListenerConfig *listener, char *table_name, size_t len) {
+    if (listener->table_name == NULL)
+        listener->table_name = strndup(table_name, len);
+    else
+        fprintf(stderr, "Duplicate table_name: %s\n", table_name);
 
-    while ((ch = getc(file)) != EOF && len < buffer_len) {
-        if (escaped) {
-            escaped = 0;
-            buffer[len] = (char)ch;
-            len ++;
-            continue;
-        }
-        switch(ch) {
-            case '\\':
-                escaped = 1;
-                break;
-                case '\"':
-                    quoted = 1 - quoted;
-                break;
-            case ' ':
-            case '\t':
-            case ';':
-            case '\n':
-            case '\r':
-            case '#':
-            case '{':
-            case '}':
-                if (quoted == 0) {
-                    /* rewind the file one character, so we don't eat part of the next token */
-                    fseek(file, -1, SEEK_CUR);
-
-                    buffer[len] = '\0';
-                    len ++;
-                    return len;
-                }
-                /* fall through */
-            default:
-                buffer[len] = (char)ch;
-                len ++;
-        }
-    }
-    /* We reached the end of the file, or filled our buffer */
-    return -1;
+    return 0;
 }
 
+static int
+accept_listener_protocol(struct ListenerConfig *listener, char *protocol, size_t len) {
+    if (listener->protocol == NULL)
+        listener->protocol = strndup(protocol, len);
+    else
+        fprintf(stderr, "Duplicate protocol: %s\n", protocol);
+            
+    return 0;
+}
 
+static int
+end_listener(struct ListenerConfig *lc) {
+    struct Listener *listener;
+    int port = 0;
+
+    listener = malloc(sizeof(struct Listener));
+
+    listener->table_name = lc->table_name;
+    lc->table_name = NULL;
+
+    listener->protocol = TLS;
+    if (lc->protocol != NULL && strcasecmp(lc->protocol, "http") == 0)
+        listener->protocol = HTTP;
+
+    if (lc->port)
+        port = atoi(lc->port);
+
+    listener->addr_len = parse_address(&listener->addr, lc->address, port);
+
+    SLIST_INSERT_HEAD(&lc->config->listeners, listener, entries);
+
+    return 0;
+}
+
+static struct TableConfig *
+begin_table(struct Config *config) {
+    struct TableConfig *table;
+
+    table = calloc(1, sizeof(struct TableConfig));
+    if (table == NULL) {
+        perror("calloc");
+        return NULL;
+    }
+
+    table->config = config;
+    STAILQ_INIT(&table->entries);
+
+    return table;
+}
+
+static int
+accept_table_arg(struct TableConfig *table, char *arg, size_t len) {
+    if (table->name == NULL)
+        table->name = strndup(arg, len);
+    else
+        fprintf(stderr, "Unexpected table argument: %s\n", arg);
+
+    return 0;
+}
+
+static int
+end_table(struct TableConfig *tc) {
+    struct Table *table;
+    struct TableEntryConfig *entry;
+    int port;
+
+    table = malloc(sizeof(struct Table));
+    STAILQ_INIT(&table->backends);
+    
+    if (table == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    table->name = tc->name;
+    tc->name = NULL;
+    
+    STAILQ_FOREACH(entry, &tc->entries, entries) {
+        port = 0;
+        if (entry->port != NULL)
+            port = atoi(entry->port);
+
+        add_backend(&table->backends, entry->hostname, entry->address, port);
+    }
+
+    SLIST_INSERT_HEAD(&tc->config->tables, table, entries);
+
+    return 0;
+}
+
+static struct TableEntryConfig *
+begin_table_entry(struct TableConfig *table) {
+    struct TableEntryConfig *entry;
+
+    entry = calloc(1, sizeof(struct TableEntryConfig));
+    if (entry == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+
+    entry->table = table;
+
+    return entry;
+}
+
+static int
+accept_table_entry_arg(struct TableEntryConfig *entry, char *arg, size_t len) {
+    if (entry->hostname == NULL)
+        entry->hostname = strndup(arg, len);
+    else if (entry->address == NULL)
+        entry->address = strndup(arg, len);
+    else if (entry->port == NULL)
+        entry->port = strndup(arg, len);
+    else
+        fprintf(stderr, "Unexpected table entry argument: %s\n", arg);
+
+    return 0;
+}
+
+static int
+end_table_entry(struct TableEntryConfig *entry) {
+    STAILQ_INSERT_TAIL(&entry->table->entries, entry, entries);
+    return 0;
+}

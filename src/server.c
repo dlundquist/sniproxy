@@ -64,7 +64,6 @@ run_server() {
             /* We where inturrupted by a signal */
             if (sighup_received) {
                 sighup_received = 0;
-                load_config();
             }
             continue; /* our file descriptor sets are undefined, so select again */
         }

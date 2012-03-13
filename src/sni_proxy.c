@@ -26,6 +26,7 @@ main(int argc, char **argv) {
     int background_flag = 1;
     int tls_flag = 1;
     int port = 443;
+    struct Config *config = NULL;
     const char *config_file = "/etc/sni_proxy.conf";
     const char *bind_addr = "::";
     const char *user= "nobody";
@@ -57,7 +58,7 @@ main(int argc, char **argv) {
         }
     }
 
-    init_config(config_file);
+    config = init_config(config_file);
 
     sockfd = init_server(bind_addr, port, tls_flag);
     if (sockfd < 0)
@@ -71,7 +72,7 @@ main(int argc, char **argv) {
 
     run_server();
 
-    free_config();
+    free_config(config);
 
     return 0;
 }

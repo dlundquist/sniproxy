@@ -51,6 +51,12 @@ parse_address(struct sockaddr_storage* saddr, const char* address, int port) {
     addr.storage = saddr;
 
     memset(addr.storage, 0, sizeof(struct sockaddr_storage));
+    if (address == NULL) {
+        addr.sin6->sin6_family = AF_INET6;
+        addr.sin6->sin6_port = htons(port);
+        return sizeof(struct sockaddr_in6);
+    }
+
     if (inet_pton(AF_INET, address, &addr.sin->sin_addr) == 1) {
         addr.sin->sin_family = AF_INET;
         addr.sin->sin_port = htons(port);

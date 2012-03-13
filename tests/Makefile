@@ -4,8 +4,8 @@ TESTS = http.test tls.test config.test binder.test
 
 all: ${TESTS}
 
-%.test: %.o ../src/%.o
-	$(CC) $(CFLAGS) -o $@ $^
+%.test: %.o ../src/%.o ../src/cfg_parser.o ../src/cfg_tokenizer.o ../src/util.o ../src/backend.o
+	$(CC) $(CFLAGS) -o $@ $^ -l pcre
 
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -o $@ -c $<
