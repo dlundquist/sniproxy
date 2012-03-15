@@ -4,69 +4,82 @@
 #include "cfg_parser.h"
 #include "cfg_tokenizer.h"
 
+static const struct Keyword * find_keyword(const struct Keyword *, const char *);
+
+
 int
-parse_config(void *context, FILE *cfg, struct Keyword *grammar) {
+parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
     enum Token token;
-    struct Keyword *keyword = NULL;
-    void *keyword_obj = NULL;
     char buffer[256];
+    const struct Keyword *keyword = NULL;
+    void *sub_context = NULL;
 
     while((token = next_token(cfg, buffer, sizeof(buffer))) != END) {
         switch(token) {
             case ERROR:
+                fprintf(stderr, "tokenizer error\n");
                 return -1;
             case WORD:
-                if (keyword == NULL) {
-                    for(struct Keyword *iter = grammar; keyword_obj == NULL &&
-                            iter->keyword; iter++) {
+                    fprintf(stderr, "DEBUG: word=%s\n", buffer);
+                if (keyword && sub_context && keyword->parse_arg) {
+                    keyword->parse_arg(sub_context, buffer, sizeof(buffer));
+                } else if ((keyword = find_keyword(grammar, buffer))) {
+                    fprintf(stderr, "DEBUG: keyword=%s\n", keyword->keyword);
+                    if (keyword->create)
+                        sub_context = keyword->create(context);
+                    else
+                        sub_context = context;
 
-                        if (strncmp(iter->keyword, buffer, strlen(buffer)) == 0) {
-                            keyword = iter;
-                            if (keyword->create)
-                                keyword_obj = keyword->create(context);
-                            else
-                                keyword_obj = context;
-                        }            
-                    }
-                    if (keyword == NULL && grammar->keyword == NULL &&
-                            grammar->create != NULL) {
-                        /* Special case for wildcard grammers i.e. tables */
-                        keyword = grammar;
-                        keyword_obj = keyword->create(context);
-                        keyword->parse_arg(keyword_obj, buffer, sizeof(buffer));
+                    /* Special case for wildcard grammers i.e. tables */
+                    if (keyword->keyword == NULL && keyword->parse_arg)
+                        keyword->parse_arg(sub_context, buffer, sizeof(buffer));
 
-                    } else if (keyword == NULL) {
-                        printf("unknown keyword %s\n", buffer);
-                        exit(1);
-                    }
                 } else {
-                    if (keyword && keyword_obj && keyword->parse_arg)
-                        keyword->parse_arg(keyword_obj, buffer, sizeof(buffer));
+                    printf("unknown keyword %s\n", buffer);
+                    return -1;
                 }
                 break;
             case OBRACE:
-                if (keyword && keyword_obj && keyword->block_grammar)
-                    parse_config(keyword_obj, cfg, keyword->block_grammar);
+                if (keyword && sub_context && keyword->block_grammar)
+                    parse_config(sub_context, cfg, keyword->block_grammar);
                 else {
                     printf("block without context\n");
-                    exit(1);
+                    return -1;
                 }
                 break;
             case EOL:
-                if (keyword && keyword_obj && keyword->finalize)
-                    keyword->finalize(keyword_obj);
+                if (keyword && sub_context && keyword->finalize)
+                    keyword->finalize(sub_context);
+
                 keyword = NULL;
-                keyword_obj = NULL;
+                sub_context = NULL;
                 break;
             case CBRACE:
-                if (keyword && keyword_obj && keyword->finalize)
-                    keyword->finalize(keyword_obj);
-                keyword = NULL;
-                keyword_obj = NULL;
+                /* Finalize the current subcontext before returning */
+                if (keyword && sub_context && keyword->finalize)
+                    keyword->finalize(sub_context);
+
                 /* fall through */
             case END:
                 return 0;
         }
     }
     return 0;
+}
+
+static const struct Keyword *
+find_keyword(const struct Keyword *grammar, const char *word) {
+
+    while (grammar->keyword) {
+        if (strncmp(grammar->keyword, word, strlen(word)) == 0)
+            return grammar;
+
+        grammar++;
+    }
+
+    /* Special case for wildcard grammers i.e. tables */
+    if (grammar->keyword == NULL && grammar->create != NULL)
+        return grammar;
+
+    return NULL;
 }

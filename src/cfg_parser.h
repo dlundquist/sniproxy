@@ -10,7 +10,7 @@ struct Keyword {
 };
 
 
-int parse_config(void *, FILE *, struct Keyword *);
+int parse_config(void *, FILE *, const struct Keyword *);
 
 
 #endif
