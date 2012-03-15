@@ -13,7 +13,6 @@
 
 
 struct ListenerConfig {
-    struct Config *config;
     char *address;
     char *port;
     char *table_name;
@@ -21,13 +20,11 @@ struct ListenerConfig {
 };
 
 struct TableConfig {
-    struct Config *config;
     char *name;
     STAILQ_HEAD(, TableEntryConfig) entries;
 };
 
 struct TableEntryConfig {
-    struct TableConfig *table;
     char *hostname;
     char *address;
     char *port;
@@ -36,19 +33,22 @@ struct TableEntryConfig {
 
 static int accept_username(struct Config *, char *);
 
-static struct ListenerConfig *begin_listener(struct Config *);
+static struct ListenerConfig *begin_listener();
 static int accept_listener_arg(struct ListenerConfig *, char *);
 static int accept_listener_table_name(struct ListenerConfig *, char *);
 static int accept_listener_protocol(struct ListenerConfig *, char *);
-static int end_listener(struct ListenerConfig *);
+static int end_listener(struct Config *, struct ListenerConfig *);
 
-static struct TableConfig *begin_table(struct Config *);
+static struct TableConfig *begin_table();
 static int accept_table_arg(struct TableConfig *, char *);
-static int end_table(struct TableConfig *);
+static int end_table(struct Config *, struct TableConfig *);
 
-static struct TableEntryConfig *begin_table_entry(struct TableConfig *);
+static struct TableEntryConfig *begin_table_entry();
 static int accept_table_entry_arg(struct TableEntryConfig *, char *);
-static int end_table_entry(struct TableEntryConfig *);
+static int end_table_entry(struct TableConfig *, struct TableEntryConfig *);
+
+static void print_listener_config(struct Listener *);
+static void print_table_config(struct Table *);
 
 static struct Keyword listener_stanza_grammar[] = {
     { "protocol",
@@ -66,10 +66,10 @@ static struct Keyword listener_stanza_grammar[] = {
 
 static struct Keyword table_stanza_grammar[] = {
     { NULL,
-            (void *(*)(void *))begin_table_entry,
+            (void *(*)())begin_table_entry,
             (int(*)(void *, char *))accept_table_entry_arg,
             NULL,
-            (int(*)(void *))end_table_entry},
+            (int(*)(void *, void*))end_table_entry},
 };
 
 static struct Keyword global_grammar[] = {
@@ -79,15 +79,15 @@ static struct Keyword global_grammar[] = {
             NULL,
             NULL},
     { "listener",
-            (void *(*)(void *))begin_listener,
+            (void *(*)())begin_listener,
             (int(*)(void *, char *))accept_listener_arg,
             listener_stanza_grammar,
-            (int(*)(void *))end_listener},
+            (int(*)(void *, void *))end_listener},
     { "table",
-            (void *(*)(void *))begin_table,
+            (void *(*)())begin_table,
             (int(*)(void *, char *))accept_table_arg,
             table_stanza_grammar,
-            (int(*)(void *))end_table},
+            (int(*)(void *, void *))end_table},
     { NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -153,70 +153,11 @@ free_config(struct Config *config) {
 
 int
 reload_config(struct Config *c) {
-/*
-    FILE *config;
-    int done = 0;
-    enum Token token;
-    char buffer[BUFFER_SIZE];
-
-    assert(c != NULL);
-    assert(c->filename != NULL);
-
-    config = fopen(c->filename, "r");
-    if (config == NULL) {
-        fprintf(stderr, "Unable to open %s\n", c->filename);
-        return -1;
-    }
-
-    while(done == 0) {
-        token = next_token(config, buffer, sizeof(buffer));
-        switch (token) {
-            case SEPERATOR:
-*/
-                /* no op */
-/*
-                break;
-            case USER:
-                if (c->user != NULL)
-                    fprintf(stderr, "Warning: user already specified\n");
-               
-                token = next_token(config, buffer, sizeof(buffer));
-                if (token != WORD) {
-                    fprintf(stderr, "Error parsing config near %s\n", buffer);
-                    return -1;
-                }
-
-                c->user = strdup(buffer);
-                if (c->user == NULL) {
-                    perror("malloc()");
-                    return -1;
-                }
-                break;
-            case LISTEN:
-                parse_listen_stanza(c, config);
-                break;
-            case TABLE:
-                parse_table_stanza(c, config);
-                break;
-            case ENDCONFIG:
-                done = 1;
-                break;
-            default:
-                fprintf(stderr, "Error parsing config near %s\n", buffer);
-                return -1;
-        }
-    }
-    fclose(config);
-
-*/
     if (c == NULL)
         return 1;
     /* TODO validate config */
     return 0;
 }
-
-static void print_listener_config(struct Listener *);
-static void print_table_config(struct Table *);
 
 void print_config(struct Config *config) {
     struct Listener *listener = NULL;
@@ -295,7 +236,7 @@ accept_username(struct Config *config, char *username) {
 }
 
 static struct ListenerConfig *
-begin_listener(struct Config *config) {
+begin_listener() {
     struct ListenerConfig *listener;
 
     listener = calloc(1, sizeof(struct ListenerConfig));
@@ -304,7 +245,6 @@ begin_listener(struct Config *config) {
         return NULL;
     }
 
-    listener->config = config;
     listener->address = NULL;
     listener->port = NULL;
     listener->table_name = NULL;
@@ -349,7 +289,7 @@ accept_listener_protocol(struct ListenerConfig *listener, char *protocol) {
 }
 
 static int
-end_listener(struct ListenerConfig *lc) {
+end_listener(struct Config *config, struct ListenerConfig *lc) {
     struct Listener *listener;
     int port = 0;
 
@@ -367,7 +307,7 @@ end_listener(struct ListenerConfig *lc) {
 
     listener->addr_len = parse_address(&listener->addr, lc->address, port);
 
-    SLIST_INSERT_HEAD(&lc->config->listeners, listener, entries);
+    SLIST_INSERT_HEAD(&config->listeners, listener, entries);
 
     if (lc->address)
         free(lc->address);
@@ -383,7 +323,7 @@ end_listener(struct ListenerConfig *lc) {
 }
 
 static struct TableConfig *
-begin_table(struct Config *config) {
+begin_table() {
     struct TableConfig *table;
 
     table = calloc(1, sizeof(struct TableConfig));
@@ -392,7 +332,6 @@ begin_table(struct Config *config) {
         return NULL;
     }
 
-    table->config = config;
     STAILQ_INIT(&table->entries);
 
     return table;
@@ -409,7 +348,7 @@ accept_table_arg(struct TableConfig *table, char *arg) {
 }
 
 static int
-end_table(struct TableConfig *tc) {
+end_table(struct Config * config, struct TableConfig *tc) {
     struct Table *table;
     struct TableEntryConfig *entry;
     int port;
@@ -441,7 +380,7 @@ end_table(struct TableConfig *tc) {
         free(entry);
     }
 
-    SLIST_INSERT_HEAD(&tc->config->tables, table, entries);
+    SLIST_INSERT_HEAD(&config->tables, table, entries);
    
     free(tc);
 
@@ -449,7 +388,7 @@ end_table(struct TableConfig *tc) {
 }
 
 static struct TableEntryConfig *
-begin_table_entry(struct TableConfig *table) {
+begin_table_entry() {
     struct TableEntryConfig *entry;
 
     entry = calloc(1, sizeof(struct TableEntryConfig));
@@ -457,8 +396,6 @@ begin_table_entry(struct TableConfig *table) {
         perror("malloc");
         return NULL;
     }
-
-    entry->table = table;
 
     return entry;
 }
@@ -478,7 +415,7 @@ accept_table_entry_arg(struct TableEntryConfig *entry, char *arg) {
 }
 
 static int
-end_table_entry(struct TableEntryConfig *entry) {
-    STAILQ_INSERT_TAIL(&entry->table->entries, entry, entries);
+end_table_entry(struct TableConfig *table, struct TableEntryConfig *entry) {
+    STAILQ_INSERT_TAIL(&table->entries, entry, entries);
     return 1;
 }

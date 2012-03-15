@@ -3,10 +3,10 @@
 
 struct Keyword {
     const char *keyword;
-    void *(*create)(void *);
+    void *(*create)();
     int (*parse_arg)(void *, char *);
     struct Keyword *block_grammar;
-    int (*finalize)(void *);
+    int (*finalize)(void *, void *);
 };
 
 

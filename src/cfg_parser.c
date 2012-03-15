@@ -28,7 +28,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
 
                 } else if ((keyword = find_keyword(grammar, buffer))) {
                     if (keyword->create)
-                        sub_context = keyword->create(context);
+                        sub_context = keyword->create();
                     else
                         sub_context = context;
 
@@ -61,7 +61,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 break;
             case EOL:
                 if (keyword && sub_context && keyword->finalize) {
-                    result = keyword->finalize(sub_context);
+                    result = keyword->finalize(context, sub_context);
                     if (result <= 0)
                         return result;
                 }
@@ -72,7 +72,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
             case CBRACE:
                 /* Finalize the current subcontext before returning */
                 if (keyword && sub_context && keyword->finalize) {
-                    result = keyword->finalize(sub_context);
+                    result = keyword->finalize(context, sub_context);
                     if (result <= 0)
                         return result;
                 }
