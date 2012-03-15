@@ -13,6 +13,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
     char buffer[256];
     const struct Keyword *keyword = NULL;
     void *sub_context = NULL;
+    int rv;
 
     while((token = next_token(cfg, buffer, sizeof(buffer))) != END) {
         switch(token) {
@@ -20,51 +21,67 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 fprintf(stderr, "tokenizer error\n");
                 return -1;
             case WORD:
-                    fprintf(stderr, "DEBUG: word=%s\n", buffer);
                 if (keyword && sub_context && keyword->parse_arg) {
-                    keyword->parse_arg(sub_context, buffer, sizeof(buffer));
+                    rv = keyword->parse_arg(sub_context, buffer, sizeof(buffer));
+                    if (rv <= 0)
+                        return rv;
                 } else if ((keyword = find_keyword(grammar, buffer))) {
-                    fprintf(stderr, "DEBUG: keyword=%s\n", keyword->keyword);
                     if (keyword->create)
                         sub_context = keyword->create(context);
                     else
                         sub_context = context;
 
+                    if (sub_context == NULL) {
+                        fprintf(stderr, "failed to create subcontext\n");
+                        return -1;
+                    }
+
                     /* Special case for wildcard grammers i.e. tables */
-                    if (keyword->keyword == NULL && keyword->parse_arg)
-                        keyword->parse_arg(sub_context, buffer, sizeof(buffer));
+                    if (keyword->keyword == NULL && keyword->parse_arg) {
+                        rv = keyword->parse_arg(sub_context, buffer, sizeof(buffer));
+                        if (rv <= 0)
+                            return rv;
+                    }
 
                 } else {
-                    printf("unknown keyword %s\n", buffer);
+                    fprintf(stderr, "unknown keyword %s\n", buffer);
                     return -1;
                 }
                 break;
             case OBRACE:
-                if (keyword && sub_context && keyword->block_grammar)
-                    parse_config(sub_context, cfg, keyword->block_grammar);
-                else {
+                if (keyword && sub_context && keyword->block_grammar) {
+                    rv = parse_config(sub_context, cfg, keyword->block_grammar);
+                    if (rv <= 0)
+                        return rv;
+                } else {
                     printf("block without context\n");
                     return -1;
                 }
                 break;
             case EOL:
-                if (keyword && sub_context && keyword->finalize)
-                    keyword->finalize(sub_context);
+                if (keyword && sub_context && keyword->finalize) {
+                    rv = keyword->finalize(sub_context);
+                    if (rv <= 0)
+                        return rv;
+                }
 
                 keyword = NULL;
                 sub_context = NULL;
                 break;
             case CBRACE:
                 /* Finalize the current subcontext before returning */
-                if (keyword && sub_context && keyword->finalize)
-                    keyword->finalize(sub_context);
+                if (keyword && sub_context && keyword->finalize) {
+                    rv = keyword->finalize(sub_context);
+                    if (rv <= 0)
+                        return rv;
+                }
 
                 /* fall through */
             case END:
-                return 0;
+                return 1;
         }
     }
-    return 0;
+    return 1;
 }
 
 static const struct Keyword *

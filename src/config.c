@@ -275,7 +275,7 @@ print_table_config(struct Table *table) {
 static int
 accept_username(struct Config *config, char *username, size_t len) {
         config->user = strndup(username, len);
-        return 0;
+        return 1;
 }
 
 static struct ListenerConfig *
@@ -309,7 +309,7 @@ accept_listener_arg(struct ListenerConfig *listener, char *arg, size_t len) {
     else
         return -1;
 
-    return 0;
+    return 1;
 }
 
 static int
@@ -319,7 +319,7 @@ accept_listener_table_name(struct ListenerConfig *listener, char *table_name, si
     else
         fprintf(stderr, "Duplicate table_name: %s\n", table_name);
 
-    return 0;
+    return 1;
 }
 
 static int
@@ -329,7 +329,7 @@ accept_listener_protocol(struct ListenerConfig *listener, char *protocol, size_t
     else
         fprintf(stderr, "Duplicate protocol: %s\n", protocol);
             
-    return 0;
+    return 1;
 }
 
 static int
@@ -353,7 +353,7 @@ end_listener(struct ListenerConfig *lc) {
 
     SLIST_INSERT_HEAD(&lc->config->listeners, listener, entries);
 
-    return 0;
+    return 1;
 }
 
 static struct TableConfig *
@@ -379,7 +379,7 @@ accept_table_arg(struct TableConfig *table, char *arg, size_t len) {
     else
         fprintf(stderr, "Unexpected table argument: %s\n", arg);
 
-    return 0;
+    return 1;
 }
 
 static int
@@ -408,7 +408,7 @@ end_table(struct TableConfig *tc) {
 
     SLIST_INSERT_HEAD(&tc->config->tables, table, entries);
 
-    return 0;
+    return 1;
 }
 
 static struct TableEntryConfig *
@@ -437,11 +437,11 @@ accept_table_entry_arg(struct TableEntryConfig *entry, char *arg, size_t len) {
     else
         fprintf(stderr, "Unexpected table entry argument: %s\n", arg);
 
-    return 0;
+    return 1;
 }
 
 static int
 end_table_entry(struct TableEntryConfig *entry) {
     STAILQ_INSERT_TAIL(&entry->table->entries, entry, entries);
-    return 0;
+    return 1;
 }
