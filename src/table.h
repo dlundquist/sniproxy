@@ -1,6 +1,7 @@
 #ifndef TABLE_H
 #define TABLE_H
 
+#include <stdio.h>
 #include <sys/queue.h>
 #include "backend.h"
 
@@ -21,6 +22,7 @@ struct Table *lookup_table(const char *);
 void remove_table(struct Table *);
 void free_table(struct Table *);
 int lookup_table_server_socket(const struct Table *, const char *);
+void print_table_config(struct Table *);
 
 static inline struct Backend *
 add_table_backend(struct Table *table, const char *hostname, const char *address, int port) {

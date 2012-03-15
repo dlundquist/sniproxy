@@ -28,6 +28,7 @@ void free_listener(struct Listener *);
 struct Listener *add_listener(const struct sockaddr *, size_t, int, const char *);
 int fd_set_listeners(fd_set *, int);
 void handle_listeners(fd_set *);
+void print_listener_config(struct Listener *);
 
 static inline int lookup_server_socket(const struct Listener *listener, const char *hostname) {
     return lookup_table_server_socket(listener->table, hostname);

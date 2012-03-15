@@ -47,9 +47,6 @@ static struct TableEntryConfig *begin_table_entry();
 static int accept_table_entry_arg(struct TableEntryConfig *, char *);
 static int end_table_entry(struct TableConfig *, struct TableEntryConfig *);
 
-static void print_listener_config(struct Listener *);
-static void print_table_config(struct Table *);
-
 static struct Keyword listener_stanza_grammar[] = {
     { "protocol",
             NULL,
@@ -69,7 +66,7 @@ static struct Keyword table_stanza_grammar[] = {
             (void *(*)())begin_table_entry,
             (int(*)(void *, char *))accept_table_entry_arg,
             NULL,
-            (int(*)(void *, void*))end_table_entry},
+            (int(*)(void *, void *))end_table_entry},
 };
 
 static struct Keyword global_grammar[] = {
@@ -107,7 +104,6 @@ init_config(const char *filename) {
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
-
     config->filename = strdup(filename);
     if (config->filename == NULL) {
         perror("malloc()");
@@ -115,14 +111,17 @@ init_config(const char *filename) {
         return NULL;
     }
 
+
     file = fopen(config->filename, "r");
     
     if (parse_config((void *)config, file, global_grammar) <= 0) {
         fprintf(stderr, "error parsing config\n");
         free_config(config);
+        config = NULL;
     }
 
     fclose(file);
+
 
     return(config);
 }
@@ -150,16 +149,16 @@ free_config(struct Config *config) {
     free(config);
 }
 
-
 int
-reload_config(struct Config *c) {
-    if (c == NULL)
+reload_config(struct Config *config) {
+    if (config == NULL)
         return 1;
     /* TODO validate config */
     return 0;
 }
 
-void print_config(struct Config *config) {
+void
+print_config(struct Config *config) {
     struct Listener *listener = NULL;
     struct Table *table = NULL;
 
@@ -177,71 +176,27 @@ void print_config(struct Config *config) {
     }
 }
 
-static void
-print_listener_config(struct Listener *listener) {
-    char addr_str[INET_ADDRSTRLEN];
-    union {
-        struct sockaddr_storage *storage;
-        struct sockaddr_in *sin;
-        struct sockaddr_in6 *sin6;
-        struct sockaddr_un *sun;
-    } addr;
-    
-    addr.storage = &listener->addr;
 
-    if (addr.storage->ss_family == AF_UNIX) {
-        printf("listener unix:%s {\n", addr.sun->sun_path);
-    } else if (addr.storage->ss_family == AF_INET) {
-        inet_ntop(AF_INET, &addr.sin->sin_addr, addr_str, listener->addr_len);
-        printf("listener %s %d {\n", addr_str, ntohs(addr.sin->sin_port));
-    } else {
-        inet_ntop(AF_INET6, &addr.sin6->sin6_addr, addr_str, listener->addr_len);
-        printf("listener %s %d {\n", addr_str, ntohs(addr.sin6->sin6_port));
-    }
-
-    if (listener->protocol == TLS)
-        printf("\tprotocol tls\n");
-    else
-        printf("\tprotocol http\n");
-
-    if (listener->table_name)
-        printf("\ttable %s\n", listener->table_name);
-
-
-    printf("}\n\n");
-}
-
-static void
-print_table_config(struct Table *table) {
-    struct Backend *backend;
-
-    if (table->name == NULL)
-        printf("table {\n");
-    else
-        printf("table %s {\n", table->name);
-
-    STAILQ_FOREACH(backend, &table->backends, entries) {
-        if (backend->port == 0)
-            printf("\t%s %s\n", backend->hostname, backend->address);
-        else 
-            printf("\t%s %s %d\n", backend->hostname, backend->address, backend->port);
-    }
-    printf("}\n\n");
-}
 
 static int
 accept_username(struct Config *config, char *username) {
         config->user = strdup(username);
+        if (config->user == NULL) {
+            perror("malloc:");
+            return -1;
+        }
         return 1;
 }
+
+
 
 static struct ListenerConfig *
 begin_listener() {
     struct ListenerConfig *listener;
 
-    listener = calloc(1, sizeof(struct ListenerConfig));
+    listener = malloc(sizeof(struct ListenerConfig));
     if (listener == NULL) {
-        perror("calloc");
+        perror("malloc");
         return NULL;
     }
 
@@ -322,16 +277,19 @@ end_listener(struct Config *config, struct ListenerConfig *lc) {
     return 1;
 }
 
+
+
 static struct TableConfig *
 begin_table() {
     struct TableConfig *table;
 
-    table = calloc(1, sizeof(struct TableConfig));
+    table = malloc(sizeof(struct TableConfig));
     if (table == NULL) {
-        perror("calloc");
+        perror("malloc");
         return NULL;
     }
 
+    table->name = NULL;
     STAILQ_INIT(&table->entries);
 
     return table;
@@ -354,12 +312,12 @@ end_table(struct Config * config, struct TableConfig *tc) {
     int port;
 
     table = malloc(sizeof(struct Table));
-    STAILQ_INIT(&table->backends);
-    
     if (table == NULL) {
         perror("malloc");
         return -1;
     }
+
+    STAILQ_INIT(&table->backends);
     table->name = tc->name;
     tc->name = NULL;
     
@@ -386,6 +344,8 @@ end_table(struct Config * config, struct TableConfig *tc) {
 
     return 1;
 }
+
+
 
 static struct TableEntryConfig *
 begin_table_entry() {

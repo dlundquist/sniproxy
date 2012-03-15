@@ -79,6 +79,24 @@ lookup_table_server_socket(const struct Table *table, const char *hostname) {
 }
 
 void
+print_table_config(struct Table *table) {
+    struct Backend *backend;
+
+    if (table->name == NULL)
+        printf("table {\n");
+    else
+        printf("table %s {\n", table->name);
+
+    STAILQ_FOREACH(backend, &table->backends, entries) {
+        if (backend->port == 0)
+            printf("\t%s %s\n", backend->hostname, backend->address);
+        else 
+            printf("\t%s %s %d\n", backend->hostname, backend->address, backend->port);
+    }
+    printf("}\n\n");
+}
+
+void
 free_table(struct Table *table) {
     struct Backend *iter;
 

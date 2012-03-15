@@ -1,9 +1,13 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include "listener.h"
 #include "connection.h"
 #include "tls.h"
@@ -142,6 +146,45 @@ free_listener(struct Listener *listener) {
     if (listener->table_name != NULL)
         free (listener->table_name);
     free (listener);
+}
+
+void
+print_listener_config(struct Listener *listener) {
+    char addr_str[INET_ADDRSTRLEN];
+    union {
+        struct sockaddr_storage *storage;
+        struct sockaddr_in *sin;
+        struct sockaddr_in6 *sin6;
+        struct sockaddr_un *sun;
+    } addr;
+    
+    addr.storage = &listener->addr;
+
+    switch(addr.storage->ss_family) {
+        case AF_UNIX:
+            printf("listener unix:%s {\n", addr.sun->sun_path);
+            break;
+        case AF_INET:
+            inet_ntop(AF_INET, &addr.sin->sin_addr, addr_str, listener->addr_len);
+            printf("listener %s %d {\n", addr_str, ntohs(addr.sin->sin_port));
+            break;
+        case AF_INET6:
+            inet_ntop(AF_INET6, &addr.sin6->sin6_addr, addr_str, listener->addr_len);
+            printf("listener %s %d {\n", addr_str, ntohs(addr.sin6->sin6_port));
+            break;
+        default:
+            break;
+    }
+
+    if (listener->protocol == TLS)
+        printf("\tprotocol tls\n");
+    else
+        printf("\tprotocol http\n");
+
+    if (listener->table_name)
+        printf("\ttable %s\n", listener->table_name);
+
+    printf("}\n\n");
 }
 
 void
