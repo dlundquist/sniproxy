@@ -14,7 +14,6 @@
 
 
 static void close_listener(struct Listener *);
-static void free_listener(struct Listener *);
 
 
 static SLIST_HEAD(, Listener) listeners;
@@ -138,7 +137,7 @@ close_listener(struct Listener * listener) {
     close(listener->sockfd);
 }
 
-static void
+void
 free_listener(struct Listener *listener) {
     if (listener->table_name != NULL)
         free (listener->table_name);

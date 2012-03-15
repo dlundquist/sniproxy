@@ -4,7 +4,7 @@ TESTS = http.test tls.test config.test binder.test cfg_tokenizer.test
 
 all: ${TESTS}
 
-config.test: config.o ../src/config.o ../src/cfg_parser.o ../src/cfg_tokenizer.o ../src/util.o ../src/backend.o
+config.test: config.o ../src/config.o ../src/cfg_parser.o ../src/cfg_tokenizer.o ../src/util.o ../src/backend.o ../src/table.o ../src/listener.o ../src/connection.o ../src/tls.o ../src/http.o
 	$(CC) $(CFLAGS) -o $@ $^ -l pcre
 
 %.test: %.o ../src/%.o

@@ -24,6 +24,7 @@ struct Listener {
 
 void init_listeners();
 void free_listeners();
+void free_listener(struct Listener *);
 struct Listener *add_listener(const struct sockaddr *, size_t, int, const char *);
 int fd_set_listeners(fd_set *, int);
 void handle_listeners(fd_set *);

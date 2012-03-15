@@ -13,7 +13,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
     char buffer[256];
     const struct Keyword *keyword = NULL;
     void *sub_context = NULL;
-    int rv;
+    int result;
 
     while((token = next_token(cfg, buffer, sizeof(buffer))) != END) {
         switch(token) {
@@ -22,9 +22,10 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 return -1;
             case WORD:
                 if (keyword && sub_context && keyword->parse_arg) {
-                    rv = keyword->parse_arg(sub_context, buffer, sizeof(buffer));
-                    if (rv <= 0)
-                        return rv;
+                    result = keyword->parse_arg(sub_context, buffer);
+                    if (result <= 0)
+                        return result;
+
                 } else if ((keyword = find_keyword(grammar, buffer))) {
                     if (keyword->create)
                         sub_context = keyword->create(context);
@@ -38,9 +39,9 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
 
                     /* Special case for wildcard grammers i.e. tables */
                     if (keyword->keyword == NULL && keyword->parse_arg) {
-                        rv = keyword->parse_arg(sub_context, buffer, sizeof(buffer));
-                        if (rv <= 0)
-                            return rv;
+                        result = keyword->parse_arg(sub_context, buffer);
+                        if (result <= 0)
+                            return result;
                     }
 
                 } else {
@@ -50,9 +51,9 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 break;
             case OBRACE:
                 if (keyword && sub_context && keyword->block_grammar) {
-                    rv = parse_config(sub_context, cfg, keyword->block_grammar);
-                    if (rv <= 0)
-                        return rv;
+                    result = parse_config(sub_context, cfg, keyword->block_grammar);
+                    if (result <= 0)
+                        return result;
                 } else {
                     printf("block without context\n");
                     return -1;
@@ -60,9 +61,9 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 break;
             case EOL:
                 if (keyword && sub_context && keyword->finalize) {
-                    rv = keyword->finalize(sub_context);
-                    if (rv <= 0)
-                        return rv;
+                    result = keyword->finalize(sub_context);
+                    if (result <= 0)
+                        return result;
                 }
 
                 keyword = NULL;
@@ -71,9 +72,9 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
             case CBRACE:
                 /* Finalize the current subcontext before returning */
                 if (keyword && sub_context && keyword->finalize) {
-                    rv = keyword->finalize(sub_context);
-                    if (rv <= 0)
-                        return rv;
+                    result = keyword->finalize(sub_context);
+                    if (result <= 0)
+                        return result;
                 }
 
                 /* fall through */
@@ -95,7 +96,7 @@ find_keyword(const struct Keyword *grammar, const char *word) {
     }
 
     /* Special case for wildcard grammers i.e. tables */
-    if (grammar->keyword == NULL && grammar->create != NULL)
+    if (grammar->keyword == NULL && grammar->create)
         return grammar;
 
     return NULL;

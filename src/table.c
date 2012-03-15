@@ -9,8 +9,6 @@
 static SLIST_HEAD(, Table) tables;
 
 
-static void free_table(struct Table *);
-
 
 void
 init_tables() {
@@ -80,7 +78,7 @@ lookup_table_server_socket(const struct Table *table, const char *hostname) {
     return open_backend_socket(b, hostname);
 }
 
-static void
+void
 free_table(struct Table *table) {
     struct Backend *iter;
 

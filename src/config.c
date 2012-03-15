@@ -34,31 +34,31 @@ struct TableEntryConfig {
     STAILQ_ENTRY(TableEntryConfig) entries;
 };
 
-static int accept_username(struct Config *, char *, size_t);
+static int accept_username(struct Config *, char *);
 
 static struct ListenerConfig *begin_listener(struct Config *);
-static int accept_listener_arg(struct ListenerConfig *, char *, size_t);
-static int accept_listener_table_name(struct ListenerConfig *, char *, size_t);
-static int accept_listener_protocol(struct ListenerConfig *, char *, size_t);
+static int accept_listener_arg(struct ListenerConfig *, char *);
+static int accept_listener_table_name(struct ListenerConfig *, char *);
+static int accept_listener_protocol(struct ListenerConfig *, char *);
 static int end_listener(struct ListenerConfig *);
 
 static struct TableConfig *begin_table(struct Config *);
-static int accept_table_arg(struct TableConfig *, char *, size_t);
+static int accept_table_arg(struct TableConfig *, char *);
 static int end_table(struct TableConfig *);
 
 static struct TableEntryConfig *begin_table_entry(struct TableConfig *);
-static int accept_table_entry_arg(struct TableEntryConfig *, char *, size_t);
+static int accept_table_entry_arg(struct TableEntryConfig *, char *);
 static int end_table_entry(struct TableEntryConfig *);
 
 static struct Keyword listener_stanza_grammar[] = {
     { "protocol",
             NULL,
-            (int(*)(void *, char *, size_t))accept_listener_protocol,
+            (int(*)(void *, char *))accept_listener_protocol,
             NULL,
             NULL},
     { "table",
             NULL,
-            (int(*)(void *, char *, size_t))accept_listener_table_name,
+            (int(*)(void *, char *))accept_listener_table_name,
             NULL,
             NULL},
     { NULL, NULL, NULL, NULL, NULL }
@@ -67,7 +67,7 @@ static struct Keyword listener_stanza_grammar[] = {
 static struct Keyword table_stanza_grammar[] = {
     { NULL,
             (void *(*)(void *))begin_table_entry,
-            (int(*)(void *, char *, size_t))accept_table_entry_arg,
+            (int(*)(void *, char *))accept_table_entry_arg,
             NULL,
             (int(*)(void *))end_table_entry},
 };
@@ -75,17 +75,17 @@ static struct Keyword table_stanza_grammar[] = {
 static struct Keyword global_grammar[] = {
     { "username",
             NULL,
-            (int(*)(void *, char *, size_t))accept_username,
+            (int(*)(void *, char *))accept_username,
             NULL,
             NULL},
     { "listener",
             (void *(*)(void *))begin_listener,
-            (int(*)(void *, char *, size_t))accept_listener_arg,
+            (int(*)(void *, char *))accept_listener_arg,
             listener_stanza_grammar,
             (int(*)(void *))end_listener},
     { "table",
             (void *(*)(void *))begin_table,
-            (int(*)(void *, char *, size_t))accept_table_arg,
+            (int(*)(void *, char *))accept_table_arg,
             table_stanza_grammar,
             (int(*)(void *))end_table},
     { NULL, NULL, NULL, NULL, NULL }
@@ -117,7 +117,10 @@ init_config(const char *filename) {
 
     file = fopen(config->filename, "r");
     
-    parse_config((void *)config, file, global_grammar);
+    if (parse_config((void *)config, file, global_grammar) <= 0) {
+        fprintf(stderr, "error parsing config\n");
+        free_config(config);
+    }
 
     fclose(file);
 
@@ -125,13 +128,26 @@ init_config(const char *filename) {
 }
 
 void
-free_config(struct Config *c) {
-    assert(c != NULL);
+free_config(struct Config *config) {
+    struct Listener *listener;
+    struct Table *table;
 
-    free(c->filename);
-    /* TODO free nested objects */
+    if (config->filename)
+        free(config->filename);
+    if (config->user)
+        free(config->user);
 
-    free(c);
+    while ((listener = SLIST_FIRST(&config->listeners)) != NULL) {
+        SLIST_REMOVE_HEAD(&config->listeners, entries);
+        free_listener(listener);
+    }
+
+    while ((table = SLIST_FIRST(&config->tables)) != NULL) {
+        SLIST_REMOVE_HEAD(&config->tables, entries);
+        free_table(table);
+    }
+
+    free(config);
 }
 
 
@@ -273,8 +289,8 @@ print_table_config(struct Table *table) {
 }
 
 static int
-accept_username(struct Config *config, char *username, size_t len) {
-        config->user = strndup(username, len);
+accept_username(struct Config *config, char *username) {
+        config->user = strdup(username);
         return 1;
 }
 
@@ -298,14 +314,14 @@ begin_listener(struct Config *config) {
 }
 
 static int
-accept_listener_arg(struct ListenerConfig *listener, char *arg, size_t len) {
+accept_listener_arg(struct ListenerConfig *listener, char *arg) {
     if (listener->address == NULL)
         if (isnumeric(arg))
-            listener->port = strndup(arg, len);
+            listener->port = strdup(arg);
         else
-            listener->address = strndup(arg, len);
+            listener->address = strdup(arg);
     else if (listener->port == NULL && isnumeric(arg))
-        listener->port = strndup(arg, len);
+        listener->port = strdup(arg);
     else
         return -1;
 
@@ -313,9 +329,9 @@ accept_listener_arg(struct ListenerConfig *listener, char *arg, size_t len) {
 }
 
 static int
-accept_listener_table_name(struct ListenerConfig *listener, char *table_name, size_t len) {
+accept_listener_table_name(struct ListenerConfig *listener, char *table_name) {
     if (listener->table_name == NULL)
-        listener->table_name = strndup(table_name, len);
+        listener->table_name = strdup(table_name);
     else
         fprintf(stderr, "Duplicate table_name: %s\n", table_name);
 
@@ -323,9 +339,9 @@ accept_listener_table_name(struct ListenerConfig *listener, char *table_name, si
 }
 
 static int
-accept_listener_protocol(struct ListenerConfig *listener, char *protocol, size_t len) {
+accept_listener_protocol(struct ListenerConfig *listener, char *protocol) {
     if (listener->protocol == NULL)
-        listener->protocol = strndup(protocol, len);
+        listener->protocol = strdup(protocol);
     else
         fprintf(stderr, "Duplicate protocol: %s\n", protocol);
             
@@ -353,6 +369,16 @@ end_listener(struct ListenerConfig *lc) {
 
     SLIST_INSERT_HEAD(&lc->config->listeners, listener, entries);
 
+    if (lc->address)
+        free(lc->address);
+    if (lc->port)
+        free(lc->port);
+    if (lc->table_name)
+        free(lc->table_name);
+    if (lc->protocol)
+        free(lc->protocol);
+    free(lc);
+
     return 1;
 }
 
@@ -373,9 +399,9 @@ begin_table(struct Config *config) {
 }
 
 static int
-accept_table_arg(struct TableConfig *table, char *arg, size_t len) {
+accept_table_arg(struct TableConfig *table, char *arg) {
     if (table->name == NULL)
-        table->name = strndup(arg, len);
+        table->name = strdup(arg);
     else
         fprintf(stderr, "Unexpected table argument: %s\n", arg);
 
@@ -398,15 +424,26 @@ end_table(struct TableConfig *tc) {
     table->name = tc->name;
     tc->name = NULL;
     
-    STAILQ_FOREACH(entry, &tc->entries, entries) {
+    while ((entry = STAILQ_FIRST(&tc->entries)) != NULL)  {
+        STAILQ_REMOVE_HEAD(&tc->entries, entries);
         port = 0;
         if (entry->port != NULL)
             port = atoi(entry->port);
 
         add_backend(&table->backends, entry->hostname, entry->address, port);
+        
+        if (entry->hostname)
+            free(entry->hostname);
+        if (entry->address)
+            free(entry->address);
+        if (entry->port)
+            free(entry->port);
+        free(entry);
     }
 
     SLIST_INSERT_HEAD(&tc->config->tables, table, entries);
+   
+    free(tc);
 
     return 1;
 }
@@ -427,13 +464,13 @@ begin_table_entry(struct TableConfig *table) {
 }
 
 static int
-accept_table_entry_arg(struct TableEntryConfig *entry, char *arg, size_t len) {
+accept_table_entry_arg(struct TableEntryConfig *entry, char *arg) {
     if (entry->hostname == NULL)
-        entry->hostname = strndup(arg, len);
+        entry->hostname = strdup(arg);
     else if (entry->address == NULL)
-        entry->address = strndup(arg, len);
+        entry->address = strdup(arg);
     else if (entry->port == NULL)
-        entry->port = strndup(arg, len);
+        entry->port = strdup(arg);
     else
         fprintf(stderr, "Unexpected table entry argument: %s\n", arg);
 

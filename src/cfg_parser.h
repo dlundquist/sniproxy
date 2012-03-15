@@ -4,7 +4,7 @@
 struct Keyword {
     const char *keyword;
     void *(*create)(void *);
-    int (*parse_arg)(void *, char *, size_t);
+    int (*parse_arg)(void *, char *);
     struct Keyword *block_grammar;
     int (*finalize)(void *);
 };

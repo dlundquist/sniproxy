@@ -19,6 +19,7 @@ void free_tables();
 struct Table *add_table(const char *);
 struct Table *lookup_table(const char *);
 void remove_table(struct Table *);
+void free_table(struct Table *);
 int lookup_table_server_socket(const struct Table *, const char *);
 
 static inline struct Backend *

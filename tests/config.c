@@ -7,5 +7,7 @@ int main() {
 
     print_config(config);
 
+    free_config(config);
+
     return 0;
 }
