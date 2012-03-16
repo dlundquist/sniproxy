@@ -13,33 +13,21 @@
 #include "util.h"
 
 
-struct ListenerConfig {
-    char *address;
-    char *port;
-    char *table_name;
-    char *protocol;
-};
-
-struct TableConfig {
-    char *name;
-    STAILQ_HEAD(, Backend) entries;
-};
-
 static int accept_username(struct Config *, char *);
 
-static struct ListenerConfig *begin_listener();
-static int accept_listener_arg(struct ListenerConfig *, char *);
-static int accept_listener_table_name(struct ListenerConfig *, char *);
-static int accept_listener_protocol(struct ListenerConfig *, char *);
-static int end_listener(struct Config *, struct ListenerConfig *);
+static struct Listener *begin_listener();
+static int accept_listener_arg(struct Listener *, char *);
+static int accept_listener_table_name(struct Listener *, char *);
+static int accept_listener_protocol(struct Listener *, char *);
+static int end_listener(struct Config *, struct Listener *);
 
-static struct TableConfig *begin_table();
-static int accept_table_arg(struct TableConfig *, char *);
-static int end_table(struct Config *, struct TableConfig *);
+static struct Table *begin_table();
+static int accept_table_arg(struct Table *, char *);
+static int end_table(struct Config *, struct Table *);
 
 static struct Backend *begin_table_entry();
 static int accept_table_entry_arg(struct Backend *, char *);
-static int end_table_entry(struct TableConfig *, struct Backend *);
+static int end_table_entry(struct Table *, struct Backend *);
 
 static struct Keyword listener_stanza_grammar[] = {
     { "protocol",
@@ -182,43 +170,48 @@ accept_username(struct Config *config, char *username) {
         return 1;
 }
 
-
-
-static struct ListenerConfig *
+static struct Listener *
 begin_listener() {
-    struct ListenerConfig *listener;
+    struct Listener *listener;
 
-    listener = malloc(sizeof(struct ListenerConfig));
+    listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
         perror("malloc");
         return NULL;
     }
 
-    listener->address = NULL;
-    listener->port = NULL;
-    listener->table_name = NULL;
-    listener->protocol = NULL;
+    listener->protocol = TLS;
 
     return listener;
 }
 
 static int
-accept_listener_arg(struct ListenerConfig *listener, char *arg) {
-    if (listener->address == NULL)
+accept_listener_arg(struct Listener *listener, char *arg) {
+    if (listener->addr.ss_family == 0) {
         if (isnumeric(arg))
-            listener->port = strdup(arg);
-        else
-            listener->address = strdup(arg);
-    else if (listener->port == NULL && isnumeric(arg))
-        listener->port = strdup(arg);
-    else
+            listener->addr_len = parse_address(&listener->addr, "::", atoi(arg));
+        else 
+            listener->addr_len = parse_address(&listener->addr, arg, 0);
+
+        if (listener->addr_len == 0) {
+            fprintf(stderr, "Invalid listener argument %s\n", arg);
+            return -1;
+        }
+    } else if (listener->addr.ss_family == AF_INET && isnumeric(arg)) {
+        ((struct sockaddr_in *)&listener->addr)->sin_port = htons(atoi(arg));
+    } else if (listener->addr.ss_family == AF_INET6 && isnumeric(arg)) {
+        ((struct sockaddr_in6 *)&listener->addr)->sin6_port = htons(atoi(arg));
+    } else {
+        fprintf(stderr, "Invalid listener argument %s\n", arg);
         return -1;
+    }
+    
 
     return 1;
 }
 
 static int
-accept_listener_table_name(struct ListenerConfig *listener, char *table_name) {
+accept_listener_table_name(struct Listener *listener, char *table_name) {
     if (listener->table_name == NULL)
         listener->table_name = strdup(table_name);
     else
@@ -228,105 +221,70 @@ accept_listener_table_name(struct ListenerConfig *listener, char *table_name) {
 }
 
 static int
-accept_listener_protocol(struct ListenerConfig *listener, char *protocol) {
-    if (listener->protocol == NULL)
-        listener->protocol = strdup(protocol);
+accept_listener_protocol(struct Listener *listener, char *protocol) {
+    if (listener->protocol == 0 && strcasecmp(protocol, "http") == 0)
+        listener->protocol = HTTP;
     else
-        fprintf(stderr, "Duplicate protocol: %s\n", protocol);
+        listener->protocol = TLS;
+
+    if (listener->addr.ss_family == AF_INET && ((struct sockaddr_in *)&listener->addr)->sin_port == 0)
+        ((struct sockaddr_in *)&listener->addr)->sin_port = listener->protocol == TLS ? 443 : 80;
+    else if (listener->addr.ss_family == AF_INET6 && ((struct sockaddr_in6 *)&listener->addr)->sin6_port == 0)
+        ((struct sockaddr_in6 *)&listener->addr)->sin6_port = listener->protocol == TLS ? 443 : 80;
             
     return 1;
 }
 
 static int
-end_listener(struct Config *config, struct ListenerConfig *lc) {
-    struct Listener *listener;
-    int port = 0;
-
-    listener = malloc(sizeof(struct Listener));
-
-    listener->table_name = lc->table_name;
-    lc->table_name = NULL;
-
-    listener->protocol = TLS;
-    if (lc->protocol != NULL && strcasecmp(lc->protocol, "http") == 0)
-        listener->protocol = HTTP;
-
-    if (lc->port)
-        port = atoi(lc->port);
-
-    listener->addr_len = parse_address(&listener->addr, lc->address, port);
+end_listener(struct Config *config, struct Listener *listener) {
 
     SLIST_INSERT_HEAD(&config->listeners, listener, entries);
-
-    if (lc->address)
-        free(lc->address);
-    if (lc->port)
-        free(lc->port);
-    if (lc->table_name)
-        free(lc->table_name);
-    if (lc->protocol)
-        free(lc->protocol);
-    free(lc);
 
     return 1;
 }
 
 
 
-static struct TableConfig *
+static struct Table *
 begin_table() {
-    struct TableConfig *table;
+    struct Table *table;
 
-    table = malloc(sizeof(struct TableConfig));
+    table = malloc(sizeof(struct Table));
     if (table == NULL) {
         perror("malloc");
         return NULL;
     }
 
     table->name = NULL;
-    STAILQ_INIT(&table->entries);
+    STAILQ_INIT(&table->backends);
 
     return table;
 }
 
 static int
-accept_table_arg(struct TableConfig *table, char *arg) {
-    if (table->name == NULL)
+accept_table_arg(struct Table *table, char *arg) {
+    if (table->name == NULL) {
         table->name = strdup(arg);
-    else
+        if (table->name == NULL) {
+            perror("strdup");
+            return -1;
+        }
+    } else {
         fprintf(stderr, "Unexpected table argument: %s\n", arg);
+        return -1;
+    }
 
     return 1;
 }
 
 static int
-end_table(struct Config * config, struct TableConfig *tc) {
-    struct Table *table;
-    struct Backend *entry;
-
-    table = malloc(sizeof(struct Table));
-    if (table == NULL) {
-        perror("malloc");
-        return -1;
-    }
-
-    STAILQ_INIT(&table->backends);
-    table->name = tc->name;
-    tc->name = NULL;
-    
-    while ((entry = STAILQ_FIRST(&tc->entries)) != NULL)  {
-        STAILQ_REMOVE_HEAD(&tc->entries, entries);
-        STAILQ_INSERT_TAIL(&table->backends, entry, entries);
-    }
+end_table(struct Config *config, struct Table *table) {
+    /* TODO check table */
 
     SLIST_INSERT_HEAD(&config->tables, table, entries);
    
-    free(tc);
-
     return 1;
 }
-
-
 
 static struct Backend *
 begin_table_entry() {
@@ -372,7 +330,7 @@ accept_table_entry_arg(struct Backend *entry, char *arg) {
 }
 
 static int
-end_table_entry(struct TableConfig *table, struct Backend *entry) {
+end_table_entry(struct Table *table, struct Backend *entry) {
     const char *reerr; 
     int reerroffset;
 
@@ -382,6 +340,6 @@ end_table_entry(struct TableConfig *table, struct Backend *entry) {
         return -1;
     }
 
-    STAILQ_INSERT_TAIL(&table->entries, entry, entries);
+    STAILQ_INSERT_TAIL(&table->backends, entry, entries);
     return 1;
 }
