@@ -3,6 +3,7 @@
 #include <string.h>
 #include <strings.h> /* strcasecmp() */
 #include <assert.h>
+#include <ctype.h> /* tolower */      
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -21,14 +22,7 @@ struct ListenerConfig {
 
 struct TableConfig {
     char *name;
-    STAILQ_HEAD(, TableEntryConfig) entries;
-};
-
-struct TableEntryConfig {
-    char *hostname;
-    char *address;
-    char *port;
-    STAILQ_ENTRY(TableEntryConfig) entries;
+    STAILQ_HEAD(, Backend) entries;
 };
 
 static int accept_username(struct Config *, char *);
@@ -43,9 +37,9 @@ static struct TableConfig *begin_table();
 static int accept_table_arg(struct TableConfig *, char *);
 static int end_table(struct Config *, struct TableConfig *);
 
-static struct TableEntryConfig *begin_table_entry();
-static int accept_table_entry_arg(struct TableEntryConfig *, char *);
-static int end_table_entry(struct TableConfig *, struct TableEntryConfig *);
+static struct Backend *begin_table_entry();
+static int accept_table_entry_arg(struct Backend *, char *);
+static int end_table_entry(struct TableConfig *, struct Backend *);
 
 static struct Keyword listener_stanza_grammar[] = {
     { "protocol",
@@ -308,8 +302,7 @@ accept_table_arg(struct TableConfig *table, char *arg) {
 static int
 end_table(struct Config * config, struct TableConfig *tc) {
     struct Table *table;
-    struct TableEntryConfig *entry;
-    int port;
+    struct Backend *entry;
 
     table = malloc(sizeof(struct Table));
     if (table == NULL) {
@@ -323,19 +316,7 @@ end_table(struct Config * config, struct TableConfig *tc) {
     
     while ((entry = STAILQ_FIRST(&tc->entries)) != NULL)  {
         STAILQ_REMOVE_HEAD(&tc->entries, entries);
-        port = 0;
-        if (entry->port != NULL)
-            port = atoi(entry->port);
-
-        add_backend(&table->backends, entry->hostname, entry->address, port);
-        
-        if (entry->hostname)
-            free(entry->hostname);
-        if (entry->address)
-            free(entry->address);
-        if (entry->port)
-            free(entry->port);
-        free(entry);
+        STAILQ_INSERT_TAIL(&table->backends, entry, entries);
     }
 
     SLIST_INSERT_HEAD(&config->tables, table, entries);
@@ -347,11 +328,11 @@ end_table(struct Config * config, struct TableConfig *tc) {
 
 
 
-static struct TableEntryConfig *
+static struct Backend *
 begin_table_entry() {
-    struct TableEntryConfig *entry;
+    struct Backend *entry;
 
-    entry = calloc(1, sizeof(struct TableEntryConfig));
+    entry = calloc(1, sizeof(struct Backend));
     if (entry == NULL) {
         perror("malloc");
         return NULL;
@@ -361,21 +342,46 @@ begin_table_entry() {
 }
 
 static int
-accept_table_entry_arg(struct TableEntryConfig *entry, char *arg) {
-    if (entry->hostname == NULL)
+accept_table_entry_arg(struct Backend *entry, char *arg) {
+    char *ch;
+
+    if (entry->hostname == NULL) {
         entry->hostname = strdup(arg);
-    else if (entry->address == NULL)
+        if (entry->hostname == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+    } else if (entry->address == NULL) {
         entry->address = strdup(arg);
-    else if (entry->port == NULL)
-        entry->port = strdup(arg);
-    else
+        if (entry->address == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+
+        /* Store address as lower case */
+        for (ch = entry->address; *ch == '\0'; ch++)
+            *ch = tolower(*ch);
+    } else if (entry->port == 0 && isnumeric(arg)) {
+        entry->port = atoi(arg);
+    } else {
         fprintf(stderr, "Unexpected table entry argument: %s\n", arg);
+        return -1;
+    }
 
     return 1;
 }
 
 static int
-end_table_entry(struct TableConfig *table, struct TableEntryConfig *entry) {
+end_table_entry(struct TableConfig *table, struct Backend *entry) {
+    const char *reerr; 
+    int reerroffset;
+
+    entry->hostname_re = pcre_compile(entry->hostname, 0, &reerr, &reerroffset, NULL);
+    if (entry->hostname_re == NULL) {
+        fprintf(stderr, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+        return -1;
+    }
+
     STAILQ_INSERT_TAIL(&table->entries, entry, entries);
     return 1;
 }
