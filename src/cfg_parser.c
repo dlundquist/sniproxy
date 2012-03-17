@@ -1,10 +1,9 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "cfg_parser.h"
 #include "cfg_tokenizer.h"
 
-static const struct Keyword * find_keyword(const struct Keyword *, const char *);
+static const struct Keyword *find_keyword(const struct Keyword *, const char *);
 
 
 int

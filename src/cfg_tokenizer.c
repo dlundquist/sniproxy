@@ -1,25 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "cfg_tokenizer.h"
-
-#define BUFFER_SIZE 256
 
 static void chomp_line(FILE *);
 static int next_word(FILE *, char *, int);
 
 
 /*
- * next_token() returns the next token based on the current position of config file
- * advancing the position to immidiatly after the token.
+ * next_token() returns the next token based on the current position of config
+ * file advancing the position to immidiatly after the token.
  */
 enum Token
 next_token(FILE *config, char *buffer, size_t buffer_len) {
     int ch;
     int token_len;
-
-    assert(config != NULL);
 
     while ((ch = getc(config)) != EOF) {
         switch(ch) {
@@ -42,7 +37,8 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
             case '}':
                 return CBRACE;
             default:
-                /* Rewind one byte, so next_word() can fetch the begining of the word */
+                /* Rewind one byte, so next_word() can fetch from 
+                 * the begining of the word */
                 fseek(config, -1, SEEK_CUR);
 
                 token_len = next_word(config, buffer, buffer_len);
@@ -83,7 +79,7 @@ next_word(FILE *file, char *buffer, int buffer_len) {
                 escaped = 1;
                 break;
             case '\"':
-                quoted = 1 - quoted;
+                quoted = 1 - quoted; /* toggle quoted flag */
                 break;
             /* Seperators */
             case ' ':
@@ -95,7 +91,8 @@ next_word(FILE *file, char *buffer, int buffer_len) {
             case '{':
             case '}':
                 if (quoted == 0) {
-                    /* rewind the file one character, so we don't eat part of the next token */
+                    /* rewind the file one character, so we don't eat
+                     * part of the next token */
                     fseek(file, -1, SEEK_CUR);
 
                     buffer[len] = '\0';
