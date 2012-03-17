@@ -27,7 +27,7 @@ sub start_proxy {
     if (not defined $pid) {
         die("fork: $!");
     } elsif ($pid == 0) {
-        exec(@wrapper, '../src/sni_proxy', '-f', '-h', '-c', 'test_proxy.conf', '-p', '8080')
+        exec(@wrapper, '../src/sni_proxy', '-f', '-c', 'test_proxy.conf')
             or die("exec: $!");
     } else {
         $children{$pid} = { 
