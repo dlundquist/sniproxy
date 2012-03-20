@@ -1,35 +1,15 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <strings.h> /* strcasecmp() */
-#include <assert.h>
-#include <ctype.h> /* tolower */      
-#include <sys/queue.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <arpa/inet.h>
 #include "cfg_parser.h"
 #include "config.h"
-#include "util.h"
 
 
 static int accept_username(struct Config *, char *);
+static int end_listener_stanza(struct Config *, struct Listener *);
+static int end_table_stanza(struct Config *, struct Table *);
+static int end_backend(struct Table *, struct Backend *);
 
-static struct Listener *begin_listener();
-static int accept_listener_arg(struct Listener *, char *);
-static int accept_listener_table_name(struct Listener *, char *);
-static int accept_listener_protocol(struct Listener *, char *);
-static int end_listener(struct Config *, struct Listener *);
-
-static struct Table *begin_table();
-static int accept_table_arg(struct Table *, char *);
-static int end_table(struct Config *, struct Table *);
-
-static struct Backend *begin_table_entry();
-static int accept_table_entry_arg(struct Backend *, char *);
-static int end_table_entry(struct Table *, struct Backend *);
-
-static struct Keyword listener_stanza_grammar[] = {
+struct Keyword listener_stanza_grammar[] = {
     { "protocol",
             NULL,
             (int(*)(void *, char *))accept_listener_protocol,
@@ -45,10 +25,10 @@ static struct Keyword listener_stanza_grammar[] = {
 
 static struct Keyword table_stanza_grammar[] = {
     { NULL,
-            (void *(*)())begin_table_entry,
-            (int(*)(void *, char *))accept_table_entry_arg,
+            (void *(*)())new_backend,
+            (int(*)(void *, char *))accept_backend_arg,
             NULL,
-            (int(*)(void *, void *))end_table_entry},
+            (int(*)(void *, void *))end_backend},
 };
 
 static struct Keyword global_grammar[] = {
@@ -58,15 +38,15 @@ static struct Keyword global_grammar[] = {
             NULL,
             NULL},
     { "listener",
-            (void *(*)())begin_listener,
+            (void *(*)())new_listener,
             (int(*)(void *, char *))accept_listener_arg,
             listener_stanza_grammar,
-            (int(*)(void *, void *))end_listener},
+            (int(*)(void *, void *))end_listener_stanza},
     { "table",
-            (void *(*)())begin_table,
+            (void *(*)())new_table,
             (int(*)(void *, char *))accept_table_arg,
             table_stanza_grammar,
-            (int(*)(void *, void *))end_table},
+            (int(*)(void *, void *))end_table_stanza},
     { NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -97,7 +77,15 @@ init_config(const char *filename) {
     file = fopen(config->filename, "r");
     
     if (parse_config((void *)config, file, global_grammar) <= 0) {
-        fprintf(stderr, "error parsing config\n");
+        long whence = ftell(file);
+        char buffer[256];
+
+        fprintf(stderr, "error parsing %s at %ld near: %s\n", filename, whence);
+        fseek(file, -20, SEEK_CUR);
+        for (int i = 0; i < 5; i++) {
+            fprintf(stderr, "%d\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
+        }
+
         free_config(config);
         config = NULL;
     }
@@ -140,25 +128,24 @@ reload_config(struct Config *config) {
 }
 
 void
-print_config(struct Config *config) {
+print_config(FILE *file, struct Config *config) {
     struct Listener *listener = NULL;
     struct Table *table = NULL;
 
-    printf("# Config loaded from %s\n\n", config->filename);
+    if (config->filename)
+        fprintf(file, "# Config loaded from %s\n\n", config->filename);
 
     if (config->user)
-        printf("username %s\n\n", config->user);
+        fprintf(file, "username %s\n\n", config->user);
 
     SLIST_FOREACH(listener, &config->listeners, entries) {
-        print_listener_config(listener);
+        print_listener_config(file, listener);
     }
 
     SLIST_FOREACH(table, &config->tables, entries) {
-        print_table_config(table);
+        print_table_config(file, table);
     }
 }
-
-
 
 static int
 accept_username(struct Config *config, char *username) {
@@ -167,179 +154,39 @@ accept_username(struct Config *config, char *username) {
             perror("malloc:");
             return -1;
         }
+
         return 1;
 }
 
-static struct Listener *
-begin_listener() {
-    struct Listener *listener;
-
-    listener = calloc(1, sizeof(struct Listener));
-    if (listener == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-
-    listener->protocol = TLS;
-
-    return listener;
-}
 
 static int
-accept_listener_arg(struct Listener *listener, char *arg) {
-    if (listener->addr.ss_family == 0) {
-        if (isnumeric(arg))
-            listener->addr_len = parse_address(&listener->addr, "::", atoi(arg));
-        else 
-            listener->addr_len = parse_address(&listener->addr, arg, 0);
-
-        if (listener->addr_len == 0) {
-            fprintf(stderr, "Invalid listener argument %s\n", arg);
-            return -1;
-        }
-    } else if (listener->addr.ss_family == AF_INET && isnumeric(arg)) {
-        ((struct sockaddr_in *)&listener->addr)->sin_port = htons(atoi(arg));
-    } else if (listener->addr.ss_family == AF_INET6 && isnumeric(arg)) {
-        ((struct sockaddr_in6 *)&listener->addr)->sin6_port = htons(atoi(arg));
-    } else {
-        fprintf(stderr, "Invalid listener argument %s\n", arg);
-        return -1;
-    }
-    
-
-    return 1;
-}
-
-static int
-accept_listener_table_name(struct Listener *listener, char *table_name) {
-    if (listener->table_name == NULL)
-        listener->table_name = strdup(table_name);
-    else
-        fprintf(stderr, "Duplicate table_name: %s\n", table_name);
-
-    return 1;
-}
-
-static int
-accept_listener_protocol(struct Listener *listener, char *protocol) {
-    if (listener->protocol == 0 && strcasecmp(protocol, "http") == 0)
-        listener->protocol = HTTP;
-    else
-        listener->protocol = TLS;
-
-    if (listener->addr.ss_family == AF_INET && ((struct sockaddr_in *)&listener->addr)->sin_port == 0)
-        ((struct sockaddr_in *)&listener->addr)->sin_port = listener->protocol == TLS ? 443 : 80;
-    else if (listener->addr.ss_family == AF_INET6 && ((struct sockaddr_in6 *)&listener->addr)->sin6_port == 0)
-        ((struct sockaddr_in6 *)&listener->addr)->sin6_port = listener->protocol == TLS ? 443 : 80;
-            
-    return 1;
-}
-
-static int
-end_listener(struct Config *config, struct Listener *listener) {
-
-    SLIST_INSERT_HEAD(&config->listeners, listener, entries);
-
-    return 1;
-}
-
-
-
-static struct Table *
-begin_table() {
-    struct Table *table;
-
-    table = malloc(sizeof(struct Table));
-    if (table == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-
-    table->name = NULL;
-    STAILQ_INIT(&table->backends);
-
-    return table;
-}
-
-static int
-accept_table_arg(struct Table *table, char *arg) {
-    if (table->name == NULL) {
-        table->name = strdup(arg);
-        if (table->name == NULL) {
-            perror("strdup");
-            return -1;
-        }
-    } else {
-        fprintf(stderr, "Unexpected table argument: %s\n", arg);
+end_listener_stanza(struct Config *config, struct Listener *listener) {
+    if (valid_listener(listener) <= 0) {
+        fprintf(stderr, "Invalid listener\n");
+        print_listener_config(stderr, listener);
+        free_listener(listener);
         return -1;
     }
 
+    add_listener(&config->listeners, listener);
+
     return 1;
 }
 
 static int
-end_table(struct Config *config, struct Table *table) {
+end_table_stanza(struct Config *config, struct Table *table) {
     /* TODO check table */
 
-    SLIST_INSERT_HEAD(&config->tables, table, entries);
+    add_table(&config->tables, table);
    
     return 1;
 }
 
-static struct Backend *
-begin_table_entry() {
-    struct Backend *entry;
-
-    entry = calloc(1, sizeof(struct Backend));
-    if (entry == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-
-    return entry;
-}
-
 static int
-accept_table_entry_arg(struct Backend *entry, char *arg) {
-    char *ch;
+end_backend(struct Table *table, struct Backend *backend) {
+    /* TODO check backend */
 
-    if (entry->hostname == NULL) {
-        entry->hostname = strdup(arg);
-        if (entry->hostname == NULL) {
-            fprintf(stderr, "strdup failed");
-            return -1;
-        }
-    } else if (entry->address == NULL) {
-        entry->address = strdup(arg);
-        if (entry->address == NULL) {
-            fprintf(stderr, "strdup failed");
-            return -1;
-        }
-
-        /* Store address as lower case */
-        for (ch = entry->address; *ch == '\0'; ch++)
-            *ch = tolower(*ch);
-    } else if (entry->port == 0 && isnumeric(arg)) {
-        entry->port = atoi(arg);
-    } else {
-        fprintf(stderr, "Unexpected table entry argument: %s\n", arg);
-        return -1;
-    }
-
+    add_backend(&table->backends, backend);
     return 1;
 }
 
-static int
-end_table_entry(struct Table *table, struct Backend *entry) {
-    const char *reerr; 
-    int reerroffset;
-
-    entry->hostname_re = pcre_compile(entry->hostname, 0, &reerr, &reerroffset, NULL);
-    if (entry->hostname_re == NULL) {
-        fprintf(stderr, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
-        return -1;
-    }
-
-    STAILQ_INSERT_TAIL(&table->backends, entry, entries);
-    return 1;
-}

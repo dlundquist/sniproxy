@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include "table.h"
 
+SLIST_HEAD(Listener_head, Listener);
+
 struct Listener {
     /* Configuration fields */
     struct sockaddr_storage addr;
@@ -22,13 +24,23 @@ struct Listener {
     SLIST_ENTRY(Listener) entries;
 };
 
-void init_listeners();
-void free_listeners();
+struct Listener *new_listener();
+int accept_listener_arg(struct Listener *, char *);
+int accept_listener_table_name(struct Listener *, char *);
+int accept_listener_protocol(struct Listener *, char *);
+
+void add_listener(struct Listener_head *, struct Listener *);
+int init_listeners(struct Listener_head *, const struct Table_head *);
+int fd_set_listeners(const struct Listener_head *, fd_set *, int);
+void handle_listeners(struct Listener_head *, fd_set *);
+void remove_listener(struct Listener_head *, struct Listener *);
+void free_listeners(struct Listener_head *);
+
+int valid_listener(const struct Listener *);
+void print_listener_config(FILE *, const struct Listener *);
+void print_listener_status(FILE *, const struct Listener *);
+int init_listener(struct Listener *, const struct Table_head *);
 void free_listener(struct Listener *);
-struct Listener *add_listener(const struct sockaddr *, size_t, int, const char *);
-int fd_set_listeners(fd_set *, int);
-void handle_listeners(fd_set *);
-void print_listener_config(struct Listener *);
 
 static inline int lookup_server_socket(const struct Listener *listener, const char *hostname) {
     return lookup_table_server_socket(listener->table, hostname);

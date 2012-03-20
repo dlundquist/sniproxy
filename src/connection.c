@@ -187,8 +187,6 @@ handle_connection_client_data(struct Connection *con) {
 
     switch(con->state) {
         case(ACCEPTED):
-            hostname = con->listener->parse_packet(con->client.buffer, con->client.buffer_size);
-
             /* identify peer address */
             peeraddr_len = sizeof(peeraddr);
             getpeername(con->client.sockfd, (struct sockaddr*)&peeraddr, &peeraddr_len);
@@ -202,6 +200,8 @@ handle_connection_client_data(struct Connection *con) {
                 peerport = ntohs(s->sin6_port);
                 inet_ntop(AF_INET6, &s->sin6_addr, peeripstr, sizeof(peeripstr));
             }
+
+            hostname = con->listener->parse_packet(con->client.buffer, con->client.buffer_size);
 
             if (hostname == NULL) {
                 syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);

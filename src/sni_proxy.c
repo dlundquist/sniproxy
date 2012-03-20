@@ -3,7 +3,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
-#include <strings.h> /* bzero() */
+// #include <strings.h> /* bzero() */
 #include <syslog.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -22,35 +22,20 @@ static void daemonize(const char *, int);
 
 int
 main(int argc, char **argv) {
-    int opt, sockfd;
-    int background_flag = 1;
-    int tls_flag = 1;
-    int port = 443;
     struct Config *config = NULL;
     const char *config_file = "/etc/sni_proxy.conf";
-    const char *bind_addr = "::";
-    const char *user= "nobody";
+    int background_flag = 1;
+    int fd_count;
+    int opt;
 
 
-    while ((opt = getopt(argc, argv, "fhb:p:c:u:")) != -1) {
+    while ((opt = getopt(argc, argv, "fc:")) != -1) {
         switch (opt) {
-            case 'f': /* foreground */
-                background_flag = 0;
-                break;
-            case 'h':
-                tls_flag = 0;
-                break;
-            case 'b':
-                bind_addr = optarg;
-                break;
-            case 'p':
-                port = atoi(optarg);
-                break;
             case 'c':
                 config_file = optarg;
                 break;
-            case 'u':
-                user = optarg;
+            case 'f': /* foreground */
+                background_flag = 0;
                 break;
             default: 
                 usage();
@@ -60,13 +45,10 @@ main(int argc, char **argv) {
 
     config = init_config(config_file);
 
-    sockfd = init_server(bind_addr, port, tls_flag);
-    if (sockfd < 0)
-        return -1;
-
+    init_server(config);
 
     if (background_flag)
-        daemonize(user, sockfd);
+        daemonize(config->user, 5);
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
@@ -149,5 +131,5 @@ daemonize(const char *username, int sockfd) {
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sni_proxy [-c <config>] [-f] [-b <address>] [-p <port>] [-u <user>]\n");
+    fprintf(stderr, "Usage: sni_proxy [-c <config>] [-f]\n");
 }

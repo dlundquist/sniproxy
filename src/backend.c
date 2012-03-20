@@ -18,51 +18,68 @@
 
 static void free_backend(struct Backend *);
 
-
 struct Backend *
-add_backend(struct Backend_head *head, const char *hostname, const char *address, int port) {
+new_backend() {
     struct Backend *backend;
-    const char *reerr;
-    int reerroffset;
-    char *ch;
 
     backend = calloc(1, sizeof(struct Backend));
     if (backend == NULL) {
-        syslog(LOG_CRIT, "calloc failed");
+        perror("malloc");
         return NULL;
     }
-
-    backend->hostname = strdup(hostname);
-    if (backend->hostname == NULL) {
-        syslog(LOG_CRIT, "strdup failed");
-        free_backend(backend);
-        return NULL;
-    }
-
-    backend->address = strdup(address);
-    if (backend->address == NULL) {
-        syslog(LOG_CRIT, "strdup failed");
-        free_backend(backend);
-        return NULL;
-    }
-    /* Store address as lower case */
-    for (ch = backend->address; *ch == '\0'; ch++)
-        *ch = tolower(*ch);
-    
-
-    backend->port = port;
-
-    backend->hostname_re = pcre_compile(hostname, 0, &reerr, &reerroffset, NULL);
-    if (backend->hostname_re == NULL) {
-        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
-        free_backend(backend);
-        return NULL;
-    }
-
-    syslog(LOG_DEBUG, "Parsed %s %s %d", hostname, address, port);
-    STAILQ_INSERT_TAIL(head, backend, entries);
 
     return backend;
+}
+
+int
+accept_backend_arg(struct Backend *backend, char *arg) {
+    char *ch;
+
+    if (backend->hostname == NULL) {
+        backend->hostname = strdup(arg);
+        if (backend->hostname == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+    } else if (backend->address == NULL) {
+        backend->address = strdup(arg);
+        if (backend->address == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+
+        /* Store address as lower case */
+        for (ch = backend->address; *ch == '\0'; ch++)
+            *ch = tolower(*ch);
+    } else if (backend->port == 0 && isnumeric(arg)) {
+        backend->port = atoi(arg);
+    } else {
+        fprintf(stderr, "Unexpected table backend argument: %s\n", arg);
+        return -1;
+    }
+
+    return 1;
+}
+
+void
+add_backend(struct Backend_head *backends, struct Backend *backend) {
+    STAILQ_INSERT_TAIL(backends, backend, entries);
+}
+
+int
+init_backend(struct Backend *backend) {
+    const char *reerr;
+    int reerroffset;
+
+    backend->hostname_re = pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
+    if (backend->hostname_re == NULL) {
+        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+        return 0;
+    }
+
+    syslog(LOG_DEBUG, "Parsed %s %s %d", backend->hostname, backend->address, backend->port);
+
+    return 1;
 }
 
 struct Backend *

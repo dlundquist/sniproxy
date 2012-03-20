@@ -13,32 +13,21 @@ static void sig_handler(int);
 
 static volatile int running; /* For signal handler */
 static volatile int sighup_received; /* For signal handler */
-
+static struct Config *config;
 
 int
-init_server(const char *address, int port, int tls_flag) {
-    struct sockaddr_storage addr;
-    int addr_len;
-    struct Listener *listener;
-
+init_server(struct Config * c) {
+    config = c;
+    
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
     signal(SIGHUP, sig_handler);
     /* ignore SIGPIPE, or it will kill us */
     signal(SIGPIPE, SIG_IGN);
 
-    init_listeners();
+    init_tables(&config->tables);
 
-
-    addr_len = parse_address(&addr, address, port);
-    if (addr_len == 0) {
-        perror("Error parsing address");
-        return -1;
-    }
-
-    listener = add_listener((const struct sockaddr *)&addr, addr_len, tls_flag, "default");
-
-    return listener->sockfd;
+    return init_listeners(&config->listeners, &config->tables);
 }
 
 void
@@ -46,13 +35,14 @@ run_server() {
     int maxfd;
     fd_set rfds;
 
+
     init_connections();
     running = 1;
 
 
     while (running) {
         FD_ZERO(&rfds);
-        maxfd = fd_set_listeners(&rfds, 0);
+        maxfd = fd_set_listeners(&config->listeners, &rfds, 0);
         maxfd = fd_set_connections(&rfds, maxfd);
 
         if (select(maxfd + 1, &rfds, NULL, NULL, NULL) < 0) {
@@ -68,11 +58,12 @@ run_server() {
             continue; /* our file descriptor sets are undefined, so select again */
         }
 
-        handle_listeners(&rfds);
+        handle_listeners(&config->listeners, &rfds);
+
         handle_connections(&rfds);
     }
 
-    free_listeners();
+    free_listeners(&config->listeners);
     free_connections();
 }
 

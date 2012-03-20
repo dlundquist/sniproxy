@@ -6,6 +6,7 @@ MODULES =   sni_proxy.o \
             cfg_parser.o \
             cfg_tokenizer.o \
             util.o \
+            server.o \
             binder.o \
             listener.o \
             table.o \

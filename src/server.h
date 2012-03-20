@@ -1,7 +1,9 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-int init_server(const char *, int, int);
+#include "config.h"
+
+int init_server(struct Config *);
 void run_server();
 
 #endif
