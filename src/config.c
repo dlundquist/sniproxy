@@ -80,10 +80,10 @@ init_config(const char *filename) {
         long whence = ftell(file);
         char buffer[256];
 
-        fprintf(stderr, "error parsing %s at %ld near: %s\n", filename, whence);
+        fprintf(stderr, "error parsing %s at %ld near:\n", filename, whence);
         fseek(file, -20, SEEK_CUR);
         for (int i = 0; i < 5; i++) {
-            fprintf(stderr, "%d\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
+            fprintf(stderr, "%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
         }
 
         free_config(config);
@@ -98,23 +98,15 @@ init_config(const char *filename) {
 
 void
 free_config(struct Config *config) {
-    struct Listener *listener;
-    struct Table *table;
 
     if (config->filename)
         free(config->filename);
     if (config->user)
         free(config->user);
 
-    while ((listener = SLIST_FIRST(&config->listeners)) != NULL) {
-        SLIST_REMOVE_HEAD(&config->listeners, entries);
-        free_listener(listener);
-    }
+    free_listeners(&config->listeners);
 
-    while ((table = SLIST_FIRST(&config->tables)) != NULL) {
-        SLIST_REMOVE_HEAD(&config->tables, entries);
-        free_table(table);
-    }
+    free_tables(&config->tables);
 
     free(config);
 }

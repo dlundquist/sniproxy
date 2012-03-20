@@ -4,9 +4,7 @@
 #include <signal.h>
 #include <errno.h>
 #include "server.h"
-#include "listener.h"
 #include "connection.h"
-#include "config.h"
 #include "util.h"
 
 static void sig_handler(int);

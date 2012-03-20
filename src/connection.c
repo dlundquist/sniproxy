@@ -2,17 +2,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <syslog.h>
-#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/queue.h>
+#include <sys/select.h>
 #include "connection.h"
-#include "http.h"
-#include "tls.h"
-#include "util.h"
 
 
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))

@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "cfg_tokenizer.h"
 
 static void chomp_line(FILE *);

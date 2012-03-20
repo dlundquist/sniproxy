@@ -24,7 +24,7 @@ struct Table *lookup_table(const struct Table_head *, const char *);
 int lookup_table_server_socket(const struct Table *, const char *);
 void print_table_config(FILE *, struct Table *);
 void print_table_status(FILE *, struct Table *);
-void remove_table(struct Table_head *, struct Table *);
+int valid_table(struct Table *);
 void free_table(struct Table *);
 
 

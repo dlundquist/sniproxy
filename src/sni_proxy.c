@@ -12,7 +12,6 @@
 #include <sys/resource.h>
 #include <signal.h>
 #include "sni_proxy.h"
-#include "config.h"
 #include "server.h"
 
 
@@ -25,7 +24,6 @@ main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sni_proxy.conf";
     int background_flag = 1;
-    int fd_count;
     int opt;
 
 

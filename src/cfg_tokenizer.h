@@ -1,6 +1,8 @@
 #ifndef CFG_TOKENIZER
 #define CFG_TOKENIZER
 
+#include <stdio.h>
+
 enum Token {
     ERROR,
     EOL,

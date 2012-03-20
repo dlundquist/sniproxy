@@ -17,6 +17,7 @@ struct Backend {
 };
 
 void add_backend(struct Backend_head *, struct Backend *);
+int init_backend(struct Backend *);
 struct Backend *lookup_backend(const struct Backend_head *, const char *);
 int open_backend_socket(struct Backend *, const char *);
 void remove_backend(struct Backend_head *, struct Backend *);

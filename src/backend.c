@@ -1,17 +1,14 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <strings.h> /* strncasecmp */
-#include <ctype.h> /* tolower */
-#include <netdb.h>
 #include <string.h>
-#include <unistd.h>
-#include <pcre.h>
+#include <ctype.h> /* tolower */
 #include <errno.h>
 #include <syslog.h>
-#include <stdarg.h>
+#include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <netdb.h> /* getaddrinfo */
+#include <unistd.h> /* close */
+#include <pcre.h>
 #include "backend.h"
 #include "util.h"
 
