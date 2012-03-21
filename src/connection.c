@@ -101,7 +101,7 @@ fd_set_connections(fd_set *fds, int max) {
 
                 FD_SET(iter->client.sockfd, fds);
                 max = MAX(max, iter->client.sockfd);
-                break;
+                /* Fall through */
             case(CLOSED):
                 /* do nothing */
                 break;

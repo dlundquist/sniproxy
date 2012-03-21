@@ -9,6 +9,7 @@ static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
 
+
 struct Keyword listener_stanza_grammar[] = {
     { "protocol",
             NULL,
@@ -50,6 +51,7 @@ static struct Keyword global_grammar[] = {
     { NULL, NULL, NULL, NULL, NULL }
 };
 
+
 struct Config *
 init_config(const char *filename) {
     FILE *file;
@@ -75,6 +77,11 @@ init_config(const char *filename) {
 
 
     file = fopen(config->filename, "r");
+    if (file == NULL) {
+        perror("unable to open config file");
+        free_config(config);
+        return NULL;
+    }
     
     if (parse_config((void *)config, file, global_grammar) <= 0) {
         long whence = ftell(file);
@@ -82,16 +89,14 @@ init_config(const char *filename) {
 
         fprintf(stderr, "error parsing %s at %ld near:\n", filename, whence);
         fseek(file, -20, SEEK_CUR);
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++)
             fprintf(stderr, "%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
-        }
 
         free_config(config);
         config = NULL;
     }
 
     fclose(file);
-
 
     return(config);
 }
@@ -113,9 +118,11 @@ free_config(struct Config *config) {
 
 int
 reload_config(struct Config *config) {
-    if (config == NULL)
-        return 1;
-    /* TODO validate config */
+    /* TODO */
+    /* Open client connections have references the listener they connected
+     * to, so we can't simply load a new configuration and discard the old
+     * one.
+     */
     return 0;
 }
 

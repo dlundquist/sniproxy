@@ -1,11 +1,9 @@
 #include <stdio.h>
-#include <unistd.h> /* close() */
 #include <sys/select.h>
 #include <signal.h>
 #include <errno.h>
 #include "server.h"
 #include "connection.h"
-#include "util.h"
 
 static void sig_handler(int);
 

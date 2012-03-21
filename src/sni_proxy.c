@@ -3,14 +3,12 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
-// #include <strings.h> /* bzero() */
 #include <syslog.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <signal.h>
 #include "sni_proxy.h"
 #include "server.h"
 
@@ -42,6 +40,10 @@ main(int argc, char **argv) {
     }
 
     config = init_config(config_file);
+    if (config == NULL) {
+        fprintf(stderr, "Unable to load %s\n", config_file);
+        return 1;
+    }
 
     init_server(config);
 

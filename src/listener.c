@@ -115,7 +115,6 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 
 int
 accept_listener_table_name(struct Listener *listener, char *table_name) {
-    fprintf(stderr, "accept_listener_table_name(%p, %s)\n", (void *)listener, table_name);
     if (listener->table_name == NULL)
         listener->table_name = strdup(table_name);
     else
@@ -202,6 +201,7 @@ int
 init_listener(struct Listener *listener, const struct Table_head *tables) {
     listener->table = lookup_table(tables, listener->table_name);
     if (listener->table == NULL) {
+        fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
         return -1;
     }
     
@@ -270,6 +270,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 
     switch(addr.storage->ss_family) {
         case AF_UNIX:
+            fprintf(file, "listener unix:%s {\n", (char *)&addr.sun->sun_path);
             break;
         case AF_INET:
             inet_ntop(AF_INET, &addr.sin->sin_addr, addr_str, listener->addr_len);
@@ -280,6 +281,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
             fprintf(file, "listener %s %d {\n", addr_str, ntohs(addr.sin6->sin6_port));
             break;
         default:
+            fprintf(file, "listener {\n");
             break;
     }
 

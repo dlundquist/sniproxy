@@ -1,6 +1,8 @@
 #ifndef CFG_PARSER
 #define CFG_PARSER
 
+#include <stdio.h>
+
 struct Keyword {
     const char *keyword;
     void *(*create)();
@@ -11,6 +13,5 @@ struct Keyword {
 
 
 int parse_config(void *, FILE *, const struct Keyword *);
-
 
 #endif

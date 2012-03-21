@@ -7,7 +7,6 @@ MODULES =   sni_proxy.o \
             cfg_tokenizer.o \
             util.o \
             server.o \
-            binder.o \
             listener.o \
             table.o \
             backend.o \
@@ -26,4 +25,4 @@ sni_proxy: $(MODULES)
 .PHONY: clean all
 
 clean:
-	rm -f *.o sni_proxy
+	rm -f *.o core sni_proxy

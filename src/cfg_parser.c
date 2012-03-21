@@ -54,7 +54,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                     if (result <= 0)
                         return result;
                 } else {
-                    printf("block without context\n");
+                    fprintf(stderr, "block without context\n");
                     return -1;
                 }
                 break;

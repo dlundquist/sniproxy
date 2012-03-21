@@ -1,8 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <sys/queue.h>
-#include <netinet/in.h>
+#include <stdio.h>
 #include "table.h"
 #include "listener.h"
 

@@ -16,7 +16,7 @@ config.test: config.o ../src/config.o ../src/cfg_parser.o ../src/cfg_tokenizer.o
 .PHONY: clean all
 
 clean:
-	rm -f *.o ${TESTS}
+	rm -f *.o core ${TESTS}
 
 test: all
 	./run_tests.sh
