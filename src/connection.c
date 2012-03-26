@@ -48,7 +48,7 @@ free_connections() {
 void
 accept_connection(struct Listener *listener) {
     struct Connection *c;
-    struct sockaddr_in client_addr;
+    struct sockaddr_storage client_addr;
     unsigned int client_addr_len;
 
     c = calloc(1, sizeof(struct Connection));

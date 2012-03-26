@@ -54,7 +54,7 @@ run_server() {
             continue; /* our file descriptor sets are undefined, so select again */
         }
 
-        handle_listeners(&config->listeners, &rfds);
+        handle_listeners(&config->listeners, &rfds, accept_connection);
 
         handle_connections(&rfds);
     }

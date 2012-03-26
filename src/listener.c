@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #include "util.h"
 #include "listener.h"
-#include "connection.h"
 #include "tls.h"
 #include "http.h"
 
@@ -66,12 +65,12 @@ init_listeners(struct Listener_head *listeners, const struct Table_head *tables)
 }
 
 void
-handle_listeners(struct Listener_head *listeners, fd_set *rfds) {
+handle_listeners(const struct Listener_head *listeners, const fd_set *rfds, void (*accept_cb)(struct Listener *)) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
         if (FD_ISSET (iter->sockfd, rfds))
-            accept_connection(iter);
+            accept_cb(iter);
     }
 }
 
