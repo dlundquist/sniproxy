@@ -77,7 +77,7 @@ lookup_table(const struct Table_head *tables, const char *name) {
         if (name == NULL) {
             if (iter->name == NULL)
                 return iter;
-        } else {
+        } else if (iter->name) {
             if (strcmp(iter->name, name) == 0)
                 return iter;
         }

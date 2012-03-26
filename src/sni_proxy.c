@@ -14,7 +14,7 @@
 
 
 static void usage();
-static void daemonize(const char *, int);
+static void daemonize(const char *);
 
 
 int
@@ -48,7 +48,7 @@ main(int argc, char **argv) {
     init_server(config);
 
     if (background_flag)
-        daemonize(config->user, 5);
+        daemonize(config->user);
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
@@ -60,11 +60,12 @@ main(int argc, char **argv) {
 }
 
 static void
-daemonize(const char *username, int sockfd) {
+daemonize(const char *username) {
     int i, fd0, fd1, fd2;
     pid_t pid;
     struct rlimit rl;
     struct passwd *user;
+    struct stat sb;
 
     user = getpwnam(username);
     if (user == NULL) {
@@ -97,9 +98,13 @@ daemonize(const char *username, int sockfd) {
     }
 
 
-    for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--)
-        if (i != sockfd)
+    for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--) {
+        if (fstat(i, &sb) == -1)
+            continue;
+        
+        if (!S_ISSOCK(sb.st_mode))
             close(i);
+    }
 
     fd0 = open("/dev/null", O_RDWR);
     fd1 = dup(fd0);
