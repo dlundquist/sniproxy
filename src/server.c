@@ -44,7 +44,7 @@ init_server(const char *address, int port, int tls_flag) {
 void
 run_server() {
     int maxfd;
-    fd_set rfds;
+    fd_set rfds, wfds;
 
     init_connections();
     running = 1;
@@ -52,8 +52,9 @@ run_server() {
 
     while (running) {
         FD_ZERO(&rfds);
+        FD_ZERO(&wfds);
         maxfd = fd_set_listeners(&rfds, 0);
-        maxfd = fd_set_connections(&rfds, maxfd);
+        maxfd = fd_set_connections(&rfds, &wfds, maxfd);
 
         if (select(maxfd + 1, &rfds, NULL, NULL, NULL) < 0) {
             /* select() might have failed because we received a signal, so we need to check */
@@ -70,7 +71,7 @@ run_server() {
         }
 
         handle_listeners(&rfds);
-        handle_connections(&rfds);
+        handle_connections(&rfds, &wfds);
     }
 
     free_listeners();

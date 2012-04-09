@@ -28,10 +28,11 @@
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
-
+static void handle_connection_hello(struct Connection *);
 static void handle_connection_server_data(struct Connection *);
 static void handle_connection_client_data(struct Connection *);
 static void close_connection(struct Connection *);
+static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 
 
@@ -56,7 +57,7 @@ accept_connection(struct Listener *listener) {
     struct sockaddr_in client_addr;
     unsigned int client_addr_len;
 
-    c = calloc(1, sizeof(struct Connection));
+    c = new_connection();
     if (c == NULL) {
         syslog(LOG_CRIT, "calloc failed");
         return;
@@ -82,7 +83,7 @@ accept_connection(struct Listener *listener) {
  * Returns the highest file descriptor in the set.
  */
 int
-fd_set_connections(fd_set *fds, int max) {
+fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
     struct Connection *iter;
 
     LIST_FOREACH(iter, &connections, entries) {
@@ -94,7 +95,11 @@ fd_set_connections(fd_set *fds, int max) {
                     break;
                 }
 
-                FD_SET(iter->server.sockfd, fds);
+                if (buffer_len(iter->client.buffer))
+                    FD_SET(iter->server.sockfd, wfds);
+
+                if (buffer_room(iter->server.buffer))
+                    FD_SET(iter->server.sockfd, rfds);
                 max = MAX(max, iter->server.sockfd);
                 /* Fall through */
             case(ACCEPTED):
@@ -104,7 +109,11 @@ fd_set_connections(fd_set *fds, int max) {
                     break;
                 }
 
-                FD_SET(iter->client.sockfd, fds);
+                if (buffer_len(iter->server.buffer))
+                    FD_SET(iter->client.sockfd, wfds);
+
+                if (buffer_room(iter->client.buffer))
+                    FD_SET(iter->client.sockfd, rfds);
                 max = MAX(max, iter->client.sockfd);
                 break;
             case(CLOSED):
@@ -119,18 +128,33 @@ fd_set_connections(fd_set *fds, int max) {
 }
 
 void
-handle_connections(fd_set *rfds) {
+handle_connections(fd_set *rfds, fd_set *wfds) {
     struct Connection *iter, *tmp;
+    ssize_t len;
 
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
         switch(iter->state) {
             case(CONNECTED):
-                if (FD_ISSET (iter->server.sockfd, rfds))
-                handle_connection_server_data(iter);
+                if (FD_ISSET (iter->server.sockfd, rfds) && buffer_room(iter->server.buffer))
+                    handle_connection_server_data(iter);
+
+                if (FD_ISSET (iter->server.sockfd, wfds) && buffer_len(iter->client.buffer)) {
+                    len = buffer_send(iter->client.buffer, iter->server.sockfd, MSG_DONTWAIT);
+                    if (len < 0)
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                }
+                    
                 /* Fall through */
             case(ACCEPTED):
-                if (FD_ISSET (iter->client.sockfd, rfds))
-                handle_connection_client_data(iter);
+                if (FD_ISSET (iter->client.sockfd, rfds) && buffer_room(iter->client.buffer))
+                    handle_connection_client_data(iter);
+
+                if (FD_ISSET (iter->client.sockfd, wfds) && buffer_len(iter->server.buffer)) {
+                    len = buffer_send(iter->server.buffer, iter->client.sockfd, MSG_DONTWAIT);
+                    if (len < 0)
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                }
+
                 break;
             case(CLOSED):
                 LIST_REMOVE(iter, entries);
@@ -146,88 +170,45 @@ static void
 handle_connection_server_data(struct Connection *con) {
     int n;
 
-    n = read(con->server.sockfd, con->server.buffer, BUFFER_LEN);
+    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
     if (n < 0) {
-        syslog(LOG_INFO, "read failed: %s", strerror(errno));
+        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
         close_connection(con);
         return;
     }
 
-    con->server.buffer_size = n;
-
-    n = send(con->client.sockfd, con->server.buffer, con->server.buffer_size, MSG_DONTWAIT);
+    n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
     if (n < 0) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
     }
-    /* TODO handle case where n < con->server.buffer_size */
-    con->server.buffer_size = 0;
 }
 
 static void
 handle_connection_client_data(struct Connection *con) {
     int n;
-    const char *hostname;
-    struct sockaddr_storage peeraddr;
-    socklen_t peeraddr_len;
-    char peeripstr[INET6_ADDRSTRLEN];
-    int peerport;
 
-    n = read(con->client.sockfd, con->client.buffer, BUFFER_LEN);
+    n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
     if (n < 0) {
-        syslog(LOG_INFO, "Read failed: %s", strerror(errno));
+        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
         close_connection(con);
         return;
     }
-    con->client.buffer_size = n;
 
     switch(con->state) {
         case(ACCEPTED):
-            hostname = con->listener->parse_packet(con->client.buffer, con->client.buffer_size);
-
-            /* identify peer address */
-            peeraddr_len = sizeof(peeraddr);
-            getpeername(con->client.sockfd, (struct sockaddr*)&peeraddr, &peeraddr_len);
-
-            if (peeraddr.ss_family == AF_INET) {
-                struct sockaddr_in *s = (struct sockaddr_in *)&peeraddr;
-                peerport = ntohs(s->sin_port);
-                inet_ntop(AF_INET, &s->sin_addr, peeripstr, sizeof(peeripstr));
-            } else { // AF_INET6
-                struct sockaddr_in6 *s = (struct sockaddr_in6 *)&peeraddr;
-                peerport = ntohs(s->sin6_port);
-                inet_ntop(AF_INET6, &s->sin6_addr, peeripstr, sizeof(peeripstr));
-            }
-
-            if (hostname == NULL) {
-                syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
-                /*hexdump(con->client.buffer, con->client.buffer_size);*/
-            } else {
-                syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
-            }
-
-            /* lookup server for hostname and connect */
-            con->server.sockfd = lookup_server_socket(con->listener, hostname);
-            if (con->server.sockfd < 0) {
-                syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
-                close_connection(con);
-                return;
-            }
-            con->state = CONNECTED;
-
+            handle_connection_hello(con);
             /* Fall through */
         case(CONNECTED):
-            n = send(con->server.sockfd, con->client.buffer, con->client.buffer_size, MSG_DONTWAIT);
+            n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
             if (n < 0) {
                 syslog(LOG_INFO, "send failed: %s", strerror(errno));
                 return;
             }
-            /* TODO handle case where n < con->client.buffer_size */
-            con->client.buffer_size = 0;
             break;
         case(CLOSED):	
             syslog(LOG_WARNING, "Received data from closed connection");
@@ -236,6 +217,54 @@ handle_connection_client_data(struct Connection *con) {
             syslog(LOG_WARNING, "Invalid state %d\n", con->state);
     }
 }
+
+static void
+handle_connection_hello(struct Connection *con) {
+    char buffer[256];
+    ssize_t len;
+    const char *hostname;
+    struct sockaddr_storage peeraddr;
+    char peeripstr[INET6_ADDRSTRLEN];
+    socklen_t peeraddr_len;
+    int peerport = 0;
+
+    len  = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
+
+    hostname = con->listener->parse_packet(buffer, len);
+
+
+    /* identify peer address */
+    peeraddr_len = sizeof(peeraddr);
+    getpeername(con->client.sockfd, (struct sockaddr*)&peeraddr, &peeraddr_len);
+
+    switch(peeraddr.ss_family) {
+        case AF_INET:
+            peerport = ntohs(((struct sockaddr_in *)&peeraddr)->sin_port);
+            inet_ntop(AF_INET, &((struct sockaddr_in *)&peeraddr)->sin_addr, peeripstr, sizeof(peeripstr));
+            break;
+        case AF_INET6:
+            peerport = ntohs(((struct sockaddr_in6 *)&peeraddr)->sin6_port);
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&peeraddr)->sin6_addr, peeripstr, sizeof(peeripstr));
+            break;
+    }
+
+
+    if (hostname == NULL) {
+        syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
+    } else {
+        syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
+    }
+
+    /* lookup server for hostname and connect */
+    con->server.sockfd = lookup_server_socket(con->listener, hostname);
+    if (con->server.sockfd < 0) {
+        syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
+        close_connection(con);
+        return;
+    }
+    con->state = CONNECTED;
+}
+
 
 static void
 close_connection(struct Connection *c) {
@@ -249,8 +278,38 @@ close_connection(struct Connection *c) {
     c->state = CLOSED;
 }
 
+static struct Connection *
+new_connection() {
+    struct Connection *c;
+
+    c = calloc(1, sizeof (struct Connection));
+    if (c == NULL)
+        return NULL;
+
+    c->client.buffer = new_buffer();
+    if (c->client.buffer == NULL) {
+        free_connection(c);
+        return NULL;
+    }
+    
+    c->server.buffer = new_buffer();
+    if (c->server.buffer == NULL) {
+        free_connection(c);
+        return NULL;
+    }
+
+    return c;
+}
+
 static void
 free_connection(struct Connection *c) {
     close_connection(c);
+
+    if (c->client.buffer)
+        free_buffer(c->client.buffer);
+
+    if (c->server.buffer)
+        free_buffer(c->server.buffer);
+
     free(c);
 }

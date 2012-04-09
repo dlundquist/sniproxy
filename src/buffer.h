@@ -18,5 +18,11 @@ ssize_t buffer_write(struct Buffer *, int);
 size_t buffer_peek(const struct Buffer *, void *, size_t);
 size_t buffer_pop(struct Buffer *, void *, size_t);
 size_t buffer_push(struct Buffer *, const void *, size_t);
+inline size_t buffer_len(const struct Buffer *b) {
+    return b->len;
+}
+inline size_t buffer_room(const struct Buffer *b) {
+    return b->size - b->len;
+}
 
 #endif
