@@ -10,9 +10,11 @@
 
 struct Connection {
     enum State {
-        ACCEPTED,
-        CONNECTED,
-        CLOSED
+        ACCEPTED,       /* Newly accepted client connection */
+        CONNECTED,      /* Parsed client hello and connected to server */
+        SERVER_CLOSED,  /* Client closed socket */
+        CLIENT_CLOSED,  /* Server closed socket */
+        CLOSED          /* Both sockets closed */
     } state;
 
     struct {
@@ -29,5 +31,6 @@ void accept_connection(struct Listener *);
 int fd_set_connections(fd_set *, fd_set *, int);
 void handle_connections(fd_set *, fd_set *);
 void free_connections();
+void print_connections();
 
 #endif
