@@ -1,6 +1,8 @@
 #ifndef BUFFER_H 
 #define BUFFER_H
 
+#include <stdio.h>
+
 struct Buffer {
     char *buffer;
     size_t size;
