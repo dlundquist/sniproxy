@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=200809L -g -I ../src -L ../src
-TESTS = http.test tls.test
+TESTS = http.test tls.test buffer.test
 
 all: ${TESTS}
 
