@@ -11,6 +11,7 @@ MODULES =   sni_proxy.o \
             table.o \
             backend.o \
             connection.o \
+            buffer.o \
             tls.o \
             http.o
 
