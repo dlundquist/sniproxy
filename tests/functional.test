@@ -45,7 +45,7 @@ sub worker($$$) {
 
     for (my $i = 0; $i < $requests; $i++) {
         system('/usr/bin/curl',
-                '-s',
+                '-s', '-S',
                 '-H', "Host: $hostname",
                 '-o', '/dev/null',
                 "http://localhost:8080/$path");
