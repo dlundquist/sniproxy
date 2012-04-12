@@ -1,11 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stddef.h>
 #include <ctype.h>
-#include <string.h> /* memset */
 #include "util.h"
-
-
 
 void
 hexdump(const void *ptr, int buflen) {
@@ -26,8 +22,8 @@ hexdump(const void *ptr, int buflen) {
     }
 }
 
-int isnumeric (const char * s)
-{
+int
+isnumeric (const char * s) {
     if (s == NULL || *s == '\0')
         return 0;
     char * p;
