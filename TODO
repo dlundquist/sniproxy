@@ -1,4 +1,5 @@
 * Reimplement configuration reloading
+* PID file
 * Non-blocking DNS resolution
 * Improved table backend lookup, currently this is a linear lookup
 * Move from select() to libevent to support more than FD_SETSIZE / 2 connections
