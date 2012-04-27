@@ -38,7 +38,7 @@ static volatile int sigusr1_received; /* For signal handler */
 static struct Config *config;
 
 int
-init_server(struct Config * c) {
+init_server(struct Config *c) {
     config = c;
     
     signal(SIGINT, sig_handler);
@@ -58,10 +58,8 @@ run_server() {
     int maxfd;
     fd_set rfds, wfds;
 
-
     init_connections();
     running = 1;
-
 
     while (running) {
         FD_ZERO(&rfds);
@@ -78,6 +76,7 @@ run_server() {
             /* We where inturrupted by a signal */
             if (sighup_received) {
                 sighup_received = 0;
+                reload_config(config);
             }
             if (sigusr1_received) {
                 sigusr1_received = 0;
@@ -91,8 +90,8 @@ run_server() {
         handle_connections(&rfds, &wfds);
     }
 
-    free_listeners(&config->listeners);
     free_connections();
+    free_config(config);
 }
 
 static void
@@ -108,6 +107,6 @@ sig_handler(int sig) {
         case(SIGTERM):
             running = 0;
     }
-    signal(sig, sig_handler);
     /* Reinstall signal handler */
+    signal(sig, sig_handler);
 }

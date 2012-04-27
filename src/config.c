@@ -25,8 +25,11 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 #include "cfg_parser.h"
 #include "config.h"
+
+#define DEFAULT_USERNAME "daemon"
 
 
 static int accept_username(struct Config *, char *);
@@ -89,7 +92,7 @@ init_config(const char *filename) {
     }
 
     config->filename = NULL;
-    config->user = NULL;
+    config->user = DEFAULT_USERNAME;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -144,10 +147,13 @@ free_config(struct Config *config) {
 int
 reload_config(struct Config *config) {
     /* TODO */
+
     /* Open client connections have references the listener they connected
      * to, so we can't simply load a new configuration and discard the old
      * one.
      */
+    syslog(LOG_INFO, "reload of %s not supported, see TODO", config->filename);
+
     return 0;
 }
 

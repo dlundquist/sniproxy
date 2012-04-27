@@ -122,13 +122,12 @@ daemonize(const char *username) {
         exit(1);
     }
 
-
+    /* close all non socket file descriptors */
     for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--) {
-        if (fstat(i, &sb) == -1)
+        if (fstat(i, &sb) == -1 || S_ISSOCK(sb.st_mode))
             continue;
-        
-        if (!S_ISSOCK(sb.st_mode))
-            close(i);
+    
+        close(i);
     }
 
     fd0 = open("/dev/null", O_RDWR);
