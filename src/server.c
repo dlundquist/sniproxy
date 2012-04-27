@@ -91,7 +91,6 @@ run_server() {
     }
 
     free_connections();
-    free_config(config);
 }
 
 static void

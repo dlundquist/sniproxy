@@ -29,8 +29,6 @@
 #include "cfg_parser.h"
 #include "config.h"
 
-#define DEFAULT_USERNAME "daemon"
-
 
 static int accept_username(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
@@ -92,7 +90,7 @@ init_config(const char *filename) {
     }
 
     config->filename = NULL;
-    config->user = DEFAULT_USERNAME;
+    config->user = NULL;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 

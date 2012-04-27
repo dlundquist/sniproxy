@@ -73,7 +73,7 @@ main(int argc, char **argv) {
     init_server(config);
 
     if (background_flag)
-        daemonize(config->user);
+        daemonize(config->user ? config->user : DEFAULT_USERNAME);
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 

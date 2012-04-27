@@ -28,5 +28,6 @@
 
 #define SYSLOG_IDENT "sni_proxy"
 #define SYSLOG_FACILITY LOG_DAEMON
+#define DEFAULT_USERNAME "daemon"
 
 #endif
