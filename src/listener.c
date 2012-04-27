@@ -33,6 +33,7 @@
 #include <syslog.h>
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include "util.h"
