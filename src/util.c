@@ -1,15 +1,32 @@
+/*
+ * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, 
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <stdio.h>
-#include <stddef.h>
+#include <stdlib.h>
 #include <ctype.h>
-#include <string.h> /* memset */
-#include <sys/socket.h> /* sockaddr_storage */
-#include <sys/un.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include "util.h"
-
-#define UNIX_PATH_MAX 108
-
 
 void
 hexdump(const void *ptr, int buflen) {
@@ -30,31 +47,12 @@ hexdump(const void *ptr, int buflen) {
     }
 }
 
-size_t
-parse_address(struct sockaddr_storage* addr, const char* address, int port) {
-
-    memset(addr, 0, sizeof(struct sockaddr_storage));
-    if (inet_pton(AF_INET, address, &(((struct sockaddr_in *)addr)->sin_addr)) == 1) {
-        ((struct sockaddr_in *)addr)->sin_family = AF_INET;
-        ((struct sockaddr_in *)addr)->sin_port = htons(port);
-        return sizeof(struct sockaddr_in);
-    }
-
-    memset(addr, 0, sizeof(struct sockaddr_storage));
-    if (inet_pton(AF_INET6, address, &(((struct sockaddr_in6 *)addr)->sin6_addr)) == 1) {
-        ((struct sockaddr_in6 *)addr)->sin6_family = AF_INET6;
-        ((struct sockaddr_in6 *)addr)->sin6_port = htons(port);
-        return sizeof(struct sockaddr_in6);
-    }
-
-    if (strncmp("unix:", address, 5) == 0) {
-        memset(addr, 0, sizeof(struct sockaddr_storage));
-        ((struct sockaddr_un *)addr)->sun_family = AF_UNIX;
-        strncpy(((struct sockaddr_un *)addr)->sun_path, address + 5, UNIX_PATH_MAX);
-
-        return offsetof(struct sockaddr_un, sun_path) + strlen(((struct sockaddr_un *)addr)->sun_path);
-    }
-
-
-    return 0;
+int
+isnumeric (const char * s) {
+    if (s == NULL || *s == '\0')
+        return 0;
+    char * p;
+    strtod (s, &p);
+    return *p == '\0';
 }
+

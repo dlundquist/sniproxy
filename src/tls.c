@@ -1,4 +1,29 @@
 /*
+ * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, 
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+/*
  * This is a minimal TLS impleimentation indented only to parse the server name extension.
  * This was created based primarily on wireshark disection of a TLS handshake and RFC4366.
  */
@@ -7,7 +32,6 @@
 #include <unistd.h> /* close() */
 #include <sys/socket.h>
 #include <syslog.h>
-#include <stdarg.h>
 #include "tls.h"
 
 #define SERVER_NAME_LEN 256
@@ -15,7 +39,7 @@
 #define TLS_HANDSHAKE_CONTENT_TYPE 0x16
 #define TLS_HANDSHAKE_TYPE_CLIENT_HELLO 0x01
 
-static const uint8_t tls_alert[] = {
+static const char tls_alert[] = {
     0x15, /* TLS Alert */
     0x03, 0x01, /* TLS version  */
     0x00, 0x02, /* Payload length */
@@ -23,7 +47,7 @@ static const uint8_t tls_alert[] = {
 };
 
 
-static const char *parse_server_name_extension(const uint8_t *, int);
+static const char *parse_server_name_extension(const char *, int);
 
 
 /* Send a TLS handshake failure alert and close a socket */
@@ -36,12 +60,12 @@ close_tls_socket(int sockfd) {
 /* Parse a TLS packet for the Server Name Indication extension in the client hello
  * handshake, returning the first servername found (pointer to static array) */
 const char *
-parse_tls_header(const uint8_t* data, int data_len) {
-    uint8_t tls_content_type;
-    uint8_t tls_version_major;
-    uint8_t tls_version_minor;
-    uint16_t tls_length;
-    const uint8_t* p = data;
+parse_tls_header(const char* data, int data_len) {
+    char tls_content_type;
+    char tls_version_major;
+    char tls_version_minor;
+    int tls_length;
+    const char* p = data;
     int len;
 
     /* Check that our TCP payload is atleast large enough for a TLS header */
@@ -66,7 +90,7 @@ parse_tls_header(const uint8_t* data, int data_len) {
         return NULL;
     }
 
-    tls_length = (p[3] << 8) + p[4];
+    tls_length = ((unsigned char)p[3] << 8) + (unsigned char)p[4];
     if (data_len < tls_length + TLS_HEADER_LEN) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
@@ -100,20 +124,20 @@ parse_tls_header(const uint8_t* data, int data_len) {
         return NULL;
     }
 
-    len = *p; /* Session ID Length */
+    len = (unsigned char)*p; /* Session ID Length */
     p += 1 + len; /* Skip session ID block */
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
     }
 
-    len = *p << 8; /* Cipher Suites length high byte */
+    len = (unsigned char)*p << 8; /* Cipher Suites length high byte */
     p ++;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
     }
-    len += *p; /* Cipher Suites length low byte */
+    len += (unsigned char)*p; /* Cipher Suites length low byte */
 
     p += 1 + len;
 
@@ -121,7 +145,7 @@ parse_tls_header(const uint8_t* data, int data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
     }
-    len = *p; /* Compression Methods length */
+    len = (unsigned char)*p; /* Compression Methods length */
 
     p += 1 + len;
 
@@ -132,13 +156,13 @@ parse_tls_header(const uint8_t* data, int data_len) {
     }
 
 
-    len = *p << 8; /* Extensions length high byte */
+    len = (unsigned char)*p << 8; /* Extensions length high byte */
     p++;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
     }
-    len += *p; /* Extensions length low byte */
+    len += (unsigned char)*p; /* Extensions length low byte */
     p++;
 
     while (1) {
@@ -148,7 +172,7 @@ parse_tls_header(const uint8_t* data, int data_len) {
         }
 
         /* Parse our extension header */
-        len = (p[2] << 8) + p[3]; /* Extension length */
+        len = ((unsigned char)p[2] << 8) + (unsigned char)p[3]; /* Extension length */
         if (p[0] == 0x00 && p[1] == 0x00) { /* Check if it's a server name extension */
             /* There can be only one extension of each type, so we break
                our state and move p to beinging of the extension here */
@@ -165,11 +189,10 @@ parse_tls_header(const uint8_t* data, int data_len) {
 }
 
 static const char *
-parse_server_name_extension(const uint8_t* buf, int buf_len) {
+parse_server_name_extension(const char* buf, int buf_len) {
     static char server_name[SERVER_NAME_LEN];
-    const uint8_t* p = buf;
-    int ext_len;
-    uint8_t name_type;
+    const char* p = buf;
+    char name_type;
     int name_len;
 
     if (p - buf + 1 > buf_len) {
@@ -177,7 +200,6 @@ parse_server_name_extension(const uint8_t* buf, int buf_len) {
         return NULL;
     }
 
-    ext_len = (p[0] << 8) + p[1];
     p += 2;
 
     while(1) {
@@ -193,7 +215,7 @@ parse_server_name_extension(const uint8_t* buf, int buf_len) {
                     syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
                     return NULL;
                 }
-                name_len = (p[0] << 8) + p[1];
+                name_len = ((unsigned char)p[0] << 8) + (unsigned char)p[1];
                 p += 2;
                 if (p - buf + name_len > buf_len) {
                     syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
@@ -203,7 +225,7 @@ parse_server_name_extension(const uint8_t* buf, int buf_len) {
                     syslog(LOG_DEBUG, "Server name is too long");
                     return NULL;
                 }
-                strncpy (server_name, (char *)p, name_len);
+                strncpy (server_name, p, name_len);
                 server_name[name_len] = '\0';
                 return server_name;
             default:

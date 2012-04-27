@@ -1,70 +1,118 @@
+/*
+ * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2011 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, 
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <stdio.h>
-#include <stdlib.h>
-#include <strings.h> /* strncasecmp */
-#include <ctype.h> /* tolower */
-#include <netdb.h>
 #include <string.h>
-#include <unistd.h>
-#include <pcre.h>
+#include <ctype.h> /* tolower */
 #include <errno.h>
 #include <syslog.h>
-#include <stdarg.h>
+#include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <netdb.h> /* getaddrinfo */
+#include <unistd.h> /* close */
+#include <pcre.h>
 #include "backend.h"
 #include "util.h"
 
-static STAILQ_HEAD(, Backend) backends;
 
+static void free_backend(struct Backend *);
 
-static struct Backend* lookup_backend(const char *);
-static int open_backend_socket(struct Backend *, const char *);
+struct Backend *
+new_backend() {
+    struct Backend *backend;
 
-
-void
-init_backends() {
-    STAILQ_INIT(&backends);
-}
-
-#ifndef STAILQ_FOREACH_SAFE
-#define STAILQ_FOREACH_SAFE(var, head, field, tvar)                     \
-    for ((var) = STAILQ_FIRST((head));                          \
-        (var) && ((tvar) = STAILQ_NEXT((var), field), 1);               \
-        (var) = (tvar))
-#endif
-
-void
-free_backends() {
-    struct Backend *iter, *temp;
-
-    STAILQ_FOREACH_SAFE(iter, &backends, entries, temp) {
-        STAILQ_REMOVE_HEAD(&backends, entries);
-        free(iter);
+    backend = calloc(1, sizeof(struct Backend));
+    if (backend == NULL) {
+        perror("malloc");
+        return NULL;
     }
+
+    return backend;
 }
 
 int
-lookup_backend_socket(const char *hostname) {
-    struct Backend *b;
+accept_backend_arg(struct Backend *backend, char *arg) {
+    char *ch;
 
-    b = lookup_backend(hostname);
-    if (b == NULL) {
-        syslog(LOG_INFO, "No match found for %s", hostname);
+    if (backend->hostname == NULL) {
+        backend->hostname = strdup(arg);
+        if (backend->hostname == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+    } else if (backend->address == NULL) {
+        backend->address = strdup(arg);
+        if (backend->address == NULL) {
+            fprintf(stderr, "strdup failed");
+            return -1;
+        }
+
+        /* Store address as lower case */
+        for (ch = backend->address; *ch == '\0'; ch++)
+            *ch = tolower(*ch);
+    } else if (backend->port == 0 && isnumeric(arg)) {
+        backend->port = atoi(arg);
+    } else {
+        fprintf(stderr, "Unexpected table backend argument: %s\n", arg);
         return -1;
     }
 
-    return open_backend_socket(b, hostname);
+    return 1;
 }
 
-static struct Backend *
-lookup_backend(const char *hostname) {
+void
+add_backend(struct Backend_head *backends, struct Backend *backend) {
+    STAILQ_INSERT_TAIL(backends, backend, entries);
+}
+
+int
+init_backend(struct Backend *backend) {
+    const char *reerr;
+    int reerroffset;
+
+    backend->hostname_re = pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
+    if (backend->hostname_re == NULL) {
+        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+        return 0;
+    }
+
+    syslog(LOG_DEBUG, "Parsed %s %s %d", backend->hostname, backend->address, backend->port);
+
+    return 1;
+}
+
+struct Backend *
+lookup_backend(const struct Backend_head *head, const char *hostname) {
     struct Backend *iter;
 
     if (hostname == NULL)
         hostname = "";
 
-    STAILQ_FOREACH(iter, &backends, entries) {
+    STAILQ_FOREACH(iter, head, entries) {
         if (pcre_exec(iter->hostname_re, NULL, hostname, strlen(hostname), 0, 0, NULL, 0) >= 0) {
             syslog(LOG_DEBUG, "%s matched %s", iter->hostname, hostname);
             return iter;
@@ -75,7 +123,24 @@ lookup_backend(const char *hostname) {
     return NULL;
 }
 
-static int
+void
+remove_backend(struct Backend_head *head, struct Backend *backend) {
+    STAILQ_REMOVE(head, backend, Backend, entries);
+    free_backend(backend);
+}
+
+static void
+free_backend(struct Backend *backend) {
+    if (backend->hostname != NULL)
+        free(backend->hostname);
+    if (backend->address != NULL)
+        free(backend->address);
+    if (backend->hostname_re != NULL)
+        pcre_free(backend->hostname_re);
+    free(backend);
+}
+
+int
 open_backend_socket(struct Backend *b, const char *req_hostname) {
     int sockfd = -1, error;
     struct addrinfo hints, *results, *iter;
@@ -120,35 +185,4 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
 
     freeaddrinfo(results);
     return sockfd;
-}
-
-void
-add_backend(const char *hostname, const char *address, int port) {
-    struct Backend *b;
-    const char *reerr;
-    int reerroffset;
-    int i;
-
-    b = calloc(1, sizeof(struct Backend));
-    if (b == NULL) {
-        syslog(LOG_CRIT, "calloc failed");
-        return;
-    }
-
-    strncpy(b->hostname, hostname, HOSTNAME_REGEX_LEN - 1);
-
-    b->hostname_re = pcre_compile(hostname, 0, &reerr, &reerroffset, NULL);
-    if (b->hostname_re == NULL) {
-        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
-        free(b);
-        return;
-    }
-
-    for (i = 0; i < BACKEND_ADDRESS_LEN && address[i] != '\0'; i++)
-        b->address[i] = tolower(address[i]);
-
-    b->port = port;
-
-    syslog(LOG_DEBUG, "Parsed %s %s %d", hostname, address, port);
-    STAILQ_INSERT_TAIL(&backends, b, entries);
 }

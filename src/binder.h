@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -23,11 +23,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef SNI_PROXY_H
-#define SNI_PROXY_H
+#ifndef BINDER_H
+#define BINDER_H
 
-#define SYSLOG_IDENT "sni_proxy"
-#define SYSLOG_FACILITY LOG_DAEMON
-#define DEFAULT_USERNAME "daemon"
+#include <sys/socket.h>
+
+void start_binder();
+int bind_socket(struct sockaddr *, size_t);
+void stop_binder();
 
 #endif
