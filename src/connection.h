@@ -47,6 +47,7 @@ struct Connection {
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
+	time_t lastact;
 
     LIST_ENTRY(Connection) entries;
 };

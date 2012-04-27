@@ -62,7 +62,7 @@ fd_set_listeners(const struct Listener_head *listeners, fd_set *fds, int max) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        if (iter->sockfd > FD_SETSIZE) {
+        if (iter->sockfd > (int)FD_SETSIZE) {
             syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE\n");
             break;
         }
@@ -161,6 +161,13 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     else if (listener->addr.ss_family == AF_INET6 && ((struct sockaddr_in6 *)&listener->addr)->sin6_port == 0)
         ((struct sockaddr_in6 *)&listener->addr)->sin6_port = listener->protocol == TLS ? 443 : 80;
             
+    return 1;
+}
+
+int
+accept_listener_timeout(struct Listener *listener, char *timeout) {
+	listener->timeout = atoi(timeout);
+
     return 1;
 }
 

@@ -29,6 +29,7 @@
 #include <syslog.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include <arpa/inet.h>
 #include <sys/queue.h>
 #include <sys/select.h>
@@ -92,7 +93,7 @@ accept_connection(struct Listener *listener) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
         free_connection(c);
         return;
-    } else if (c->client.sockfd > FD_SETSIZE) {
+    } else if (c->client.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incomming connection\n");
         free_connection(c);
         return;
@@ -155,38 +156,57 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 void
 handle_connections(fd_set *rfds, fd_set *wfds) {
     struct Connection *iter, *tmp;
+	struct timespec curclkv;
+	
+	/* get current monotonic second (we assume that the processing loop below won't
+	   take a significant amount of time, so we only do it once) */
+	clock_gettime(CLOCK_MONOTONIC, &curclkv);
 
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
+		/* timeout? */
+		if (iter->listener->timeout > 0 && (curclkv.tv_sec - iter->lastact) > iter->listener->timeout)
+			iter->state = CLOSED;
+		
         switch(iter->state) {
             case(CONNECTED):
                 if (iter->server.sockfd >= 0 &&
                         FD_ISSET(iter->server.sockfd, rfds) &&
-                        buffer_room(iter->server.buffer))
-                    handle_connection_server_rx(iter);
+                        buffer_room(iter->server.buffer)) {
+					handle_connection_server_rx(iter);
+					iter->lastact = curclkv.tv_sec;
+				}
 
                 if (iter->server.sockfd >= 0 &&
                         FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
+                        buffer_len(iter->client.buffer)) {
                     handle_connection_server_tx(iter);
+					iter->lastact = curclkv.tv_sec;
+				}
                     
                 /* Fall through */
             case(ACCEPTED):
                 if (iter->client.sockfd >= 0 &&
                         FD_ISSET(iter->client.sockfd, rfds) &&
-                        buffer_room(iter->client.buffer))
+                        buffer_room(iter->client.buffer)) {
                     handle_connection_client_rx(iter);
+					iter->lastact = curclkv.tv_sec;
+				}
 
                 if (iter->client.sockfd >= 0 &&
                         FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
+                        buffer_len(iter->server.buffer)) {
                     handle_connection_client_tx(iter);
+					iter->lastact = curclkv.tv_sec;
+				}
 
                 break;
             case(SERVER_CLOSED):
                 if (iter->client.sockfd >= 0 &&
                         FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
+                        buffer_len(iter->server.buffer)) {
+					iter->lastact = curclkv.tv_sec;
                     handle_connection_client_tx(iter);
+				}
 
                 if (buffer_len(iter->server.buffer) == 0) {
 					if (iter->client.sockfd >= 0) {
@@ -200,8 +220,10 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
             case(CLIENT_CLOSED):
                 if (iter->server.sockfd >= 0 &&
                         FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
-                    handle_connection_server_tx(iter);
+                        buffer_len(iter->client.buffer)) {
+					iter->lastact = curclkv.tv_sec;
+					handle_connection_server_tx(iter);
+				}
 
                 if (buffer_len(iter->client.buffer) == 0) {
 					if (iter->server.sockfd >= 0) {
@@ -371,7 +393,7 @@ handle_connection_client_hello(struct Connection *con) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
         close_connection(con);
         return;
-    } else if (con->server.sockfd > FD_SETSIZE) {
+    } else if (con->server.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing server connection\n");
         close_connection(con);
         return;
@@ -396,6 +418,7 @@ close_connection(struct Connection *c) {
 static struct Connection *
 new_connection() {
     struct Connection *c;
+	struct timespec curclkv;
 
     c = calloc(1, sizeof (struct Connection));
     if (c == NULL)
@@ -403,6 +426,9 @@ new_connection() {
 
 	c->client.sockfd = -1;
 	c->server.sockfd = -1;
+	
+	clock_gettime(CLOCK_MONOTONIC, &curclkv);
+	c->lastact = curclkv.tv_sec;
 
     c->client.buffer = new_buffer();
     if (c->client.buffer == NULL) {

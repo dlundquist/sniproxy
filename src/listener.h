@@ -40,6 +40,7 @@ struct Listener {
         HTTP
     } protocol;
     char *table_name;
+	time_t timeout;
 
     /* Runtime fields */
     int sockfd;
@@ -53,6 +54,7 @@ struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
+int accept_listener_timeout(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
 int init_listeners(struct Listener_head *, const struct Table_head *);
