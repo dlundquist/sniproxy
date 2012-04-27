@@ -83,19 +83,18 @@ accept_connection(struct Listener *listener) {
 
     c = new_connection();
     if (c == NULL) {
-        syslog(LOG_CRIT, "calloc failed");
+        syslog(LOG_CRIT, "new_connection failed");
         return;
     }
 
     c->client.sockfd = accept(listener->sockfd, NULL, NULL);
     if (c->client.sockfd < 0) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
-        free(c);
+        free_connection(c);
         return;
     } else if (c->client.sockfd > FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incomming connection\n");
-        close(c->client.sockfd);
-        free(c);
+        free_connection(c);
         return;
     }
     c->state = ACCEPTED;
@@ -117,27 +116,27 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
             case(CONNECTED):
-                if (buffer_room(iter->server.buffer))
+                if (buffer_room(iter->server.buffer) && iter->server.sockfd >= 0)
                     FD_SET(iter->server.sockfd, rfds);
 
-                if (buffer_len(iter->client.buffer))
+                if (buffer_len(iter->client.buffer) && iter->server.sockfd >= 0)
                     FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
                 /* Fall through */
             case(ACCEPTED):
-                if (buffer_room(iter->client.buffer))
+                if (buffer_room(iter->client.buffer) && iter->client.sockfd >= 0)
                     FD_SET(iter->client.sockfd, rfds);
 
                 /* Fall through */
             case(SERVER_CLOSED):
-                if (buffer_len(iter->server.buffer))
+                if (buffer_len(iter->server.buffer) && iter->client.sockfd >= 0)
                     FD_SET(iter->client.sockfd, wfds);
 
                 max = MAX(max, iter->client.sockfd);
                 break;
             case(CLIENT_CLOSED):
-                if (buffer_len(iter->client.buffer))
+                if (buffer_len(iter->client.buffer) && iter->server.sockfd >= 0)
                     FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
@@ -160,50 +159,58 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
         switch(iter->state) {
             case(CONNECTED):
-                if (FD_ISSET(iter->server.sockfd, rfds) &&
+                if (iter->server.sockfd >= 0 &&
+                        FD_ISSET(iter->server.sockfd, rfds) &&
                         buffer_room(iter->server.buffer))
                     handle_connection_server_rx(iter);
 
-                if (FD_ISSET(iter->server.sockfd, wfds) &&
+                if (iter->server.sockfd >= 0 &&
+                        FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer))
                     handle_connection_server_tx(iter);
                     
                 /* Fall through */
             case(ACCEPTED):
-                if (FD_ISSET(iter->client.sockfd, rfds) &&
+                if (iter->client.sockfd >= 0 &&
+                        FD_ISSET(iter->client.sockfd, rfds) &&
                         buffer_room(iter->client.buffer))
                     handle_connection_client_rx(iter);
 
-                if (FD_ISSET(iter->client.sockfd, wfds) &&
+                if (iter->client.sockfd >= 0 &&
+                        FD_ISSET(iter->client.sockfd, wfds) &&
                         buffer_len(iter->server.buffer))
                     handle_connection_client_tx(iter);
 
                 break;
             case(SERVER_CLOSED):
-                if (FD_ISSET(iter->client.sockfd, wfds) &&
+                if (iter->client.sockfd >= 0 &&
+                        FD_ISSET(iter->client.sockfd, wfds) &&
                         buffer_len(iter->server.buffer))
                     handle_connection_client_tx(iter);
 
                 if (buffer_len(iter->server.buffer) == 0) {
                     close(iter->client.sockfd);
+					iter->client.sockfd = -1;
                     iter->state = CLOSED;
                 }
 
                 break;
             case(CLIENT_CLOSED):
-                if (FD_ISSET(iter->server.sockfd, wfds) &&
+                if (iter->server.sockfd >= 0 &&
+                        FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer))
                     handle_connection_server_tx(iter);
 
                 if (buffer_len(iter->client.buffer) == 0) {
                     close(iter->server.sockfd);
+					iter->server.sockfd = -1;
                     iter->state = CLOSED;
                 }
 
                 break;
             case(CLOSED):
                 LIST_REMOVE(iter, entries);
-                free(iter);
+                free_connection(iter);
                 break;
             default:
                 syslog(LOG_WARNING, "Invalid state %d", iter->state);
@@ -284,6 +291,8 @@ handle_connection_server_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
+		close(con->server.sockfd);
+		con->server.sockfd = -1;
         con->state = SERVER_CLOSED;
         return;
     }
@@ -298,6 +307,8 @@ handle_connection_client_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
+		close(con->client.sockfd);
+		con->client.sockfd = -1;
         con->state = CLIENT_CLOSED;
         return;
     }
@@ -363,12 +374,13 @@ handle_connection_client_hello(struct Connection *con) {
 
 static void
 close_connection(struct Connection *c) {
-    /* The server socket is not open yet, when before we are in the CONNECTED state */
-    if (c->state == CONNECTED && close(c->server.sockfd) < 0)
+    if (c->server.sockfd >= 0 && close(c->server.sockfd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
+	c->server.sockfd = -1;
 
-    if (close(c->client.sockfd) < 0)
+    if (c->client.sockfd >= 0 && close(c->client.sockfd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
+	c->client.sockfd = -1;
 
     c->state = CLOSED;
 }
@@ -380,6 +392,9 @@ new_connection() {
     c = calloc(1, sizeof (struct Connection));
     if (c == NULL)
         return NULL;
+
+	c->client.sockfd = -1;
+	c->server.sockfd = -1;
 
     c->client.buffer = new_buffer();
     if (c->client.buffer == NULL) {
