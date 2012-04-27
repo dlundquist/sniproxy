@@ -189,8 +189,10 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     handle_connection_client_tx(iter);
 
                 if (buffer_len(iter->server.buffer) == 0) {
-                    close(iter->client.sockfd);
-					iter->client.sockfd = -1;
+					if (iter->client.sockfd >= 0) {
+                    	close(iter->client.sockfd);
+						iter->client.sockfd = -1;
+					}
                     iter->state = CLOSED;
                 }
 
@@ -202,8 +204,10 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     handle_connection_server_tx(iter);
 
                 if (buffer_len(iter->client.buffer) == 0) {
-                    close(iter->server.sockfd);
-					iter->server.sockfd = -1;
+					if (iter->server.sockfd >= 0) {
+                    	close(iter->server.sockfd);
+						iter->server.sockfd = -1;
+					}
                     iter->state = CLOSED;
                 }
 
@@ -291,8 +295,10 @@ handle_connection_server_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
-		close(con->server.sockfd);
-		con->server.sockfd = -1;
+		if (con->server.sockfd >= 0) {
+			close(con->server.sockfd);
+			con->server.sockfd = -1;
+		}
         con->state = SERVER_CLOSED;
         return;
     }
@@ -307,8 +313,10 @@ handle_connection_client_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
-		close(con->client.sockfd);
-		con->client.sockfd = -1;
+		if (con->client.sockfd >= 0) {
+			close(con->client.sockfd);
+			con->client.sockfd = -1;
+		}
         con->state = CLIENT_CLOSED;
         return;
     }
