@@ -1,4 +1,6 @@
-* Improved configuration syntax allowing multiple listening ports/address per daemon.
-* Move from select() to poll() or epoll() to support more than FD_SETSIZE / 2 connections
+* Reimplement configuration reloading
+* PID file
+* Non-blocking DNS resolution
+* Improved table backend lookup, currently this is a linear lookup
+* Move from select() to libevent to support more than FD_SETSIZE / 2 connections
 * HTTP interface for backend servers to determine remote IP and port of connection
-* Out of band TCP data proxying -- I haven't seen a case where the lack of this has caused any issues yet.

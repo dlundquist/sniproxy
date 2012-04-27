@@ -32,7 +32,6 @@
 #include <unistd.h> /* close() */
 #include <sys/socket.h>
 #include <syslog.h>
-#include <stdarg.h>
 #include "tls.h"
 
 #define SERVER_NAME_LEN 256

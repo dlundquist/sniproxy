@@ -26,10 +26,13 @@
 #ifndef TABLE_H
 #define TABLE_H
 
+#include <stdio.h>
 #include <sys/queue.h>
 #include "backend.h"
 
 #define TABLE_NAME_LEN 20
+
+SLIST_HEAD(Table_head, Table);
 
 struct Table {
     char *name;
@@ -39,17 +42,21 @@ struct Table {
     SLIST_ENTRY(Table) entries;
 };
 
-void init_tables();
-void free_tables();
-struct Table *add_table(const char *);
-struct Table *lookup_table(const char *);
-void remove_table(struct Table *);
+struct Table *new_table();
+int accept_table_arg(struct Table *, char *);
+void add_table(struct Table_head *, struct Table *);
+struct Table *lookup_table(const struct Table_head *, const char *);
 int lookup_table_server_socket(const struct Table *, const char *);
+void print_table_config(FILE *, struct Table *);
+void print_table_status(FILE *, struct Table *);
+int valid_table(struct Table *);
+void free_table(struct Table *);
 
-static inline struct Backend *
-add_table_backend(struct Table *table, const char *hostname, const char *address, int port) {
-    return add_backend(&table->backends, hostname, address, port);
-}
+
+void init_tables(struct Table_head *);
+void free_tables(struct Table_head *);
+
+
 
 static inline struct Backend *
 lookup_table_backend(const struct Table *table, const char *hostname) {
