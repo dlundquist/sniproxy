@@ -131,12 +131,14 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 
                 /* Fall through */
             case(SERVER_CLOSED):
-                FD_SET(iter->client.sockfd, wfds);
+                if (buffer_len(iter->server.buffer))
+                    FD_SET(iter->client.sockfd, wfds);
 
                 max = MAX(max, iter->client.sockfd);
                 break;
             case(CLIENT_CLOSED):
-                FD_SET(iter->server.sockfd, wfds);
+                if (buffer_len(iter->client.buffer))
+                    FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
                 break;
