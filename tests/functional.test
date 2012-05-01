@@ -112,8 +112,8 @@ sub main {
     sleep 1;
 
     # For troubleshooting connections stuck in CLOSE_WAIT state
-    kill 10, $proxy_pid;
-    system("netstat -ptn | grep $proxy_pid\/sni_proxy");
+    #kill 10, $proxy_pid;
+    #system("netstat -ptn | grep $proxy_pid\/sni_proxy");
 
     # Orderly shutdown of the server
     kill 15, $proxy_pid;

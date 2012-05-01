@@ -32,7 +32,6 @@
 #include <arpa/inet.h>
 #include <sys/queue.h>
 #include <sys/select.h>
-#include <sys/stat.h>
 #include "connection.h"
 
 
@@ -421,18 +420,6 @@ new_connection() {
 
 static void
 free_connection(struct Connection *c) {
-    struct stat sb;
-
-    if (fstat(c->server.sockfd, &sb) == -1) {
-        fprintf(stderr, "Connection server socket still open: ");
-        print_connection(stderr, c);
-    }
-        
-    if (fstat(c->client.sockfd, &sb) == -1) {
-        fprintf(stderr, "Connection client socket still open: ");
-        print_connection(stderr, c);
-    }
-
     close_connection(c);
 
     if (c->client.buffer)
