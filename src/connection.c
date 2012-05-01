@@ -89,13 +89,13 @@ accept_connection(struct Listener *listener) {
     c->client.sockfd = accept(listener->sockfd, NULL, NULL);
     if (c->client.sockfd < 0) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
-        free(c);
+        free_connection(c);
         return;
     } else if (c->client.sockfd > FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incomming connection\n");
         if (close(c->client.sockfd) < 0)
                 syslog(LOG_INFO, "close failed: %s", strerror(errno));
-        free(c);
+        free_connection(c);
         return;
     }
     c->state = ACCEPTED;
@@ -203,7 +203,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                 break;
             case(CLOSED):
                 LIST_REMOVE(iter, entries);
-                free(iter);
+                free_connection(iter);
                 break;
             default:
                 syslog(LOG_WARNING, "Invalid state %d", iter->state);
