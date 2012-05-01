@@ -94,7 +94,8 @@ accept_connection(struct Listener *listener) {
         return;
     } else if (c->client.sockfd > FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incomming connection\n");
-        close(c->client.sockfd);
+        if (close(c->client.sockfd) < 0)
+                syslog(LOG_INFO, "close failed: %s", strerror(errno));
         free(c);
         return;
     }
@@ -131,14 +132,12 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 
                 /* Fall through */
             case(SERVER_CLOSED):
-                if (buffer_len(iter->server.buffer))
-                    FD_SET(iter->client.sockfd, wfds);
+                FD_SET(iter->client.sockfd, wfds);
 
                 max = MAX(max, iter->client.sockfd);
                 break;
             case(CLIENT_CLOSED):
-                if (buffer_len(iter->client.buffer))
-                    FD_SET(iter->server.sockfd, wfds);
+                FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
                 break;
@@ -185,7 +184,8 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     handle_connection_client_tx(iter);
 
                 if (buffer_len(iter->server.buffer) == 0) {
-                    close(iter->client.sockfd);
+                    if (close(iter->client.sockfd) < 0)
+                        syslog(LOG_INFO, "close failed: %s", strerror(errno));
                     iter->state = CLOSED;
                 }
 
@@ -196,7 +196,8 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     handle_connection_server_tx(iter);
 
                 if (buffer_len(iter->client.buffer) == 0) {
-                    close(iter->server.sockfd);
+                    if (close(iter->server.sockfd) < 0)
+                        syslog(LOG_INFO, "close failed: %s", strerror(errno));
                     iter->state = CLOSED;
                 }
 
@@ -236,7 +237,9 @@ print_connections() {
         print_connection(temp, iter);
     }
 
-    fclose(temp);
+    if (fclose(temp) < 0)
+        syslog(LOG_INFO, "fclose failed: %s", strerror(errno));
+
     syslog(LOG_INFO, "Dumped connections to %s", filename);
 }
 
@@ -250,28 +253,28 @@ print_connection(FILE *file, const struct Connection *con) {
     switch(con->state) {
         case ACCEPTED:
             get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
-            fprintf(file, "accepted      %s %d %zu/%zu\t-\n",
+            fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CONNECTED:
             get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
             get_peer_address(con->server.sockfd, server, sizeof(server), &server_port);
-            fprintf(file, "connected     %s %d %zu/%zu\t%s %d %zu/%zu\n",
+            fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size,
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
         case SERVER_CLOSED:
             get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
-            fprintf(file, "server closed %s %d %zu/%zu\t-\n",
+            fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CLIENT_CLOSED:
             get_peer_address(con->server.sockfd, server, sizeof(server), &server_port);
-            fprintf(file, "client closed -\t%s %d %zu/%zu\n",
+            fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
         case CLOSED:
-            fprintf(file, "closed        -\t-\n");
+            fprintf(file, "CLOSED        -\t-\n");
     }
 }
 

@@ -76,17 +76,20 @@ sub start_worker($$$) {
         worker($hostname, $path, $requests);
         # Should not be reached
         exit(99);
-    } else {
-        $children{$pid} = {
-            type => 'worker',
-            pid => $pid,
-            running => 1,
-        };
     }
+
+    $children{$pid} = {
+        type => 'worker',
+        pid => $pid,
+        running => 1,
+    };
+
+    return $pid;
 }
 
 sub reap_children {
     while (my @hit_list = grep($children{$_}->{'running'}, keys %children)) {
+        print STDERR "sending $children{$_}->{'type'} child $_ SIGTERM\n";
         kill 15, @hit_list;
         sleep 1;
     }
@@ -102,14 +105,21 @@ sub main {
     }
 
     # Wait for all our children to finish
-    while (grep($children{$_}->{'running'}, grep($children{$_}->{'type'} eq 'worker', keys %children)) > 0) {
+    while (grep($children{$_}->{'running'} && $children{$_}->{'type'} eq 'worker', keys %children) > 0) {
         sleep 1;
     }
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
 
     # For troubleshooting connections stuck in CLOSE_WAIT state
     kill 10, $proxy_pid;
     system("netstat -ptn | grep $proxy_pid\/sni_proxy");
 
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    sleep 1;
+
+    # Kill off any remaining children
     reap_children();
 
     # Check that all our children exited cleanly
