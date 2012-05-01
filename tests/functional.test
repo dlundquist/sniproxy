@@ -29,13 +29,15 @@ sub start_proxy {
     } elsif ($pid == 0) {
         exec(@wrapper, '../src/sni_proxy', '-f', '-c', 'test_proxy.conf')
             or die("exec: $!");
-    } else {
-        $children{$pid} = { 
-            type => 'server',
-            pid => $pid,
-            running => 1,
-        };
     }
+
+    $children{$pid} = { 
+        type => 'server',
+        pid => $pid,
+        running => 1,
+    };
+
+    return $pid;
 }
 
 sub worker($$$) {
@@ -91,7 +93,7 @@ sub reap_children {
 }
 
 sub main {
-    start_proxy(@ARGV);
+    my $proxy_pid = start_proxy(@ARGV);
 
     sleep 1;
     
@@ -103,6 +105,10 @@ sub main {
     while (grep($children{$_}->{'running'}, grep($children{$_}->{'type'} eq 'worker', keys %children)) > 0) {
         sleep 1;
     }
+
+    # For troubleshooting connections stuck in CLOSE_WAIT state
+    kill 10, $proxy_pid;
+    system("netstat -ptn | grep $proxy_pid\/sni_proxy");
 
     reap_children();
 

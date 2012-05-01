@@ -32,6 +32,7 @@
 #include <arpa/inet.h>
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include "connection.h"
 
 
@@ -363,11 +364,25 @@ handle_connection_client_hello(struct Connection *con) {
 static void
 close_connection(struct Connection *c) {
     /* The server socket is not open yet, when before we are in the CONNECTED state */
-    if (c->state == CONNECTED && close(c->server.sockfd) < 0)
-        syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
-    if (close(c->client.sockfd) < 0)
-        syslog(LOG_INFO, "close failed: %s", strerror(errno));
+    switch(c->state) {
+        case(CLOSED):
+            /* do nothing */
+            break;
+        case CONNECTED:
+            if (close(c->server.sockfd) < 0)
+                syslog(LOG_INFO, "close failed: %s", strerror(errno));
+            /* fall through */
+        case ACCEPTED:
+        case SERVER_CLOSED:
+            if (close(c->client.sockfd) < 0)
+                syslog(LOG_INFO, "close failed: %s", strerror(errno));
+            break;
+        case CLIENT_CLOSED:
+            if (close(c->server.sockfd) < 0)
+                syslog(LOG_INFO, "close failed: %s", strerror(errno));
+    }
+
 
     c->state = CLOSED;
 }
@@ -397,6 +412,18 @@ new_connection() {
 
 static void
 free_connection(struct Connection *c) {
+    struct stat sb;
+
+    if (fstat(c->server.sockfd, &sb) == -1) {
+        fprintf(stderr, "Connection server socket still open: ");
+        print_connection(stderr, c);
+    }
+        
+    if (fstat(c->client.sockfd, &sb) == -1) {
+        fprintf(stderr, "Connection client socket still open: ");
+        print_connection(stderr, c);
+    }
+
     close_connection(c);
 
     if (c->client.buffer)
