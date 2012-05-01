@@ -287,6 +287,9 @@ handle_connection_server_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
+        if (close(con->server.sockfd) < 0)
+            syslog(LOG_INFO, "close failed: %s", strerror(errno));
+
         con->state = SERVER_CLOSED;
         return;
     }
@@ -301,6 +304,9 @@ handle_connection_client_rx(struct Connection *con) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
+        if (close(con->client.sockfd) < 0)
+            syslog(LOG_INFO, "close failed: %s", strerror(errno));
+
         con->state = CLIENT_CLOSED;
         return;
     }
