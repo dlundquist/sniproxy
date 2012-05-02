@@ -28,6 +28,7 @@
 
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <time.h>
 #include "listener.h"
 #include "buffer.h"
 
@@ -47,7 +48,7 @@ struct Connection {
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
-	time_t lastact;
+    time_t lastact;
 
     LIST_ENTRY(Connection) entries;
 };

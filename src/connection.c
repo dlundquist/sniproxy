@@ -119,16 +119,16 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
     LIST_FOREACH(iter, &connections, entries) {
         switch(iter->state) {
             case(CONNECTED):
-                if (buffer_room(iter->server.buffer) && iter->server.sockfd >= 0)
+                if (buffer_room(iter->server.buffer))
                     FD_SET(iter->server.sockfd, rfds);
 
-                if (buffer_len(iter->client.buffer) && iter->server.sockfd >= 0)
+                if (buffer_len(iter->client.buffer))
                     FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
                 /* Fall through */
             case(ACCEPTED):
-                if (buffer_room(iter->client.buffer) && iter->client.sockfd >= 0)
+                if (buffer_room(iter->client.buffer))
                     FD_SET(iter->client.sockfd, rfds);
 
                 if (buffer_len(iter->server.buffer))
@@ -162,57 +162,52 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 void
 handle_connections(fd_set *rfds, fd_set *wfds) {
     struct Connection *iter, *tmp;
-	struct timespec curclkv;
-	
-	/* get current monotonic second (we assume that the processing loop below won't
-	   take a significant amount of time, so we only do it once) */
-	clock_gettime(CLOCK_MONOTONIC, &curclkv);
+    struct timespec curclkv;
+    
+    /* get current monotonic second (we assume that the processing loop below won't
+       take a significant amount of time, so we only do it once) */
+    clock_gettime(CLOCK_MONOTONIC, &curclkv);
 
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
-		/* timeout? */
-		if (iter->listener->timeout > 0 && (curclkv.tv_sec - iter->lastact) > iter->listener->timeout)
-			iter->state = CLOSED;
-		
+        /* timeout? */
+        if (iter->listener->timeout > 0 && (curclkv.tv_sec - iter->lastact) > iter->listener->timeout)
+            close_connection(iter);
+
         switch(iter->state) {
             case(CONNECTED):
-                if (iter->server.sockfd >= 0 &&
-                        FD_ISSET(iter->server.sockfd, rfds) &&
+                if (FD_ISSET(iter->server.sockfd, rfds) &&
                         buffer_room(iter->server.buffer)) {
-					handle_connection_server_rx(iter);
-					iter->lastact = curclkv.tv_sec;
-				}
+                    handle_connection_server_rx(iter);
+                    iter->lastact = curclkv.tv_sec;
+                }
 
-                if (iter->server.sockfd >= 0 &&
-                        FD_ISSET(iter->server.sockfd, wfds) &&
+                if (FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer)) {
                     handle_connection_server_tx(iter);
-					iter->lastact = curclkv.tv_sec;
-				}
+                    iter->lastact = curclkv.tv_sec;
+                }
                     
                 /* Fall through */
             case(ACCEPTED):
-                if (iter->client.sockfd >= 0 &&
-                        FD_ISSET(iter->client.sockfd, rfds) &&
+                if (FD_ISSET(iter->client.sockfd, rfds) &&
                         buffer_room(iter->client.buffer)) {
                     handle_connection_client_rx(iter);
-					iter->lastact = curclkv.tv_sec;
-				}
+                    iter->lastact = curclkv.tv_sec;
+                }
 
-                if (iter->client.sockfd >= 0 &&
-                        FD_ISSET(iter->client.sockfd, wfds) &&
+                if (FD_ISSET(iter->client.sockfd, wfds) &&
                         buffer_len(iter->server.buffer)) {
                     handle_connection_client_tx(iter);
-					iter->lastact = curclkv.tv_sec;
-				}
+                    iter->lastact = curclkv.tv_sec;
+                }
 
                 break;
             case(SERVER_CLOSED):
-                if (iter->client.sockfd >= 0 &&
-                        FD_ISSET(iter->client.sockfd, wfds) &&
+                if (FD_ISSET(iter->client.sockfd, wfds) &&
                         buffer_len(iter->server.buffer)) {
-					iter->lastact = curclkv.tv_sec;
                     handle_connection_client_tx(iter);
-				}
+                    iter->lastact = curclkv.tv_sec;
+                }
 
                 if (buffer_len(iter->server.buffer) == 0) {
                     if (close(iter->client.sockfd) < 0)
@@ -222,12 +217,11 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
 
                 break;
             case(CLIENT_CLOSED):
-                if (iter->server.sockfd >= 0 &&
-                        FD_ISSET(iter->server.sockfd, wfds) &&
+                if (FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer)) {
-					iter->lastact = curclkv.tv_sec;
-					handle_connection_server_tx(iter);
-				}
+                    handle_connection_server_tx(iter);
+                    iter->lastact = curclkv.tv_sec;
+                }
 
                 if (buffer_len(iter->client.buffer) == 0) {
                     if (close(iter->server.sockfd) < 0)
@@ -432,17 +426,14 @@ close_connection(struct Connection *c) {
 static struct Connection *
 new_connection() {
     struct Connection *c;
-	struct timespec curclkv;
+    struct timespec curclkv;
 
     c = calloc(1, sizeof (struct Connection));
     if (c == NULL)
         return NULL;
-
-	c->client.sockfd = -1;
-	c->server.sockfd = -1;
-	
-	clock_gettime(CLOCK_MONOTONIC, &curclkv);
-	c->lastact = curclkv.tv_sec;
+    
+    clock_gettime(CLOCK_MONOTONIC, &curclkv);
+    c->lastact = curclkv.tv_sec;
 
     c->client.buffer = new_buffer();
     if (c->client.buffer == NULL) {

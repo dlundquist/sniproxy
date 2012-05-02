@@ -27,6 +27,7 @@
 #define LISTENER_H
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <time.h>
 #include "table.h"
 
 SLIST_HEAD(Listener_head, Listener);
@@ -40,7 +41,7 @@ struct Listener {
         HTTP
     } protocol;
     char *table_name;
-	time_t timeout;
+    time_t timeout;
 
     /* Runtime fields */
     int sockfd;

@@ -166,11 +166,10 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 
 int
 accept_listener_timeout(struct Listener *listener, char *timeout) {
-	listener->timeout = atoi(timeout);
+    listener->timeout = atoi(timeout);
 
     return 1;
 }
-
 
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {
