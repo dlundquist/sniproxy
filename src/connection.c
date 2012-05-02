@@ -129,8 +129,14 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
                 if (buffer_room(iter->client.buffer))
                     FD_SET(iter->client.sockfd, rfds);
 
-                /* Fall through */
+                if (buffer_len(iter->server.buffer))
+                    FD_SET(iter->client.sockfd, wfds);
+
+                max = MAX(max, iter->client.sockfd);
+                break;
             case(SERVER_CLOSED):
+                /* we need to handle this connection even if we have no data
+                   to write so we can close the connection */
                 FD_SET(iter->client.sockfd, wfds);
 
                 max = MAX(max, iter->client.sockfd);

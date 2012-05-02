@@ -115,6 +115,9 @@ sub main {
     #kill 10, $proxy_pid;
     #system("netstat -ptn | grep $proxy_pid\/sni_proxy");
 
+    # For troubleshooting 100% CPU usage
+    #system("top -n 1 -p $proxy_pid -b");
+
     # Orderly shutdown of the server
     kill 15, $proxy_pid;
     sleep 1;
