@@ -47,6 +47,8 @@
         (var) = (tvar))
 #endif
 
+#define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
+
 
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
@@ -57,6 +59,8 @@ static void handle_connection_client_tx(struct Connection *);
 static void handle_connection_server_tx(struct Connection *);
 static void handle_connection_client_hello(struct Connection *);
 static void close_connection(struct Connection *);
+static void close_client_connection(struct Connection *);
+static void close_server_connection(struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
@@ -95,8 +99,7 @@ accept_connection(struct Listener *listener) {
         return;
     } else if (c->client.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incoming connection\n");
-        if (close(c->client.sockfd) < 0)
-            syslog(LOG_INFO, "close failed: %s", strerror(errno));
+        close_client_connection(c);     /* must close explicitly as state is still NEW */
         free_connection(c);
         return;
     }
@@ -210,7 +213,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                 }
 
                 if (buffer_len(iter->server.buffer) == 0)
-                    close_connection(iter);
+                    close_client_connection(iter);
 
                 break;
             case(CLIENT_CLOSED):
@@ -221,7 +224,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                 }
 
                 if (buffer_len(iter->client.buffer) == 0)
-                    close_connection(iter);
+                    close_server_connection(iter);
 
                 break;
             case(CLOSED):
@@ -308,15 +311,11 @@ handle_connection_server_rx(struct Connection *con) {
     int n;
 
     n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return;
+        close_server_connection(con);
     } else if (n == 0) { /* Server closed socket */
-        if (close(con->server.sockfd) < 0)
-            syslog(LOG_INFO, "close failed: %s", strerror(errno));
-
-        con->state = SERVER_CLOSED;
-        return;
+        close_server_connection(con);
     }
 }
 
@@ -325,23 +324,17 @@ handle_connection_client_rx(struct Connection *con) {
     int n;
 
     n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return;
+    if (n < 0) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+            close_client_connection(con);
+        }
     } else if (n == 0) { /* Client closed socket */
-        if (close(con->client.sockfd) < 0)
-            syslog(LOG_INFO, "close failed: %s", strerror(errno));
-
-        /* current state can be ACCEPTED, CONNECTED or SERVER_CLOSED (due to fallthrough) */
-        if (con->state == CONNECTED)
-            con->state = CLIENT_CLOSED;
-        else
-            con->state = CLOSED;
-        return;
+        close_client_connection(con);
+    } else {
+        if (con->state == ACCEPTED)
+            handle_connection_client_hello(con);
     }
-
-    if (con->state == ACCEPTED)
-        handle_connection_client_hello(con);
 }
 
 static void
@@ -349,9 +342,9 @@ handle_connection_client_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return;
+        close_client_connection(con);
     }
 }
 
@@ -360,9 +353,9 @@ handle_connection_server_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return;
+        close_server_connection(con);
     }
 }
 
@@ -392,39 +385,49 @@ handle_connection_client_hello(struct Connection *con) {
         return;
     } else if (con->server.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing server connection\n");
-        if (close(con->server.sockfd) < 0)
-            syslog(LOG_INFO, "close failed: %s", strerror(errno));
+        close_server_connection(con);   /* must close explicitly as state is not yet CONNECTED */
         close_connection(con);
         return;
     }
     con->state = CONNECTED;
 }
 
-
 static void
 close_connection(struct Connection *c) {
-    /* The server socket is not open yet, when before we are in the CONNECTED state */
+    
+    if (c->state == CONNECTED || c->state == ACCEPTED || c->state == SERVER_CLOSED)
+        close_client_connection(c);
+    
+    if (c->state == CONNECTED || c->state == CLIENT_CLOSED)
+        close_server_connection(c);
+}
 
-    switch(c->state) {
-        case NEW:
-        case CLOSED:
-            /* do nothing */
-            break;
-        case CONNECTED:
-            if (close(c->server.sockfd) < 0)
-                syslog(LOG_INFO, "close failed: %s", strerror(errno));
-            /* fall through */
-        case ACCEPTED:
-        case SERVER_CLOSED:
-            if (close(c->client.sockfd) < 0)
-                syslog(LOG_INFO, "close failed: %s", strerror(errno));
-            break;
-        case CLIENT_CLOSED:
-            if (close(c->server.sockfd) < 0)
-                syslog(LOG_INFO, "close failed: %s", strerror(errno));
-    }
+/* Close client socket. Caller must ensure that it has not been closed before. */
+static void
+close_client_connection(struct Connection *c) {
+    
+    if (close(c->client.sockfd) < 0)
+        syslog(LOG_INFO, "close failed: %s", strerror(errno));        
+    
+    /* next state depends on previous state */
+    if (c->state == CONNECTED)
+        c->state = CLIENT_CLOSED;
+    else
+        c->state = CLOSED;
+}
 
-    c->state = CLOSED;
+/* Close server socket. Caller must ensure that it has not been closed before. */
+static void
+close_server_connection(struct Connection *c) {
+    
+    if (close(c->server.sockfd) < 0)
+        syslog(LOG_INFO, "close failed: %s", strerror(errno));
+    
+    /* next state depends on previous state */
+    if (c->state == CLIENT_CLOSED)
+        c->state = CLOSED;
+    else
+        c->state = SERVER_CLOSED;
 }
 
 static struct Connection *
