@@ -49,14 +49,14 @@
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
 
-
 static LIST_HEAD(ConnectionHead, Connection) connections;
+static struct timespec curclkv;
 
 
-static void handle_connection_client_rx(struct Connection *);
-static void handle_connection_server_rx(struct Connection *);
-static void handle_connection_client_tx(struct Connection *);
-static void handle_connection_server_tx(struct Connection *);
+static int handle_connection_client_rx(struct Connection *);
+static int handle_connection_server_rx(struct Connection *);
+static int handle_connection_client_tx(struct Connection *);
+static int handle_connection_server_tx(struct Connection *);
 static void handle_connection_client_hello(struct Connection *);
 static void close_connection(struct Connection *);
 static void close_client_connection(struct Connection *);
@@ -165,7 +165,7 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 void
 handle_connections(fd_set *rfds, fd_set *wfds) {
     struct Connection *iter, *tmp;
-    struct timespec curclkv;
+    int err;
     
     /* get current monotonic second (we assume that the processing loop below won't
        take a significant amount of time, so we only do it once) */
@@ -176,54 +176,50 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
         if (iter->listener->timeout > 0 && (curclkv.tv_sec - iter->lastact) > iter->listener->timeout)
             close_connection(iter);
 
+        err = 0;
         switch(iter->state) {
             case(CONNECTED):
                 if (FD_ISSET(iter->server.sockfd, rfds) &&
-                        buffer_room(iter->server.buffer)) {
-                    handle_connection_server_rx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
+                        buffer_room(iter->server.buffer))
+                    err = handle_connection_server_rx(iter);
 
-                if (FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer)) {
-                    handle_connection_server_tx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
-                    
+                if (!err && FD_ISSET(iter->server.sockfd, wfds) &&
+                        buffer_len(iter->client.buffer))
+                    err = handle_connection_server_tx(iter);
+                
+                if (err)
+                    close_server_connection(iter);
+                
+                err = 0;
                 /* Fall through */
             case(ACCEPTED):
                 if (FD_ISSET(iter->client.sockfd, rfds) &&
-                        buffer_room(iter->client.buffer)) {
-                    handle_connection_client_rx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
+                        buffer_room(iter->client.buffer))
+                    err = handle_connection_client_rx(iter);
 
-                if (FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer)) {
-                    handle_connection_client_tx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
+                if (!err && FD_ISSET(iter->client.sockfd, wfds) &&
+                        buffer_len(iter->server.buffer))
+                    err = handle_connection_client_tx(iter);
+
+                if (err)
+                    close_client_connection(iter);
 
                 break;
             case(SERVER_CLOSED):
                 if (FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer)) {
-                    handle_connection_client_tx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
+                        buffer_len(iter->server.buffer))
+                    err = handle_connection_client_tx(iter);
 
-                if (buffer_len(iter->server.buffer) == 0)
+                if (err || buffer_len(iter->server.buffer) == 0)
                     close_client_connection(iter);
 
                 break;
             case(CLIENT_CLOSED):
                 if (FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer)) {
-                    handle_connection_server_tx(iter);
-                    iter->lastact = curclkv.tv_sec;
-                }
+                        buffer_len(iter->client.buffer))
+                    err = handle_connection_server_tx(iter);
 
-                if (buffer_len(iter->client.buffer) == 0)
+                if (err || buffer_len(iter->client.buffer) == 0)
                     close_server_connection(iter);
 
                 break;
@@ -306,20 +302,25 @@ print_connection(FILE *file, const struct Connection *con) {
     }
 }
 
-static void
+static int
 handle_connection_server_rx(struct Connection *con) {
     int n;
 
     n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        close_server_connection(con);
+    if (n < 0) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+            return 1;
+        }
     } else if (n == 0) { /* Server closed socket */
-        close_server_connection(con);
+        return 1;
+    } else {
+        con->lastact = curclkv.tv_sec;
     }
+    return 0;
 }
 
-static void
+static int
 handle_connection_client_rx(struct Connection *con) {
     int n;
 
@@ -327,36 +328,49 @@ handle_connection_client_rx(struct Connection *con) {
     if (n < 0) {
         if (!IS_TEMPORARY_SOCKERR(errno)) {
             syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-            close_client_connection(con);
+            return 1;
         }
     } else if (n == 0) { /* Client closed socket */
-        close_client_connection(con);
+        return 1;
     } else {
         if (con->state == ACCEPTED)
             handle_connection_client_hello(con);
+        
+        con->lastact = curclkv.tv_sec;
     }
+    return 0;
 }
 
-static void
+static int
 handle_connection_client_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        close_client_connection(con);
+    if (n < 0) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            syslog(LOG_INFO, "send failed: %s", strerror(errno));
+            return 1;
+        }
+    } else {
+        con->lastact = curclkv.tv_sec;
     }
+    return 0;
 }
 
-static void
+static int
 handle_connection_server_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        close_server_connection(con);
+    if (n < 0) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            syslog(LOG_INFO, "send failed: %s", strerror(errno));
+            return 1;
+        }
+    } else {
+        con->lastact = curclkv.tv_sec;
     }
+    return 0;
 }
 
 static void
@@ -433,7 +447,6 @@ close_server_connection(struct Connection *c) {
 static struct Connection *
 new_connection() {
     struct Connection *c;
-    struct timespec curclkv;
 
     c = calloc(1, sizeof (struct Connection));
     if (c == NULL)
