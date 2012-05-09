@@ -33,6 +33,7 @@
 #include <syslog.h>
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include "util.h"
@@ -61,7 +62,7 @@ fd_set_listeners(const struct Listener_head *listeners, fd_set *fds, int max) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        if (iter->sockfd > FD_SETSIZE) {
+        if (iter->sockfd > (int)FD_SETSIZE) {
             syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE\n");
             break;
         }

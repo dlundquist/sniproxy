@@ -32,6 +32,7 @@
 #include <arpa/inet.h>
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include "connection.h"
 
 
@@ -91,8 +92,8 @@ accept_connection(struct Listener *listener) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
         free_connection(c);
         return;
-    } else if (c->client.sockfd > FD_SETSIZE) {
-        syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incomming connection\n");
+    } else if (c->client.sockfd > (int)FD_SETSIZE) {
+        syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incoming connection\n");
         if (close(c->client.sockfd) < 0)
                 syslog(LOG_INFO, "close failed: %s", strerror(errno));
         free_connection(c);
@@ -288,7 +289,7 @@ handle_connection_server_rx(struct Connection *con) {
     int n;
 
     n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
+    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
@@ -305,7 +306,7 @@ handle_connection_client_rx(struct Connection *con) {
     int n;
 
     n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
+    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
@@ -325,7 +326,7 @@ handle_connection_client_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
+    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
     }
@@ -336,7 +337,7 @@ handle_connection_server_tx(struct Connection *con) {
     int n;
 
     n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN || errno != EWOULDBLOCK)) {
+    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
     }
@@ -366,7 +367,7 @@ handle_connection_client_hello(struct Connection *con) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
         close_connection(con);
         return;
-    } else if (con->server.sockfd > FD_SETSIZE) {
+    } else if (con->server.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing server connection\n");
         close_connection(con);
         return;

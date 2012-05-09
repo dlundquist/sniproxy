@@ -28,6 +28,8 @@
 #include <string.h> /* memcpy */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
+#include <unistd.h>
 #include "buffer.h"
 
 #define DEFAULT_SIZE 4096
