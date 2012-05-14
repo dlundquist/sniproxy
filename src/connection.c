@@ -29,14 +29,17 @@
 #include <syslog.h>
 #include <string.h>
 #include <errno.h>
-#include <arpa/inet.h>
 #include <sys/queue.h>
+#include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "connection.h"
 
-
+#ifndef MAX
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#endif
 
 /* Linux may not include _SAFE macros */
 #ifndef LIST_FOREACH_SAFE

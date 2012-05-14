@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <signal.h>
+#include <string.h> /* memset() */
 #include <errno.h>
 #include "server.h"
 #include "connection.h"

@@ -33,8 +33,10 @@
 #include <syslog.h>
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include "util.h"
 #include "listener.h"
@@ -42,8 +44,10 @@
 #include "http.h"
 
 #define BACKLOG 5
-#define UNIX_PATH_MAX 108
+#define UNIX_PATH_MAX 104
+#ifndef MAX
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#endif
 
 
 static void close_listener(struct Listener *);

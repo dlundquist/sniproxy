@@ -26,6 +26,7 @@
 #ifndef LISTENER_H
 #define LISTENER_H
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include "table.h"
 
