@@ -46,7 +46,7 @@ sub worker($$$) {
     undef $SIG{CHLD};
 
     for (my $i = 0; $i < $requests; $i++) {
-        system('/usr/bin/curl',
+        system('curl',
                 '-s', '-S',
                 '-H', "Host: $hostname",
                 '-o', '/dev/null',

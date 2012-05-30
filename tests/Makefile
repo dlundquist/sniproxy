@@ -1,10 +1,8 @@
-CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=200809L -g -I ../src -L ../src
+CFLAGS += -g -I ../src -L ../src
 TESTS = http.test \
         tls.test \
         config.test \
         buffer.test \
-        binder.test \
         cfg_tokenizer.test
 
 all: ${TESTS}

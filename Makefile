@@ -1,12 +1,15 @@
+export CC = gcc
+export CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=200809L $(include_dirs) $(lib_dirs)
+
 all: 
-	make -C src all
+	${MAKE} -C src all
 
 .PHONY: clean all test
 
 clean:
-	make -C src clean
-	make -C tests clean
+	${MAKE} -C src clean
+	${MAKE} -C tests clean
 
 test: all
-	make -C tests test
+	${MAKE} -C tests test
 

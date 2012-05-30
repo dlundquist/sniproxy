@@ -1,6 +1,4 @@
-CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=200809L
-LIBS = -lpcre
+LIBS += -lpcre
 MODULES =   sni_proxy.o \
             config.o \
             cfg_parser.o \
