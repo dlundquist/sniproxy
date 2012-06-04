@@ -2,10 +2,10 @@
  * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, 
+ * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
@@ -79,7 +79,7 @@ void init_tables(struct Table_head *tables) {
 
 static void init_table(struct Table *table) {
     struct Backend *iter;
-    
+
     STAILQ_FOREACH(iter, &table->backends, entries)
         init_backend(iter);
 }
@@ -142,7 +142,7 @@ print_table_config(FILE *file, struct Table *table) {
     STAILQ_FOREACH(backend, &table->backends, entries) {
         if (backend->port == 0)
             fprintf(file, "\t%s %s\n", backend->hostname, backend->address);
-        else 
+        else
             fprintf(file, "\t%s %s %d\n", backend->hostname, backend->address, backend->port);
     }
     fprintf(file, "}\n\n");

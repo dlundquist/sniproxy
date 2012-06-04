@@ -2,10 +2,10 @@
  * Copyright (c) 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, 
+ * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
@@ -67,7 +67,7 @@ void
 free_buffer(struct Buffer *buf) {
     if (buf->buffer)
         free(buf->buffer);
-    
+
     free(buf);
 }
 
@@ -91,7 +91,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
-    
+
     return bytes;
 }
 
@@ -115,7 +115,7 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);
-    
+
     return bytes;
 }
 
@@ -172,9 +172,9 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
 size_t
 buffer_pop(struct Buffer *src, void *dst, size_t len) {
     size_t bytes;
-    
+
     bytes = buffer_peek(src, dst, len);
-    
+
     if (bytes > 0)
         advance_read_position(src, bytes);
 

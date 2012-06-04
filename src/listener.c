@@ -2,10 +2,10 @@
  * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, 
+ * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
@@ -125,7 +125,7 @@ accept_listener_arg(struct Listener *listener, char *arg) {
     if (listener->addr.ss_family == 0) {
         if (isnumeric(arg))
             listener->addr_len = parse_address(&listener->addr, NULL, atoi(arg));
-        else 
+        else
             listener->addr_len = parse_address(&listener->addr, arg, 0);
 
         if (listener->addr_len == 0) {
@@ -164,7 +164,7 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
         ((struct sockaddr_in *)&listener->addr)->sin_port = listener->protocol == TLS ? 443 : 80;
     else if (listener->addr.ss_family == AF_INET6 && ((struct sockaddr_in6 *)&listener->addr)->sin6_port == 0)
         ((struct sockaddr_in6 *)&listener->addr)->sin6_port = listener->protocol == TLS ? 443 : 80;
-            
+
     return 1;
 }
 
@@ -188,7 +188,7 @@ int valid_listener(const struct Listener *listener) {
         const struct sockaddr_in6 *sin6;
         const struct sockaddr_un *sun;
     } addr;
-    
+
     addr.storage = &listener->addr;
 
     switch(addr.storage->ss_family) {
@@ -227,14 +227,14 @@ int valid_listener(const struct Listener *listener) {
     return 1;
 }
 
-int 
+int
 init_listener(struct Listener *listener, const struct Table_head *tables) {
     listener->table = lookup_table(tables, listener->table_name);
     if (listener->table == NULL) {
         fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
         return -1;
     }
-    
+
     listener->sockfd = socket(listener->addr.ss_family, SOCK_STREAM, 0);
     if (listener->sockfd < 0) {
         syslog(LOG_CRIT, "socket failed");
@@ -244,7 +244,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     // set SO_REUSEADDR on server socket to facilitate restart
     int reuseval = 1;
     setsockopt(listener->sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseval, sizeof(reuseval));
-    
+
     if (bind(listener->sockfd, (struct sockaddr *)&listener->addr, listener->addr_len) < 0) {
         syslog(LOG_CRIT, "bind failed");
         close(listener->sockfd);
@@ -295,7 +295,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
         const struct sockaddr_in6 *sin6;
         const struct sockaddr_un *sun;
     } addr;
-    
+
     addr.storage = &listener->addr;
 
     switch(addr.storage->ss_family) {

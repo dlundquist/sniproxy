@@ -2,10 +2,10 @@
  * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, 
+ * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
@@ -53,7 +53,7 @@ parse_http_header(const char* data, int len) {
     if (hostname == NULL)
         return hostname;
 
-    /* 
+    /*
      *  if the user specifies the port in the request, it is included here.
      *  Host: example.com:80
      *  so we trim off port portion
@@ -93,7 +93,7 @@ get_header(const char *header, const char *data, int data_len) {
                 return NULL;
             }
             strncpy (header_data, data + header_len, len - header_len);
-            
+
             /* null terminate the header data */
             header_data[len - header_len] = '\0';
 

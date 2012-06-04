@@ -33,7 +33,7 @@ void test1() {
 
     len = buffer_pop(buffer, output, sizeof(output));
     assert(len == 0);
-    
+
     free_buffer(buffer);
 }
 
@@ -51,7 +51,7 @@ void test2() {
 
         i += len;
     }
-    
+
     while (len) {
         len = buffer_pop(buffer, output, sizeof(output));
     }

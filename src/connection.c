@@ -2,10 +2,10 @@
  * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without 
+ * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, 
+ * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
@@ -154,7 +154,7 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
                 /* do nothing */
                 break;
             default:
-                syslog(LOG_WARNING, "Invalid state %d", iter->state); 
+                syslog(LOG_WARNING, "Invalid state %d", iter->state);
         }
     }
 
@@ -175,7 +175,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                 if (FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer))
                     handle_connection_server_tx(iter);
-                    
+
                 /* Fall through */
             case(ACCEPTED):
                 if (FD_ISSET(iter->client.sockfd, rfds) &&
@@ -228,7 +228,7 @@ print_connections() {
     char filename[] = "/tmp/sni-proxy-connections-XXXXXX";
     int fd;
     FILE *temp;
-    
+
     fd = mkstemp(filename);
     if (fd < 0) {
         syslog(LOG_INFO, "mkstemp failed: %s", strerror(errno));
@@ -418,7 +418,7 @@ new_connection() {
         free_connection(c);
         return NULL;
     }
-    
+
     c->server.buffer = new_buffer();
     if (c->server.buffer == NULL) {
         free_connection(c);

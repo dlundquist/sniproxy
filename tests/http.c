@@ -38,7 +38,7 @@ const char *bad[] = {
 int main() {
     unsigned int i;
     const char *hostname;
-    
+
     for(i = 0; i < sizeof(good) / sizeof(const char *); i++) {
         hostname = parse_http_header(good[i], strlen(good[i]));
 
