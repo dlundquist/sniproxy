@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use POSIX ":sys_wait_h";
+use File::Temp;
 
 $SIG{CHLD} = \&REAPER;
 
@@ -20,18 +21,31 @@ sub REAPER {
 }
 
 sub start_proxy {
+    my $port = shift;
     my @wrapper = @_;
     # Start the proxy in forground HTTP mode on a high port with our test config, this shouldn't require privileges
+
+    my ($fh, $filename) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh
+    "# Minimal test configuration\n\n" .
+    "listen $port {\n" .
+    "    proto http\n" .
+    "}\n\n" .
+    "table {\n" .
+    "    localhost 127.0.0.1 80\n" .
+    "}\n";
 
     my $pid = fork();
     if (not defined $pid) {
         die("fork: $!");
     } elsif ($pid == 0) {
-        exec(@wrapper, '../src/sni_proxy', '-f', '-c', 'test_proxy.conf')
+        exec(@wrapper, '../src/sni_proxy', '-f', '-c', $filename)
             or die("exec: $!");
     }
 
-    $children{$pid} = { 
+    $children{$pid} = {
         type => 'server',
         pid => $pid,
         running => 1,
@@ -40,8 +54,8 @@ sub start_proxy {
     return $pid;
 }
 
-sub worker($$$) {
-    my ($hostname, $path, $requests) = @_;
+sub worker($$$$) {
+    my ($hostname, $path, $port, $requests) = @_;
     # We don't want our signal handler to interfer with system()'s default behaviour
     undef $SIG{CHLD};
 
@@ -50,7 +64,7 @@ sub worker($$$) {
                 '-s', '-S',
                 '-H', "Host: $hostname",
                 '-o', '/dev/null',
-                "http://localhost:8080/$path");
+                "http://localhost:$port/$path");
 
         if ($? == -1) {
             die "failed to execute: $!\n";
@@ -66,14 +80,14 @@ sub worker($$$) {
 }
 
 # Make several requests through the proxy specifying the host header
-sub start_worker($$$) {
-    my ($hostname, $path, $requests) = @_;
+sub start_worker($$$$) {
+    my ($hostname, $path, $port, $requests) = @_;
 
     my $pid = fork();
     if (not defined $pid) {
         die("fork: $!");
     } elsif ($pid == 0) {
-        worker($hostname, $path, $requests);
+        worker($hostname, $path, $port, $requests);
         # Should not be reached
         exit(99);
     }
@@ -96,12 +110,15 @@ sub reap_children {
 }
 
 sub main {
-    my $proxy_pid = start_proxy(@ARGV);
+    my $port = $ENV{SNI_PROXY_PORT} || 8080;
+
+    my $proxy_pid = start_proxy($port, @ARGV);
+
 
     sleep 1;
-    
+
     for (my $i = 0; $i < 10; $i++) {
-        start_worker('localhost', '', 10);
+        start_worker('localhost', '', $port, 10);
     }
 
     # Wait for all our children to finish
