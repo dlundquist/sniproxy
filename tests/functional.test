@@ -2,28 +2,12 @@
 
 use strict;
 use warnings;
-use POSIX ":sys_wait_h";
+use TestUtils;
+use Socket;
 use File::Temp;
 
-$SIG{CHLD} = \&REAPER;
-
-my %children;
-
-sub REAPER {
-    my $stiff;
-    while (($stiff = waitpid(-1, &WNOHANG)) > 0) {
-        # do something with $stiff if you want
-        $children{$stiff}->{'running'} = undef;
-        $children{$stiff}->{'exit_code'} = $? >> 8;
-        $children{$stiff}->{'signal'} = $? & 127;
-    }
-    $SIG{CHLD} = \&REAPER; # install *after* calling waitpid
-}
-
-sub start_proxy {
+sub make_config($) {
     my $port = shift;
-    my @wrapper = @_;
-    # Start the proxy in forground HTTP mode on a high port with our test config, this shouldn't require privileges
 
     my ($fh, $filename) = File::Temp::tempfile();
 
@@ -37,21 +21,15 @@ sub start_proxy {
     "    localhost 127.0.0.1 80\n" .
     "}\n";
 
-    my $pid = fork();
-    if (not defined $pid) {
-        die("fork: $!");
-    } elsif ($pid == 0) {
-        exec(@wrapper, '../src/sni_proxy', '-f', '-c', $filename)
-            or die("exec: $!");
-    }
+    close ($fh);
 
-    $children{$pid} = {
-        type => 'server',
-        pid => $pid,
-        running => 1,
-    };
+    return $filename;
+}
 
-    return $pid;
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sni_proxy', '-f', '-c', $config);
 }
 
 sub worker($$$$) {
@@ -79,52 +57,22 @@ sub worker($$$$) {
     exit 0;
 }
 
-# Make several requests through the proxy specifying the host header
-sub start_worker($$$$) {
-    my ($hostname, $path, $port, $requests) = @_;
-
-    my $pid = fork();
-    if (not defined $pid) {
-        die("fork: $!");
-    } elsif ($pid == 0) {
-        worker($hostname, $path, $port, $requests);
-        # Should not be reached
-        exit(99);
-    }
-
-    $children{$pid} = {
-        type => 'worker',
-        pid => $pid,
-        running => 1,
-    };
-
-    return $pid;
-}
-
-sub reap_children {
-    while (my @hit_list = grep($children{$_}->{'running'}, keys %children)) {
-        print STDERR "sending $children{$_}->{'type'} child $_ SIGTERM\n";
-        kill 15, @hit_list;
-        sleep 1;
-    }
-}
 
 sub main {
     my $port = $ENV{SNI_PROXY_PORT} || 8080;
 
-    my $proxy_pid = start_proxy($port, @ARGV);
-
+    my $config = make_config($port);
+    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
 
     sleep 1;
 
     for (my $i = 0; $i < 10; $i++) {
-        start_worker('localhost', '', $port, 10);
+        start_child('worker', \&worker, 'localhost', '', $port, 10);
     }
 
     # Wait for all our children to finish
-    while (grep($children{$_}->{'running'} && $children{$_}->{'type'} eq 'worker', keys %children) > 0) {
-        sleep 1;
-    }
+    wait_for_type('worker');
+
     # Give the proxy a second to flush buffers and close server connections
     sleep 1;
 
@@ -139,20 +87,11 @@ sub main {
     kill 15, $proxy_pid;
     sleep 1;
 
+    # Delete our test configuration
+    unlink($config);
+
     # Kill off any remaining children
     reap_children();
-
-    # Check that all our children exited cleanly
-    if (my @failures = grep($_->{'exit_code'} != 0, values %children)) {
-        print "Test failed.\n";
-        foreach (@failures) {
-            print "$_->{'type'} failed with exit code $_->{'exit_code'}\n";
-        }
-        exit 1;
-    } else {
-        # print "Test passed.\n";
-        exit 0;
-    }
 }
 
 main();
