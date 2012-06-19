@@ -12,14 +12,17 @@ sub make_config($) {
     my ($fh, $filename) = File::Temp::tempfile();
 
     # Write out a test config file
-    print $fh
-    "# Minimal test configuration\n\n" .
-    "listen $port {\n" .
-    "    proto http\n" .
-    "}\n\n" .
-    "table {\n" .
-    "    localhost 127.0.0.1 80\n" .
-    "}\n";
+    print $fh <<END;
+# Minimal test configuration
+
+listen $port {
+    proto http
+}
+
+table {
+    localhost 127.0.0.1 80
+}
+END
 
     close ($fh);
 
