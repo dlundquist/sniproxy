@@ -54,10 +54,6 @@
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
 
-static int handle_connection_client_rx(struct Connection *);
-static int handle_connection_server_rx(struct Connection *);
-static int handle_connection_client_tx(struct Connection *);
-static int handle_connection_server_tx(struct Connection *);
 static void handle_connection_client_hello(struct Connection *);
 static void close_connection(struct Connection *);
 static void close_client_connection(struct Connection *);
@@ -168,31 +164,84 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
     struct Connection *iter, *tmp;
     int err;
 
+    /*
+     * So the root cause of this bug is that we alter the state of the connection
+     * inside this loop
+     */
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
         err = 0;
         switch(iter->state) {
+            /* BEGIN server socket operations */
+            case(CLIENT_CLOSED):
+                if (FD_ISSET(iter->server.sockfd, wfds) &&
+                        buffer_len(iter->client.buffer)) {
+                    n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                        return 1;
+                    }
+                    return 0;
+                }
+
+                if (err || buffer_len(iter->client.buffer) == 0)
+                    close_server_connection(iter); // CONNECTED -> SERVER_CLOSED
+
+                break;
             case(CONNECTED):
                 if (FD_ISSET(iter->server.sockfd, rfds) &&
-                        buffer_room(iter->server.buffer))
-                    err = handle_connection_server_rx(iter);
+                        buffer_room(iter->server.buffer)) {
+
+                    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+                        return 1;
+                    } else if (n == 0) { /* Server closed socket */
+                        return 1;
+                    }
+                    return 0;
+                }
 
                 if (!err && FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
-                    err = handle_connection_server_tx(iter);
+                        buffer_len(iter->client.buffer)) {
+                    n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                        return 1;
+                    }
+                    return 0;
+                }
 
                 if (err)
-                    close_server_connection(iter);
+                    close_server_connection(iter); // CONNECTED -> SERVER_CLOSED
 
                 err = 0;
                 /* Fall through */
+            /* END server socket operations */
+
+            /* BEGIN client socket operations */
             case(ACCEPTED):
                 if (FD_ISSET(iter->client.sockfd, rfds) &&
-                        buffer_room(iter->client.buffer))
-                    err = handle_connection_client_rx(iter);
+                        buffer_room(iter->client.buffer)) {
+                    n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+                        return 1;
+                    } else if (n == 0) { /* Client closed socket */
+                        return 1;
+                    }
+
+                    handle_connection_client_hello(con); // ACCEPTED -> CONNECTED
+                }
 
                 if (!err && FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
-                    err = handle_connection_client_tx(iter);
+                        buffer_len(iter->server.buffer)) {
+                    n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                        return 1;
+                    }
+                    return 0;
+                }
 
                 if (err)
                     close_client_connection(iter);
@@ -200,22 +249,21 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                 break;
             case(SERVER_CLOSED):
                 if (FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
-                    err = handle_connection_client_tx(iter);
+                        buffer_len(iter->server.buffer)) {
+                    n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
+                    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+                        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+                        return 1;
+                    }
+                    return 0;
+                }
 
                 if (err || buffer_len(iter->server.buffer) == 0)
                     close_client_connection(iter);
 
                 break;
-            case(CLIENT_CLOSED):
-                if (FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
-                    err = handle_connection_server_tx(iter);
+            /* END client socket operations */
 
-                if (err || buffer_len(iter->client.buffer) == 0)
-                    close_server_connection(iter);
-
-                break;
             case(CLOSED):
                 LIST_REMOVE(iter, entries);
                 free_connection(iter);
@@ -265,6 +313,9 @@ print_connection(FILE *file, const struct Connection *con) {
     int server_port = 0;
 
     switch(con->state) {
+        case NEW:
+            fprintf(file, "NEW           -\t-\n");
+            break;
         case ACCEPTED:
             get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
             fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
@@ -289,66 +340,7 @@ print_connection(FILE *file, const struct Connection *con) {
             break;
         case CLOSED:
             fprintf(file, "CLOSED        -\t-\n");
-            break;
-        case NEW:
-            fprintf(file, "NEW           -\t-\n");
     }
-}
-
-static int
-handle_connection_server_rx(struct Connection *con) {
-    int n;
-
-    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return 1;
-    } else if (n == 0) { /* Server closed socket */
-        return 1;
-    }
-    return 0;
-}
-
-static int
-handle_connection_client_rx(struct Connection *con) {
-    int n;
-
-    n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return 1;
-    } else if (n == 0) { /* Client closed socket */
-        return 1;
-    }
-
-    if (con->state == ACCEPTED)
-        handle_connection_client_hello(con);
-
-    return 0;
-}
-
-static int
-handle_connection_client_tx(struct Connection *con) {
-    int n;
-
-    n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return 1;
-    }
-    return 0;
-}
-
-static int
-handle_connection_server_tx(struct Connection *con) {
-    int n;
-
-    n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return 1;
-    }
-    return 0;
 }
 
 static void
