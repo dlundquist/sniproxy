@@ -58,10 +58,10 @@ sub simple_server($) {
             last if $line eq "\r\n"; # End of headers
         }
 
-        $client->send("HTTP/1.1 200 OK\r\n");
-        $client->send("Content-Type: text/plain\r\n");
-        $client->send("Context-Length: 16777216\r\n");
-        $client->send("\r\n");
+        $client->send("HTTP/1.1 200 OK\r\n" .
+                      "Content-Type: text/plain\r\n" .
+                      "Context-Length: 16777216\r\n" .
+                      "\r\n");
 
         # Send a bunch of data (more that will be buffered by the kernel
         for (my $i = 0; $i < 4096; $i++) {
@@ -74,6 +74,8 @@ sub simple_server($) {
 
     # Wait for children
     1 until (-1 == waitpid(-1, WNOHANG));
+
+    exit(0);
 }
 
 sub bad_client($) {
@@ -85,11 +87,11 @@ sub bad_client($) {
                                        Type => SOCK_STREAM)
         or die "couldn't connect $!";
 
-    $socket->send("GET / HTTP/1.1\r\n");
-    $socket->send("UserAgent: bad_client/0.1\r\n");
-    $socket->send("Host: localhost:$port\r\n");
-    $socket->send("Accept: */*\r\n");
-    $socket->send("\r\n");
+    $socket->send("GET / HTTP/1.1\r\n" .
+                  "UserAgent: bad_client/0.1\r\n" .
+                  "Host: localhost:$port\r\n" .
+                  "Accept: */*\r\n" .
+                  "\r\n");
 
     my $buffer;
     $socket->recv($buffer, 4096);
@@ -97,6 +99,8 @@ sub bad_client($) {
     $socket->recv($buffer, 4096);
 
     close($socket);
+
+    exit(0);
 }
 
 sub main {
