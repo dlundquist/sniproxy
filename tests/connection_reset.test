@@ -52,7 +52,7 @@ sub simple_server($) {
         next if $pid; # Parent
         die "fork: $!" unless defined $pid;
 
-        close($server);
+        $server->close();
 
         while (my $line = <$client>) {
             last if $line eq "\r\n"; # End of headers
@@ -67,10 +67,10 @@ sub simple_server($) {
         for (my $i = 0; $i < 4096; $i++) {
             $client->send('x' x 4096);
         }
-        close $client;
+        $client->close();
         exit;
     }
-    close ($server);
+    $server->close();
 
     # Wait for children
     1 until (-1 == waitpid(-1, WNOHANG));
@@ -87,6 +87,10 @@ sub bad_client($) {
                                        Type => SOCK_STREAM)
         or die "couldn't connect $!";
 
+    # This is invalid perl, but causes the socket to terminate
+    # abnormally replicated the select invalid file descriptor error
+    $socket->sockopt(SO_LINGER, 0, 0);
+
     $socket->send("GET / HTTP/1.1\r\n" .
                   "UserAgent: bad_client/0.1\r\n" .
                   "Host: localhost:$port\r\n" .
@@ -98,7 +102,7 @@ sub bad_client($) {
     $socket->recv($buffer, 4096);
     $socket->recv($buffer, 4096);
 
-    close($socket);
+    $socket->close();
 
     exit(0);
 }
