@@ -87,9 +87,9 @@ sub bad_client($) {
                                        Type => SOCK_STREAM)
         or die "couldn't connect $!";
 
-    # This is invalid perl, but causes the socket to terminate
-    # abnormally replicated the select invalid file descriptor error
-    $socket->sockopt(SO_LINGER, 0, 0);
+    # This causes the socket to terminate abnormally and
+    # replicates the select invalid file descriptor error
+    kill 9, $$;
 
     $socket->send("GET / HTTP/1.1\r\n" .
                   "UserAgent: bad_client/0.1\r\n" .
