@@ -27,6 +27,7 @@
 #define BUFFER_H
 
 #include <stdio.h>
+#include <unistd.h>
 
 struct Buffer {
     char *buffer;
