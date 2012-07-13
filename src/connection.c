@@ -51,6 +51,14 @@
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
 
+/* Avoid strict aliasing warnings in C99 with type punning */
+typedef union {
+	struct sockaddr sa;
+	struct sockaddr_in sa_in;
+	struct sockaddr_in6 sa_in6;
+	struct sockaddr_storage sa_stor;
+} address_t;
+
 static LIST_HEAD(ConnectionHead, Connection) connections;
 static struct timespec curclkv;
 
@@ -489,23 +497,23 @@ free_connection(struct Connection *c) {
 
 static void
 get_peer_address(int sockfd, char *address, size_t len, int *port) {
-    struct sockaddr_storage addr;
+    address_t addr;
     socklen_t addr_len;
 
     /* identify peer address */
     addr_len = sizeof(addr);
-    getpeername(sockfd, (struct sockaddr*)&addr, &addr_len);
+    getpeername(sockfd, &addr.sa, &addr_len);
 
-    switch(addr.ss_family) {
+    switch(addr.sa_stor.ss_family) {
         case AF_INET:
-            inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, address, len);
+            inet_ntop(AF_INET, &addr.sa_in.sin_addr, address, len);
             if (port)
-                *port = ntohs(((struct sockaddr_in *)&addr)->sin_port);
+                *port = ntohs(addr.sa_in.sin_port);
             break;
         case AF_INET6:
-            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&addr)->sin6_addr, address, len);
+            inet_ntop(AF_INET6, &addr.sa_in6.sin6_addr, address, len);
             if (port)
-                *port = ntohs(((struct sockaddr_in6 *)&addr)->sin6_port);
+                *port = ntohs(addr.sa_in6.sin6_port);
             break;
     }
 }
