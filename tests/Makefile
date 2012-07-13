@@ -8,7 +8,7 @@ TESTS = http.test \
 all: ${TESTS}
 
 config.test: config.o ../src/config.o ../src/cfg_parser.o ../src/cfg_tokenizer.o ../src/util.o ../src/backend.o ../src/table.o ../src/listener.o ../src/connection.o ../src/buffer.o ../src/tls.o ../src/http.o
-	$(CC) $(CFLAGS) -o $@ $^ -l pcre
+	$(CC) $(CFLAGS) -o $@ $^ -l pcre -lrt
 
 %.test: %.o ../src/%.o
 	$(CC) $(CFLAGS) -o $@ $^
