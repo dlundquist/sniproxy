@@ -52,7 +52,8 @@ isnumeric (const char * s) {
     if (s == NULL || *s == '\0')
         return 0;
     char * p;
-    strtod (s, &p);
+	double d;  // Not used, but catches warnings
+    d = strtod (s, &p);
     return *p == '\0';
 }
 
