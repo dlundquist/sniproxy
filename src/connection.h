@@ -28,6 +28,7 @@
 
 #include <sys/queue.h>
 #include <sys/select.h>
+#include <time.h>
 #include "listener.h"
 #include "buffer.h"
 
@@ -35,6 +36,7 @@
 
 struct Connection {
     enum State {
+        NEW,            /* Before successful accept */
         ACCEPTED,       /* Newly accepted client connection */
         CONNECTED,      /* Parsed client hello and connected to server */
         SERVER_CLOSED,  /* Client closed socket */
@@ -47,6 +49,7 @@ struct Connection {
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
+    time_t lastact;
 
     LIST_ENTRY(Connection) entries;
 };

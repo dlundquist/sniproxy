@@ -33,7 +33,6 @@
 #include <syslog.h>
 #include <sys/queue.h>
 #include <sys/select.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
@@ -168,6 +167,12 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     return 1;
 }
 
+int
+accept_listener_timeout(struct Listener *listener, char *timeout) {
+    listener->timeout = atoi(timeout);
+
+    return 1;
+}
 
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {

@@ -1,4 +1,4 @@
-LIBS += -lpcre
+LIBS += -lpcre -lrt
 MODULES =   sni_proxy.o \
             config.o \
             cfg_parser.o \
