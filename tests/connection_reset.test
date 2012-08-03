@@ -1,0 +1,150 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use TestUtils;
+use IO::Socket;
+use Socket;
+use POSIX qw(:sys_wait_h);
+use File::Temp;
+
+sub make_config($$) {
+    my $proxy_port = shift;
+    my $server_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen $proxy_port {
+    proto http
+}
+
+table {
+    localhost 127.0.0.1 $server_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sni_proxy', '-f', '-c', $config);
+}
+
+sub simple_server($) {
+    my $port = shift;
+
+    my $server = IO::Socket::INET->new(LocalPort => $port,
+                                       Type => SOCK_STREAM,
+                                       Reuse => 1,
+                                       Listen => 10)
+        or die "listen: $!";
+
+    while (my $client = $server->accept()) {
+        my $pid = fork();
+        next if $pid; # Parent
+        die "fork: $!" unless defined $pid;
+
+        $server->close();
+
+        while (my $line = <$client>) {
+            last if $line eq "\r\n"; # End of headers
+        }
+
+        $client->send("HTTP/1.1 200 OK\r\n" .
+                      "Content-Type: text/plain\r\n" .
+                      "Context-Length: 16777216\r\n" .
+                      "\r\n");
+
+        # Send a bunch of data (more that will be buffered by the kernel
+        for (my $i = 0; $i < 4096; $i++) {
+            $client->send('x' x 4096);
+        }
+        $client->close();
+        exit;
+    }
+    $server->close();
+
+    # Wait for children
+    1 until (-1 == waitpid(-1, WNOHANG));
+
+    exit(0);
+}
+
+sub bad_client($) {
+    my $port = shift;
+
+    my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+                                       PeerPort => $port,
+                                       Proto => "tcp",
+                                       Type => SOCK_STREAM)
+        or die "couldn't connect $!";
+
+    # This causes the socket to terminate abnormally and
+    # replicates the select invalid file descriptor error
+    kill 9, $$;
+
+    $socket->send("GET / HTTP/1.1\r\n" .
+                  "UserAgent: bad_client/0.1\r\n" .
+                  "Host: localhost:$port\r\n" .
+                  "Accept: */*\r\n" .
+                  "\r\n");
+
+    my $buffer;
+    $socket->recv($buffer, 4096);
+    $socket->recv($buffer, 4096);
+    $socket->recv($buffer, 4096);
+
+    $socket->close();
+
+    exit(0);
+}
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $server_port = $ENV{TEST_SERVER_PORT} || 8081;
+
+    my $config = make_config($proxy_port, $server_port);
+    my $proxy_pid = start_child('sni_proxy', \&proxy, $config, @ARGV);
+    my $server_pid = start_child('server', \&simple_server, $server_port);
+
+    # Wait for proxy to load and parse config
+    sleep 1;
+
+    for (my $i = 0; $i < 10; $i++) {
+        start_child('worker', \&bad_client, $proxy_port);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # For troubleshooting connections stuck in CLOSE_WAIT state
+    #kill 10, $proxy_pid;
+    #system("netstat -ptn | grep $proxy_pid\/sni_proxy");
+
+    # For troubleshooting 100% CPU usage
+    #system("top -n 1 -p $proxy_pid -b");
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    kill 15, $server_pid;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+}
+
+main();
