@@ -52,7 +52,6 @@ sub start_child {
 
 sub reap_children {
     while (my @hit_list = grep($children{$_}->{'running'}, keys %children)) {
-        print STDERR "sending $children{$_}->{'type'} child $_ SIGTERM\n";
         kill 15, @hit_list;
         sleep 1;
     }
