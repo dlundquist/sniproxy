@@ -353,7 +353,7 @@ handle_connection_server_tx(struct Connection *con) {
 
 static void
 handle_connection_client_hello(struct Connection *con) {
-    char buffer[256];
+    char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len;
     const char *hostname;
     char peeripstr[INET6_ADDRSTRLEN];
