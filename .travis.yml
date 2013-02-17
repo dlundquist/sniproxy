@@ -2,5 +2,5 @@ language: c
 compiler:
   - clang
   - gcc
-install: ./autogen.sh
+install: DEBIAN_FRONTEND=noninteractive sudo apt-get install -y apache2 libpcre3-dev; ./autogen.sh
 script: ./configure && make && make check && sudo make install
