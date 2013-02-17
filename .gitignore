@@ -1,4 +1,15 @@
-sni_proxy
 a.out
 *.o
-*/core
+.deps
+depcomp
+core
+autoscan.log
+aclocal.m4
+autom4te.cache
+configure
+install-sh
+missing
+Makefile
+Makefile.in
+config.status
+config.log

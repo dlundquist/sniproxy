@@ -82,6 +82,7 @@ struct Config *
 init_config(const char *filename) {
     FILE *file;
     struct Config *config;
+    int i;
 
     config = malloc(sizeof(struct Config));
     if (config == NULL) {
@@ -115,7 +116,7 @@ init_config(const char *filename) {
 
         fprintf(stderr, "error parsing %s at %ld near:\n", filename, whence);
         fseek(file, -20, SEEK_CUR);
-        for (int i = 0; i < 5; i++)
+        for (i = 0; i < 5; i++)
             fprintf(stderr, "%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
 
         free_config(config);
