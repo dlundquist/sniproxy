@@ -1,5 +1,3 @@
-
-
 HTTPS SNI Proxy
 ===============
 
@@ -21,16 +19,22 @@ Usage
         -c  configruation file, defaults to /etc/sni_proxy.conf
         -f  run in foreground, do not drop privileges
 
+
+Installation
+------------
+
+    ./autogen.sh && ./configure && make install
+
 Configuration Syntax
 --------------------
-    
+
     user daemon
 
     listener 127.0.0.1 443 {
         protocol tls
         table "TableName"
     }
-    
+
     table "TableName" {
         # Match exact request hostnames
         example.com 192.0.2.10      4343
@@ -41,4 +45,8 @@ Configuration Syntax
         .*\\.edu    *               443
     }
 
+Tests
+-----
+
+The included functional\_test expects a local webserver to be available.
 

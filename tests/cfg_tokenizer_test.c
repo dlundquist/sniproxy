@@ -45,6 +45,8 @@ int main() {
     FILE *cfg;
     char buffer[256];
     enum Token token;
+    struct Test *test;
+    int i;
 
     cfg = tmpfile();
     if (cfg == NULL) {
@@ -52,11 +54,11 @@ int main() {
         return 1;
     }
 
-    for (struct Test *test = tests; test->config; test++) {
+    for (test = tests; test->config; test++) {
         fprintf(cfg, "%s", test->config);
         rewind(cfg);
 
-        for (int i = 0; i < test->len; i++) {
+        for (i = 0; i < test->len; i++) {
             token = next_token(cfg, buffer, sizeof(buffer));
             assert(token == test->results[i].type);
             if (test->results[i].value)
