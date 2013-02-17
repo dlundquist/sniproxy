@@ -1,11 +1,12 @@
 
-AM_CPPFLAGS = -I$(top_srcdir)/src
+AM_CPPFLAGS = -I$(top_srcdir)/src -g
 
 TESTS = http_test \
 		tls_test \
 		buffer_test \
 		cfg_tokenizer_test \
-		config_test
+		config_test \
+		functional_test
 
 check_PROGRAMS = http_test \
 				 tls_test \
