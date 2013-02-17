@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.60])
 AC_INIT([https-sni-proxy], [0.1])
 AC_CONFIG_SRCDIR([src/sni_proxy.c])
 AM_INIT_AUTOMAKE
