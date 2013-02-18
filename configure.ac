@@ -10,11 +10,12 @@ AM_INIT_AUTOMAKE
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB([pcre], [pcre_exec])
+AC_SEARCH_LIBS([pcre_exec], [pcre],,AC_MSG_ERROR([libpcre not found]))
 
 # Checks for header files.
 AC_FUNC_ALLOCA
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h])
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
+    AC_MSG_ERROR([required header(s) not found]))
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -26,7 +27,8 @@ AC_TYPE_SSIZE_T
 AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([memset select socket strcasecmp strdup strerror strncasecmp])
+AC_CHECK_FUNCS([memset select socket strcasecmp strdup strerror strncasecmp],,
+    AC_MSG_ERROR([required functions(s) not found]))
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile

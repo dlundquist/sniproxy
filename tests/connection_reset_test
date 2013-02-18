@@ -108,6 +108,11 @@ sub bad_client($) {
 }
 
 sub main {
+    unless ($^O eq 'linux') {
+        print STDERR "connection_reset_test only supported under Linux\n";
+        exit 1;
+    }
+
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $server_port = $ENV{TEST_SERVER_PORT} || 8081;
 
