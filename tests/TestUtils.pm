@@ -33,7 +33,8 @@ sub start_child {
     if (not defined $pid) {
         die("fork: $!");
     } elsif ($pid == 0) {
-        &{$child}(@args);
+        undef $SIG{CHLD};
+        $child->(@args);
         # Should not be reached
         exit(99);
     }

@@ -6,7 +6,8 @@ TESTS = http_test \
 		buffer_test \
 		cfg_tokenizer_test \
 		config_test \
-		functional_test
+		functional_test \
+		connection_reset_test
 
 check_PROGRAMS = http_test \
 				 tls_test \

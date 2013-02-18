@@ -3,11 +3,12 @@
 use strict;
 use warnings;
 use TestUtils;
-use Socket;
+use TestHTTPD;
 use File::Temp;
 
-sub make_config($) {
-    my $port = shift;
+sub make_config($$) {
+    my $proxy_port = shift;
+    my $httpd_port = shift;
 
     my ($fh, $filename) = File::Temp::tempfile();
 
@@ -15,12 +16,12 @@ sub make_config($) {
     print $fh <<END;
 # Minimal test configuration
 
-listen $port {
+listen $proxy_port {
     proto http
 }
 
 table {
-    localhost 127.0.0.1 80
+    localhost 127.0.0.1 $httpd_port
 }
 END
 
@@ -37,8 +38,6 @@ sub proxy {
 
 sub worker($$$$) {
     my ($hostname, $path, $port, $requests) = @_;
-    # We don't want our signal handler to interfer with system()'s default behaviour
-    undef $SIG{CHLD};
 
     for (my $i = 0; $i < $requests; $i++) {
         system('curl',
@@ -62,15 +61,17 @@ sub worker($$$$) {
 
 
 sub main {
-    my $port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
 
-    my $config = make_config($port);
+    my $config = make_config($proxy_port, $httpd_port);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
 
     sleep 1;
 
     for (my $i = 0; $i < 10; $i++) {
-        start_child('worker', \&worker, 'localhost', '', $port, 10);
+        start_child('worker', \&worker, 'localhost', '', $proxy_port, 10);
     }
 
     # Wait for all our children to finish
@@ -88,6 +89,7 @@ sub main {
 
     # Orderly shutdown of the server
     kill 15, $proxy_pid;
+    kill 15, $httpd_port;
     sleep 1;
 
     # Delete our test configuration
