@@ -5,7 +5,7 @@ use strict;
 use POSIX ":sys_wait_h";
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(start_child reap_children wait_for_type);
+our @EXPORT = qw(start_child reap_children wait_for_type make_config);
 
 $SIG{CHLD} = \&REAPER;
 
@@ -81,6 +81,30 @@ sub wait_for_type($) {
     while (grep($children{$_}->{'running'} && $children{$_}->{'type'} eq $type, keys %children) > 0) {
         sleep 1;
     }
+}
+
+sub make_config($$) {
+    my $proxy_port = shift;
+    my $httpd_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen $proxy_port {
+    proto http
+}
+
+table {
+    localhost 127.0.0.1 $httpd_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
 }
 
 1;

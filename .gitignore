@@ -13,3 +13,4 @@ Makefile
 Makefile.in
 config.status
 config.log
+INSTALL

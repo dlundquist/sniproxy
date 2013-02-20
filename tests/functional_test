@@ -6,30 +6,6 @@ use TestUtils;
 use TestHTTPD;
 use File::Temp;
 
-sub make_config($$) {
-    my $proxy_port = shift;
-    my $httpd_port = shift;
-
-    my ($fh, $filename) = File::Temp::tempfile();
-
-    # Write out a test config file
-    print $fh <<END;
-# Minimal test configuration
-
-listen $proxy_port {
-    proto http
-}
-
-table {
-    localhost 127.0.0.1 $httpd_port
-}
-END
-
-    close ($fh);
-
-    return $filename;
-}
-
 sub proxy {
     my $config = shift;
 
@@ -65,9 +41,10 @@ sub main {
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
 
     my $config = make_config($proxy_port, $httpd_port);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port);
 
+    # Wait for proxy to load and parse config
     sleep 1;
 
     for (my $i = 0; $i < 10; $i++) {
@@ -89,7 +66,7 @@ sub main {
 
     # Orderly shutdown of the server
     kill 15, $proxy_pid;
-    kill 15, $httpd_port;
+    kill 15, $httpd_pid;
     sleep 1;
 
     # Delete our test configuration
