@@ -1,8 +1,9 @@
 HTTPS SNI Proxy
 ===============
 
-Proxies TLS and HTTP connections to separate back end servers based on the
-host name in the initial request.
+Proxies incomming HTTP and TLS connections based on the hostname contained in
+the initial request. This enables HTTPS name based virtual hosting to seperate
+backend servers without the proxy knowing the private key. 
 
 Features
 --------
