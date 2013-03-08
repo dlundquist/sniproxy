@@ -1,9 +1,9 @@
 HTTPS SNI Proxy
 ===============
 
-Proxies incomming HTTP and TLS connections based on the hostname contained in
+Proxies incoming HTTP and TLS connections based on the hostname contained in
 the initial request. This enables HTTPS name based virtual hosting to seperate
-backend servers without the proxy knowing the private key. 
+backend servers without the installing the private key on the proxy machine. 
 
 Features
 --------
@@ -47,4 +47,3 @@ Configuration Syntax
         # Combining PCRE and wildchard will resolve the hostname client requested and proxy to it
         .*\\.edu    *               443
     }
-
