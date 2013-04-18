@@ -112,7 +112,7 @@ accept_connection(struct Listener *listener) {
 
 /*
  * Prepares the fd_set as a set of all active file descriptors in all our
- * currently active connections and one additional file descriptior fd that
+ * currently active connections and one additional file descriptor fd that
  * can be used for a listening socket.
  * Returns the highest file descriptor in the set.
  */

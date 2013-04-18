@@ -31,8 +31,8 @@ static int next_word(FILE *, char *, int);
 
 
 /*
- * next_token() returns the next token based on the current position of config
- * file advancing the position to immidiatly after the token.
+ * next_token() returns the next token based on the current position of
+ * configuration file advancing the position to immediately after the token.
  */
 enum Token
 next_token(FILE *config, char *buffer, size_t buffer_len) {
@@ -61,7 +61,7 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
                 return CBRACE;
             default:
                 /* Rewind one byte, so next_word() can fetch from
-                 * the begining of the word */
+                 * the beginning of the word */
                 fseek(config, -1, SEEK_CUR);
 
                 token_len = next_word(config, buffer, buffer_len);
@@ -104,7 +104,7 @@ next_word(FILE *file, char *buffer, int buffer_len) {
             case '\"':
                 quoted = 1 - quoted; /* toggle quoted flag */
                 break;
-            /* Seperators */
+            /* separators */
             case ' ':
             case '\t':
             case ';':
@@ -131,5 +131,4 @@ next_word(FILE *file, char *buffer, int buffer_len) {
     /* We reached the end of the file, or filled our buffer */
     return -1;
 }
-
 

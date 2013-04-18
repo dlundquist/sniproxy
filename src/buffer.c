@@ -189,7 +189,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
     size_t bytes_appended = 0;
 
     if (dst->size - dst->len < len)
-        return -1; /* insufficent room */
+        return -1; /* insufficient room */
 
     iov_len = setup_write_iov(dst, iov, len);
 

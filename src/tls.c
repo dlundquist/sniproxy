@@ -24,8 +24,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /*
- * This is a minimal TLS impleimentation indented only to parse the server name extension.
- * This was created based primarily on wireshark disection of a TLS handshake and RFC4366.
+ * This is a minimal TLS implementation indented only to parse the server name extension.
+ * This was created based primarily on Wireshark dissection of a TLS handshake and RFC4366.
  */
 #include <stdio.h>
 #include <string.h> /* strncpy() */
@@ -68,7 +68,7 @@ parse_tls_header(const char* data, int data_len) {
     const char* p = data;
     int len;
 
-    /* Check that our TCP payload is atleast large enough for a TLS header */
+    /* Check that our TCP payload is at least large enough for a TLS header */
     if (data_len < TLS_HEADER_LEN)
         return NULL;
 
@@ -175,7 +175,7 @@ parse_tls_header(const char* data, int data_len) {
         len = ((unsigned char)p[2] << 8) + (unsigned char)p[3]; /* Extension length */
         if (p[0] == 0x00 && p[1] == 0x00) { /* Check if it's a server name extension */
             /* There can be only one extension of each type, so we break
-               our state and move p to beinging of the extension here */
+               our state and move p to beinnging of the extension here */
             p += 4;
             if (p - data + len > data_len) {
                 syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);

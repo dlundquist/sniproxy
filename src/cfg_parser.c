@@ -61,7 +61,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                         return -1;
                     }
 
-                    /* Special case for wildcard grammers i.e. tables */
+                    /* Special case for wildcard grammars i.e. tables */
                     if (keyword->keyword == NULL && keyword->parse_arg) {
                         result = keyword->parse_arg(sub_context, buffer);
                         if (result <= 0)
@@ -119,7 +119,7 @@ find_keyword(const struct Keyword *grammar, const char *word) {
         grammar++;
     }
 
-    /* Special case for wildcard grammers i.e. tables */
+    /* Special case for wildcard grammars i.e. tables */
     if (grammar->keyword == NULL && grammar->create)
         return grammar;
 

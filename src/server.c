@@ -74,7 +74,7 @@ run_server() {
                 perror("select");
                 return;
             }
-            /* We where inturrupted by a signal */
+            /* We where interrupted by a signal */
             if (sighup_received) {
                 sighup_received = 0;
                 reload_config(config);

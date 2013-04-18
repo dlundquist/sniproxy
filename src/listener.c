@@ -59,7 +59,7 @@ static size_t parse_address(struct sockaddr_storage*, const char*, int);
 
 /*
  * Prepares the fd_set as a set of all active file descriptors in all our
- * currently active connections and one additional file descriptior fd that
+ * currently active connections and one additional file descriptor fd that
  * can be used for a listening socket.
  * Returns the highest file descriptor in the set.
  */
@@ -87,7 +87,7 @@ init_listeners(struct Listener_head *listeners, const struct Table_head *tables)
 
     SLIST_FOREACH(iter, listeners, entries) {
         if (init_listener(iter, tables) <= 0) {
-            fprintf(stderr, "Failed to initalize listener: \n");
+            fprintf(stderr, "Failed to initialize listener: \n");
             print_listener_config(stderr, iter);
             return -1;
         }
@@ -362,7 +362,7 @@ parse_address(struct sockaddr_storage* saddr, const char* address, int port) {
         return sizeof(struct sockaddr_in);
     }
 
-    /* rezero addr incase inet_pton corrupted it while trying to parse IPv4 */
+    /* re-zero addr in case inet_pton corrupted it while trying to parse IPv4 */
     memset(addr.storage, 0, sizeof(struct sockaddr_storage));
     if (inet_pton(AF_INET6, address, &addr.sin6->sin6_addr) == 1) {
         addr.sin6->sin6_family = AF_INET6;

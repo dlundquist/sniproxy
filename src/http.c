@@ -37,7 +37,7 @@
 static const char http_503[] = "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
     "Content-Type: text/html\r\n"
     "Connection: close\r\n\r\n"
-    "Backend not avaliable";
+    "Backend not available";
 
 
 static int next_header(const char **, int *);
@@ -87,7 +87,7 @@ get_header(const char *header, const char *data, int data_len) {
             while (header_len < len && isblank(data[header_len]))
                 header_len++;
 
-            /* Check if we have enought room before copying */
+            /* Check if we have enough room before copying */
             if (len - header_len >= SERVER_NAME_LEN) {
                 /* too big */
                 return NULL;
