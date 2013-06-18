@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+include /usr/share/cdbs/1/rules/autoreconf.mk
+
+CDBS_BUILD_DEPENDS += , dh-autoreconf
+
+install/sniproxy::
+	install -D -m 644 sni_proxy.conf debian/sniproxy/etc/sni_proxy.conf
+
