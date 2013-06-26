@@ -151,7 +151,7 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
     if (strcmp(target_hostname, "*") == 0)
         target_hostname = req_hostname;
 
-    snprintf(portstr, 6, "%d", b->port);
+    snprintf(portstr, sizeof(portstr), "%d", b->port);
     syslog(LOG_DEBUG, "Connecting to %s:%s", target_hostname, portstr);
 
     memset(&hints, 0, sizeof(hints));

@@ -132,7 +132,7 @@ parse_tls_header(const char* data, int data_len) {
     }
 
     len = (unsigned char)*p << 8; /* Cipher Suites length high byte */
-    p ++;
+    p++;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
         return NULL;
@@ -202,15 +202,15 @@ parse_server_name_extension(const char* buf, int buf_len) {
 
     p += 2;
 
-    while(1) {
+    while (1) {
         if (p - buf >= buf_len) {
             syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
             return NULL;
         }
         name_type = *p;
-        p ++;
-        switch(name_type) {
-            case(0x00):
+        p++;
+        switch (name_type) {
+            case 0x00:
                 if (p - buf + 1 > buf_len) {
                     syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
                     return NULL;
@@ -225,7 +225,7 @@ parse_server_name_extension(const char* buf, int buf_len) {
                     syslog(LOG_DEBUG, "Server name is too long");
                     return NULL;
                 }
-                strncpy (server_name, p, name_len);
+                strncpy(server_name, p, name_len);
                 server_name[name_len] = '\0';
                 return server_name;
             default:

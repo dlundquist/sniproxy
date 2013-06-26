@@ -96,15 +96,15 @@ run_server() {
 
 static void
 sig_handler(int sig) {
-    switch(sig) {
-        case(SIGHUP):
+    switch (sig) {
+        case SIGHUP:
             sighup_received = 1;
             break;
-        case(SIGUSR1):
+        case SIGUSR1:
             sigusr1_received = 1;
             break;
-        case(SIGINT):
-        case(SIGTERM):
+        case SIGINT:
+        case SIGTERM:
             running = 0;
     }
     /* Reinstall signal handler */

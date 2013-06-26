@@ -38,7 +38,7 @@
 #include "connection.h"
 
 #ifndef MAX
-#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
 /* Linux may not include _SAFE macros */
@@ -121,8 +121,8 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
     struct Connection *iter;
 
     LIST_FOREACH(iter, &connections, entries) {
-        switch(iter->state) {
-            case(CONNECTED):
+        switch (iter->state) {
+            case CONNECTED:
                 if (buffer_room(iter->server.buffer))
                     FD_SET(iter->server.sockfd, rfds);
 
@@ -131,7 +131,7 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 
                 max = MAX(max, iter->server.sockfd);
                 /* Fall through */
-            case(ACCEPTED):
+            case ACCEPTED:
                 if (buffer_room(iter->client.buffer))
                     FD_SET(iter->client.sockfd, rfds);
 
@@ -140,19 +140,19 @@ fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
 
                 max = MAX(max, iter->client.sockfd);
                 break;
-            case(SERVER_CLOSED):
+            case SERVER_CLOSED:
                 /* we need to handle this connection even if we have no data
                    to write so we can close the connection */
                 FD_SET(iter->client.sockfd, wfds);
 
                 max = MAX(max, iter->client.sockfd);
                 break;
-            case(CLIENT_CLOSED):
+            case CLIENT_CLOSED:
                 FD_SET(iter->server.sockfd, wfds);
 
                 max = MAX(max, iter->server.sockfd);
                 break;
-            case(CLOSED):
+            case CLOSED:
                 /* do nothing */
                 break;
             default:
@@ -170,8 +170,8 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
 
     LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
         err = 0;
-        switch(iter->state) {
-            case(CONNECTED):
+        switch (iter->state) {
+            case CONNECTED:
                 if (FD_ISSET(iter->server.sockfd, rfds) &&
                         buffer_room(iter->server.buffer))
                     err = handle_connection_server_rx(iter);
@@ -185,7 +185,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
 
                 err = 0;
                 /* Fall through */
-            case(ACCEPTED):
+            case ACCEPTED:
                 if (FD_ISSET(iter->client.sockfd, rfds) &&
                         buffer_room(iter->client.buffer))
                     err = handle_connection_client_rx(iter);
@@ -198,7 +198,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     close_client_connection(iter);
 
                 break;
-            case(SERVER_CLOSED):
+            case SERVER_CLOSED:
                 if (FD_ISSET(iter->client.sockfd, wfds) &&
                         buffer_len(iter->server.buffer))
                     err = handle_connection_client_tx(iter);
@@ -207,7 +207,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     close_client_connection(iter);
 
                 break;
-            case(CLIENT_CLOSED):
+            case CLIENT_CLOSED:
                 if (FD_ISSET(iter->server.sockfd, wfds) &&
                         buffer_len(iter->client.buffer))
                     err = handle_connection_server_tx(iter);
@@ -216,7 +216,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
                     close_server_connection(iter);
 
                 break;
-            case(CLOSED):
+            case CLOSED:
                 LIST_REMOVE(iter, entries);
                 free_connection(iter);
                 break;
@@ -264,7 +264,7 @@ print_connection(FILE *file, const struct Connection *con) {
     int client_port = 0;
     int server_port = 0;
 
-    switch(con->state) {
+    switch (con->state) {
         case ACCEPTED:
             get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
             fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
@@ -386,7 +386,6 @@ handle_connection_client_hello(struct Connection *con) {
 
 static void
 close_connection(struct Connection *c) {
-
     if (c->state == CONNECTED || c->state == ACCEPTED || c->state == SERVER_CLOSED)
         close_client_connection(c);
 
@@ -397,7 +396,6 @@ close_connection(struct Connection *c) {
 /* Close client socket. Caller must ensure that it has not been closed before. */
 static void
 close_client_connection(struct Connection *c) {
-
     if (close(c->client.sockfd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
@@ -411,7 +409,6 @@ close_client_connection(struct Connection *c) {
 /* Close server socket. Caller must ensure that it has not been closed before. */
 static void
 close_server_connection(struct Connection *c) {
-
     if (close(c->server.sockfd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
@@ -426,7 +423,7 @@ static struct Connection *
 new_connection() {
     struct Connection *c;
 
-    c = calloc(1, sizeof (struct Connection));
+    c = calloc(1, sizeof(struct Connection));
     if (c == NULL)
         return NULL;
 
@@ -469,7 +466,7 @@ get_peer_address(int sockfd, char *address, size_t len, int *port) {
     addr_len = sizeof(addr);
     getpeername(sockfd, (struct sockaddr*)&addr, &addr_len);
 
-    switch(addr.ss_family) {
+    switch (addr.ss_family) {
         case AF_INET:
             inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, address, len);
             if (port)

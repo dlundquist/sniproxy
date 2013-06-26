@@ -39,7 +39,7 @@ int main() {
     unsigned int i;
     const char *hostname;
 
-    for(i = 0; i < sizeof(good) / sizeof(const char *); i++) {
+    for (i = 0; i < sizeof(good) / sizeof(const char *); i++) {
         hostname = parse_http_header(good[i], strlen(good[i]));
 
         assert(NULL != hostname);
@@ -47,7 +47,7 @@ int main() {
         assert(0 == strcmp("localhost", hostname));
     }
 
-    for(i = 0; i < sizeof(bad) / sizeof(const char *); i++)
+    for (i = 0; i < sizeof(bad) / sizeof(const char *); i++)
         hostname = parse_http_header(bad[i], strlen(bad[i]));
 
     return 0;

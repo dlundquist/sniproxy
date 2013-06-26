@@ -40,7 +40,7 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
     int token_len;
 
     while ((ch = getc(config)) != EOF) {
-        switch(ch) {
+        switch (ch) {
             case ' ':
                 /* fall through */
             case '\t':
@@ -94,10 +94,10 @@ next_word(FILE *file, char *buffer, int buffer_len) {
         if (escaped) {
             escaped = 0;
             buffer[len] = (char)ch;
-            len ++;
+            len++;
             continue;
         }
-        switch(ch) {
+        switch (ch) {
             case '\\':
                 escaped = 1;
                 break;
@@ -119,13 +119,13 @@ next_word(FILE *file, char *buffer, int buffer_len) {
                     fseek(file, -1, SEEK_CUR);
 
                     buffer[len] = '\0';
-                    len ++;
+                    len++;
                     return len;
                 }
                 /* fall through */
             default:
                 buffer[len] = (char)ch;
-                len ++;
+                len++;
         }
     }
     /* We reached the end of the file, or filled our buffer */

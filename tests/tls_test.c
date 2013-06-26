@@ -64,7 +64,7 @@ int main() {
     unsigned int i;
     const char *hostname;
 
-    for(i = 0; i < sizeof(good) / sizeof(struct test_packet); i++) {
+    for (i = 0; i < sizeof(good) / sizeof(struct test_packet); i++) {
         hostname = parse_tls_header(good[i].packet, good[i].len);
 
         assert(NULL != hostname);
@@ -72,7 +72,7 @@ int main() {
         assert(0 == strcmp("localhost", hostname));
     }
 
-    for(i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
+    for (i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
         hostname = parse_tls_header(bad[i].packet, bad[i].len);
     }
 

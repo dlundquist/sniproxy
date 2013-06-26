@@ -113,7 +113,7 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
     iov[0].iov_len = sizeof(data_buf);
     msg.msg_iov = iov;
     msg.msg_iovlen = 1;
-    msg.msg_control = control_buf;;
+    msg.msg_control = control_buf;
     msg.msg_controllen = sizeof(control_buf);
 
     if (recvmsg(binder_sock, &msg, 0) < 0) {
@@ -202,7 +202,7 @@ static void run_binder(int sock_fd) {
 
         continue;
 
-error:
+        error:
         strncpy(buffer + strlen(buffer), strerror(errno), sizeof(buffer) - strlen(buffer));
 
         if (send(sock_fd, buffer, strlen(buffer), 0) < 0) {

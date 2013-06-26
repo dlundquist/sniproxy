@@ -92,7 +92,7 @@ get_header(const char *header, const char *data, int data_len) {
                 /* too big */
                 return NULL;
             }
-            strncpy (header_data, data + header_len, len - header_len);
+            strncpy(header_data, data + header_len, len - header_len);
 
             /* null terminate the header data */
             header_data[len - header_len] = '\0';
@@ -110,8 +110,8 @@ next_header(const char **data, int *len) {
     /* perhaps we can optimize this to reuse the value of header_len, rather than scanning twice */
     /* walk our data stream until the end of the header */
     while (*len > 2 && (*data)[0] != '\r' && (*data)[1] != '\n') {
-        (*len) --;
-        (*data) ++;
+        (*len)--;
+        (*data)++;
     }
 
     /* advanced past the <CR><LF> pair */

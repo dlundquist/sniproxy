@@ -48,7 +48,7 @@
 
 
 #ifndef MAX
-#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #endif
 
 
@@ -91,7 +91,7 @@ init_listeners(struct Listener_head *listeners, const struct Table_head *tables)
             print_listener_config(stderr, iter);
             return -1;
         }
-        count ++;
+        count++;
     }
 
     return count;
@@ -193,7 +193,7 @@ int valid_listener(const struct Listener *listener) {
 
     addr.storage = &listener->addr;
 
-    switch(addr.storage->ss_family) {
+    switch (addr.storage->ss_family) {
         case AF_UNIX:
             break;
         case AF_INET:
@@ -259,7 +259,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         return -4;
     }
 
-    switch(listener->protocol) {
+    switch (listener->protocol) {
         case TLS:
             listener->parse_packet = parse_tls_header;
             listener->close_client_socket = close_tls_socket;
@@ -284,8 +284,8 @@ close_listener(struct Listener * listener) {
 void
 free_listener(struct Listener *listener) {
     if (listener->table_name != NULL)
-        free (listener->table_name);
-    free (listener);
+        free(listener->table_name);
+    free(listener);
 }
 
 void
@@ -300,7 +300,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 
     addr.storage = &listener->addr;
 
-    switch(addr.storage->ss_family) {
+    switch (addr.storage->ss_family) {
         case AF_UNIX:
             fprintf(file, "listener unix:%s {\n", (char *)&addr.sun->sun_path);
             break;
