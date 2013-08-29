@@ -25,6 +25,12 @@ Usage
 Installation
 ------------
 
+**Prerequisites**
+
+    apt-get install autoconf make libpcre3-dev libtool
+    
+**Install**
+
     ./autogen.sh && ./configure && make install
 
 
