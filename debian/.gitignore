@@ -1,0 +1,13 @@
+autoreconf.after
+autoreconf.before
+files
+sniproxy.debhelper.log
+sniproxy.postinst.debhelper
+sniproxy.postrm.debhelper
+sniproxy.prerm.debhelper
+sniproxy.substvars
+sniproxy/
+stamp-autotools
+stamp-autotools-files
+stamp-makefile-build
+stamp-makefile-install
