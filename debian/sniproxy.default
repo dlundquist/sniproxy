@@ -1,0 +1,13 @@
+# Defaults for sniproxy initscript
+
+# This file has two functions:
+# 1) to completely disable starting sniproxy,
+# 2) to select an alternative config file
+#    by setting DAEMON_ARGS to -c <file>
+
+# Additional options that are passed to the Daemon.
+#DAEMON_ARGS="-c /etc/sni_proxy.conf"
+
+# Whether or not to run the sniproxy daemon; set to 0 to disable, 1 to enable.
+ENABLED=0
+
