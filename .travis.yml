@@ -3,5 +3,5 @@ compiler:
   - clang
   - gcc
 install: DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev; ./autogen.sh
-script: ./configure && make && make check && sudo make install && sudo make uinstall && dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
+script: ./configure && make && make check && sudo make install && sudo make uninstall && dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
 
