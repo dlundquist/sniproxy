@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include "binder.h"
 
-int test_binder(int);
+static int test_binder(int);
 
 int main() {
     int i;
@@ -21,7 +21,7 @@ int main() {
     return 0;
 }
 
-int
+static int
 test_binder(int port) {
     int fd;
     struct sockaddr_in addr;

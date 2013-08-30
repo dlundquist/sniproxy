@@ -15,13 +15,13 @@ struct Test {
     int len;
 };
 
-char config1[] = "# Comment\n"
+static char config1[] = "# Comment\n"
                  "numbers {\n"
                  "   one\n"
                  "   two\n"
                  "   three\n"
                  "}";
-struct Result results1[] = {
+static struct Result results1[] = {
     { EOL, NULL },
     { WORD, "numbers" },
     { OBRACE, NULL },
@@ -36,7 +36,7 @@ struct Result results1[] = {
     { END, NULL },
 };
 
-struct Test tests[] = {
+static struct Test tests[] = {
     { config1, results1, sizeof(results1) / sizeof(struct Result) },
     { NULL, NULL, 0 } /* End of tests */
 };

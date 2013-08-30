@@ -3,7 +3,7 @@
 #include <assert.h>
 #include "http.h"
 
-const char *good[] = {
+static const char *good[] = {
     "GET / HTTP/1.1\r\n"
         "User-Agent: curl/7.21.0 (x86_64-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\r\n"
         "Host: localhost\r\n"
@@ -15,7 +15,7 @@ const char *good[] = {
         "Accept: */*\r\n"
         "\r\n",
 };
-const char *bad[] = {
+static const char *bad[] = {
     "GET / HTTP/1.0\r\n"
         "\r\n",
     "",
