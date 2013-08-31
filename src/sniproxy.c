@@ -34,7 +34,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include "sni_proxy.h"
+#include "sniproxy.h"
 #include "server.h"
 
 
@@ -45,7 +45,7 @@ static void daemonize(const char *);
 int
 main(int argc, char **argv) {
     struct Config *config = NULL;
-    const char *config_file = "/etc/sni_proxy.conf";
+    const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
     int opt;
 
@@ -160,5 +160,5 @@ daemonize(const char *username) {
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sni_proxy [-c <config>] [-f]\n");
+    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f]\n");
 }

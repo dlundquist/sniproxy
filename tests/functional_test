@@ -9,7 +9,7 @@ use File::Temp;
 sub proxy {
     my $config = shift;
 
-    exec(@_, '../src/sni_proxy', '-f', '-c', $config);
+    exec(@_, '../src/sniproxy', '-f', '-c', $config);
 }
 
 sub worker($$$$) {
@@ -59,7 +59,7 @@ sub main {
 
     # For troubleshooting connections stuck in CLOSE_WAIT state
     #kill 10, $proxy_pid;
-    #system("netstat -ptn | grep $proxy_pid\/sni_proxy");
+    #system("netstat -ptn | grep $proxy_pid\/sniproxy");
 
     # For troubleshooting 100% CPU usage
     #system("top -n 1 -p $proxy_pid -b");

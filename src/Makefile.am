@@ -1,7 +1,7 @@
 
-sbin_PROGRAMS = sni_proxy
+sbin_PROGRAMS = sniproxy
 
-sni_proxy_SOURCES = sni_proxy.c \
+sniproxy_SOURCES = sniproxy.c \
 					config.c \
 					cfg_parser.c \
 					cfg_tokenizer.c \
@@ -14,4 +14,4 @@ sni_proxy_SOURCES = sni_proxy.c \
 					buffer.c \
 					tls.c \
 					http.c
-sni_proxy_LDADD = -lpcre
+sniproxy_LDADD = -lpcre

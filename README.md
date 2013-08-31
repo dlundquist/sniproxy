@@ -3,7 +3,7 @@ HTTPS SNI Proxy
 
 Proxies incoming HTTP and TLS connections based on the hostname contained in
 the initial request. This enables HTTPS name based virtual hosting to seperate
-backend servers without the installing the private key on the proxy machine. 
+backend servers without the installing the private key on the proxy machine.
 
 Features
 --------
@@ -17,8 +17,8 @@ Features
 Usage
 -----
 
-    Usage: sni_proxy [-c <config>] [-f]
-        -c  configruation file, defaults to /etc/sni_proxy.conf
+    Usage: sniproxy [-c <config>] [-f]
+        -c  configruation file, defaults to /etc/sniproxy.conf
         -f  run in foreground, do not drop privileges
 
 
