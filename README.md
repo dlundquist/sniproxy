@@ -1,5 +1,5 @@
-HTTPS SNI Proxy
-===============
+SNI Proxy
+=========
 
 Proxies incoming HTTP and TLS connections based on the hostname contained in
 the initial request. This enables HTTPS name based virtual hosting to seperate
@@ -27,11 +27,13 @@ Installation
 
 **Prerequisites**
 
-    apt-get install autoconf make libpcre3-dev libtool
++ Autotools (autoconf and automake)
++ libpcre development headers
++ Perl and cURL for test suite
     
 **Install**
 
-    ./autogen.sh && ./configure && make install
+    ./autogen.sh && ./configure && make check && sudo make install
 
 
 Configuration Syntax
