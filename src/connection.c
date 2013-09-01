@@ -373,6 +373,7 @@ handle_connection_client_hello(struct Connection *con) {
         return;
     } else if (parse_result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s:%d", peeripstr, peerport);
+        syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
         close_connection(con);
         return;
