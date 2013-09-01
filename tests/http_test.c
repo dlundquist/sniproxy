@@ -42,7 +42,7 @@ static const char *bad[] = {
 int main() {
     unsigned int i;
     int result;
-    const char *hostname;
+    char *hostname;
 
     for (i = 0; i < sizeof(good) / sizeof(const char *); i++) {
         hostname = NULL;
