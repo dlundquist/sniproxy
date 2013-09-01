@@ -40,31 +40,47 @@ static const char http_503[] = "HTTP/1.1 503 Service Temporarily Unavailable\r\n
     "Backend not available";
 
 
+static int get_header(const char *, const char *, int, char **);
 static int next_header(const char **, int *);
-static char *get_header(const char *, const char *, int);
 
 
-const char *
-parse_http_header(const char* data, int len) {
-    char *hostname;
-    int i;
+/*
+ * Parses a HTTP request for the Host: header
+ *
+ * Returns:
+ *  >=0  - length of the hostname and updates *hostname
+ *         caller is responsible for freeing *hostname
+ *  -1   - Incomplete request
+ *  -2   - No Host header included in this request
+ *  -3   - Invalid hostname pointer
+ *  -4   - malloc failure
+ *  < -4 - Invalid HTTP request
+ *
+ */
+int
+parse_http_header(const char* data, int data_len, char **hostname) {
+    int result, i;
 
-    hostname = get_header("Host:", data, len);
     if (hostname == NULL)
-        return hostname;
+        return -3;
+
+    result = get_header("Host:", data, data_len, hostname);
+    if (result < 0)
+        return result;
 
     /*
      *  if the user specifies the port in the request, it is included here.
      *  Host: example.com:80
      *  so we trim off port portion
      */
-    for (i = strlen(hostname); i > 0; i--)
-        if (hostname[i] == ':') {
-            hostname[i] = '\0';
+    for (i = result; i >= 0; i--)
+        if ((*hostname)[i] == ':') {
+            (*hostname)[i] = '\0';
+            result = i;
             break;
         }
 
-    return hostname;
+    return result;
 }
 
 void
@@ -73,9 +89,8 @@ close_http_socket(int sockfd) {
     close(sockfd);
 }
 
-static char *
-get_header(const char *header, const char *data, int data_len) {
-    static char header_data[SERVER_NAME_LEN];
+static int
+get_header(const char *header, const char *data, int data_len, char **value) {
     int len, header_len;
 
     header_len = strlen(header);
@@ -87,20 +102,16 @@ get_header(const char *header, const char *data, int data_len) {
             while (header_len < len && isblank(data[header_len]))
                 header_len++;
 
-            /* Check if we have enough room before copying */
-            if (len - header_len >= SERVER_NAME_LEN) {
-                /* too big */
-                return NULL;
-            }
-            strncpy(header_data, data + header_len, len - header_len);
+            *value = malloc(len - header_len + 1);
+            if (*value == NULL)
+                return -4;
 
-            /* null terminate the header data */
-            header_data[len - header_len] = '\0';
+            strncpy(*value, data + header_len, len - header_len);
 
-            return header_data;
+            return len - header_len;;
         }
 
-    return NULL;
+    return -2;
 }
 
 static int

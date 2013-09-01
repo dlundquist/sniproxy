@@ -187,9 +187,8 @@ static void run_binder(int sock_fd) {
         cmsg = CMSG_FIRSTHDR(&msg);
         cmsg->cmsg_level = SOL_SOCKET;
         cmsg->cmsg_type = SCM_RIGHTS;
-        cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+        cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
         fdptr = (int *)CMSG_DATA(cmsg);
-        *fdptr = fd;
         memcpy(fdptr, &fd, sizeof(fd));
         msg.msg_controllen = cmsg->cmsg_len;
 

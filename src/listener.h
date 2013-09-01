@@ -44,7 +44,7 @@ struct Listener {
 
     /* Runtime fields */
     int sockfd;
-    const char *(*parse_packet)(const char *, int);
+    int (*parse_packet)(const char*, int, char **);
     void (*close_client_socket)(int);
     struct Table *table;
     SLIST_ENTRY(Listener) entries;

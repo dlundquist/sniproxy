@@ -47,7 +47,7 @@ static const char tls_alert[] = {
 };
 
 
-static const char *parse_server_name_extension(const char *, int);
+static int parse_server_name_extension(const char *, int, char **);
 
 
 /* Send a TLS handshake failure alert and close a socket */
@@ -58,9 +58,19 @@ close_tls_socket(int sockfd) {
 }
 
 /* Parse a TLS packet for the Server Name Indication extension in the client hello
- * handshake, returning the first servername found (pointer to static array) */
-const char *
-parse_tls_header(const char* data, int data_len) {
+ * handshake, returning the first servername found (pointer to static array)
+ *
+ * Returns:
+ *  >=0  - length of the hostname and updates *hostname
+ *         caller is responsible for freeing *hostname
+ *  -1   - Incomplete request
+ *  -2   - No Host header included in this request
+ *  -3   - Invalid hostname pointer
+ *  -4   - malloc failure
+ *  < -4 - Invalid TLS client hello
+ */
+int
+parse_tls_header(const char* data, int data_len, char **hostname) {
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;
@@ -68,32 +78,35 @@ parse_tls_header(const char* data, int data_len) {
     const char* p = data;
     int len;
 
+    if (hostname == NULL)
+        return -3;
+
     /* Check that our TCP payload is at least large enough for a TLS header */
     if (data_len < TLS_HEADER_LEN)
-        return NULL;
+        return -1;
 
     tls_content_type = p[0];
     if (tls_content_type != TLS_HANDSHAKE_CONTENT_TYPE) {
         syslog(LOG_DEBUG, "Did not receive TLS handshake");
-        return NULL;
+        return -5;
     }
 
     tls_version_major = p[1];
     tls_version_minor = p[2];
     if (tls_version_major < 3) {
         syslog(LOG_DEBUG, "Receved pre SSL 3.0 handshake");
-        return NULL;
+        return -5;
     }
 
     if (tls_version_major == 3 && tls_version_minor < 1) {
         syslog(LOG_DEBUG, "Receved SSL 3.0 handshake");
-        return NULL;
+        return -6;
     }
 
     tls_length = ((unsigned char)p[3] << 8) + (unsigned char)p[4];
     if (data_len < tls_length + TLS_HEADER_LEN) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
 
 
@@ -103,12 +116,12 @@ parse_tls_header(const char* data, int data_len) {
 
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
 
     if (*p != TLS_HANDSHAKE_TYPE_CLIENT_HELLO) {
         syslog(LOG_DEBUG, "Not a client hello");
-        return NULL;
+        return -5;
     }
 
     /* Skip past:
@@ -121,21 +134,21 @@ parse_tls_header(const char* data, int data_len) {
     p += 38;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
 
     len = (unsigned char)*p; /* Session ID Length */
     p += 1 + len; /* Skip session ID block */
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
 
     len = (unsigned char)*p << 8; /* Cipher Suites length high byte */
     p++;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
     len += (unsigned char)*p; /* Cipher Suites length low byte */
 
@@ -143,7 +156,7 @@ parse_tls_header(const char* data, int data_len) {
 
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
     len = (unsigned char)*p; /* Compression Methods length */
 
@@ -152,7 +165,7 @@ parse_tls_header(const char* data, int data_len) {
 
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "No extensions present in TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -2;
     }
 
 
@@ -160,7 +173,7 @@ parse_tls_header(const char* data, int data_len) {
     p++;
     if (p - data >= data_len) {
         syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-        return NULL;
+        return -1;
     }
     len += (unsigned char)*p; /* Extensions length low byte */
     p++;
@@ -168,7 +181,7 @@ parse_tls_header(const char* data, int data_len) {
     while (1) {
         if (p - data + 4 >= data_len) { /* 4 bytes for the extension header */
             syslog(LOG_DEBUG, "No more TLS handshake extensions: %d", __LINE__);
-            return NULL;
+            return -1;
         }
 
         /* Parse our extension header */
@@ -179,25 +192,24 @@ parse_tls_header(const char* data, int data_len) {
             p += 4;
             if (p - data + len > data_len) {
                 syslog(LOG_DEBUG, "Did not receive complete TLS handshake header: %d", __LINE__);
-                return NULL;
+                return -1;
             }
-            return parse_server_name_extension(p, len);
+            return parse_server_name_extension(p, len, hostname);
         }
         p += 4 + len; /* Advance to the next extension header */
     }
-    return NULL;
+    return -2;
 }
 
-static const char *
-parse_server_name_extension(const char* buf, int buf_len) {
-    static char server_name[SERVER_NAME_LEN];
+static int
+parse_server_name_extension(const char* buf, int buf_len, char **server_name) {
     const char* p = buf;
     char name_type;
     int name_len;
 
     if (p - buf + 1 > buf_len) {
         syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
-        return NULL;
+        return -1;
     }
 
     p += 2;
@@ -205,7 +217,7 @@ parse_server_name_extension(const char* buf, int buf_len) {
     while (1) {
         if (p - buf >= buf_len) {
             syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
-            return NULL;
+            return -1;
         }
         name_type = *p;
         p++;
@@ -213,21 +225,22 @@ parse_server_name_extension(const char* buf, int buf_len) {
             case 0x00:
                 if (p - buf + 1 > buf_len) {
                     syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
-                    return NULL;
+                    return -1;
                 }
                 name_len = ((unsigned char)p[0] << 8) + (unsigned char)p[1];
                 p += 2;
                 if (p - buf + name_len > buf_len) {
                     syslog(LOG_DEBUG, "Incomplete server name extension: %d", __LINE__);
-                    return NULL;
+                    return -1;
                 }
-                if (name_len >= SERVER_NAME_LEN - 1) {
-                    syslog(LOG_DEBUG, "Server name is too long");
-                    return NULL;
+                *server_name = malloc(name_len + 1);
+                if (*server_name == NULL) {
+                    syslog(LOG_ERR, "malloc() failure");
+                    return -4;
                 }
-                strncpy(server_name, p, name_len);
+                strncpy(*server_name, p, name_len);
                 server_name[name_len] = '\0';
-                return server_name;
+                return name_len;;
             default:
                 syslog(LOG_DEBUG, "Unknown name type in server name extension");
         }

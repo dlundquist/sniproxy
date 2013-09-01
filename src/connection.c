@@ -355,32 +355,47 @@ static void
 handle_connection_client_hello(struct Connection *con) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len;
-    const char *hostname;
+    char *hostname = NULL;
+    int parse_result;
     char peeripstr[INET6_ADDRSTRLEN];
     int peerport = 0;
 
     get_peer_address(con->client.sockfd, peeripstr, sizeof(peeripstr), &peerport);
 
-    len  = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
-    hostname = con->listener->parse_packet(buffer, len);
-    if (hostname == NULL) {
+    len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
+
+    parse_result = con->listener->parse_packet(buffer, len, &hostname);
+    if (parse_result == -1) {
+        return;  /* incomplete request: try again */
+    } else if (parse_result == -2) {
         syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
-    } else {
-        syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
+        close_connection(con);
+        return;
+    } else if (parse_result < -2) {
+        syslog(LOG_INFO, "Unable to parse request from %s:%d", peeripstr, peerport);
+        syslog(LOG_DEBUG, "parse() returned %d", parse_result);
+        /* TODO optionally dump request to file */
+        close_connection(con);
+        return;
     }
+
+    syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
 
     /* lookup server for hostname and connect */
     con->server.sockfd = lookup_server_socket(con->listener, hostname);
     if (con->server.sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
         close_connection(con);
+        free(hostname);
         return;
     } else if (con->server.sockfd > (int)FD_SETSIZE) {
         syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing server connection\n");
         close_server_connection(con);   /* must close explicitly as state is not yet CONNECTED */
         close_connection(con);
+        free(hostname);
         return;
     }
+    free(hostname);
     con->state = CONNECTED;
 }
 
