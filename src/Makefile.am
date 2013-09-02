@@ -1,17 +1,30 @@
 
-sbin_PROGRAMS = sni_proxy
+sbin_PROGRAMS = sniproxy
 
-sni_proxy_SOURCES = sni_proxy.c \
-					config.c \
-					cfg_parser.c \
-					cfg_tokenizer.c \
-					util.c \
-					server.c \
-					listener.c \
-					table.c \
-					backend.c \
-					connection.c \
-					buffer.c \
-					tls.c \
-					http.c
-sni_proxy_LDADD = -lpcre
+sniproxy_SOURCES = backend.c \
+                   backend.h \
+                   buffer.c \
+                   buffer.h \
+                   cfg_parser.c \
+                   cfg_parser.h \
+                   cfg_tokenizer.c \
+                   cfg_tokenizer.h \
+                   config.c \
+                   config.h \
+                   connection.c \
+                   connection.h \
+                   http.c \
+                   http.h \
+                   listener.c \
+                   listener.h \
+                   server.c \
+                   server.h \
+                   sniproxy.c \
+                   sniproxy.h \
+                   table.c \
+                   table.h \
+                   tls.c \
+                   tls.h \
+                   util.c \
+                   util.h
+sniproxy_LDADD = -lpcre
