@@ -30,7 +30,7 @@
 
 void
 hexdump(const void *ptr, int buflen) {
-    const unsigned char *buf = (const unsigned char*)ptr;
+    const unsigned char *buf = (const unsigned char *)ptr;
     int i, j;
     for (i = 0; i < buflen; i += 16) {
         printf("%06x: ", i);
@@ -48,11 +48,16 @@ hexdump(const void *ptr, int buflen) {
 }
 
 int
-isnumeric(const char * s) {
+isnumeric(const char *s) {
+    char *p;
+    int n;
+
     if (s == NULL || *s == '\0')
         return 0;
-    char * p;
-    strtod(s, &p);
-    return *p == '\0';
+
+    n = strtod(s, &p);
+
+    return n ^ n || /* to supress unused return value of strtod() */
+        *p == '\0'; /* to check entire string was numeric */
 }
 

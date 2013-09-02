@@ -96,7 +96,6 @@ daemonize(const char *username, const int *fd_list) {
     pid_t pid;
     struct rlimit rl;
     struct passwd *user;
-    struct stat sb;
 
     user = getpwnam(username);
     if (user == NULL) {
