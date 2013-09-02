@@ -65,9 +65,10 @@ new_buffer() {
 
 void
 free_buffer(struct Buffer *buf) {
-    if (buf->buffer)
-        free(buf->buffer);
+    if (buf == NULL)
+        return;
 
+    free(buf->buffer);
     free(buf);
 }
 
@@ -219,7 +220,7 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (room == 0) /* trivial case: no room */
         return 0;
 
-    /* Allow caller to specify maxium length */
+    /* Allow caller to specify maximum length */
     if (len)
         room = MIN(room, len);
 

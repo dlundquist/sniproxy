@@ -152,8 +152,12 @@ void
 free_table(struct Table *table) {
     struct Backend *iter;
 
+    if (table == NULL)
+        return;
+
     while ((iter = STAILQ_FIRST(&table->backends)) != NULL)
         remove_backend(&table->backends, iter);
+
     free(table->name);
     free(table);
 }

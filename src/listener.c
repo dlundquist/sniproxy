@@ -43,9 +43,6 @@
 #include "tls.h"
 #include "http.h"
 
-#define BACKLOG 5
-#define UNIX_PATH_MAX 104
-
 
 #ifndef MAX
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
@@ -80,21 +77,41 @@ fd_set_listeners(const struct Listener_head *listeners, fd_set *fds, int max) {
     return max;
 }
 
-int
+/*
+ * Initialize each listener.
+ * Returns an integer pointer to an array of file discriptors allocated
+ * terminated by the value -1 or NULL in the case of an error.
+ */
+int *
 init_listeners(struct Listener_head *listeners, const struct Table_head *tables) {
     struct Listener *iter;
-    int count = 0;
+    int i = 1; /* include one for terminating -1 */
+    int *fd_list = NULL;
 
-    SLIST_FOREACH(iter, listeners, entries) {
-        if (init_listener(iter, tables) <= 0) {
-            fprintf(stderr, "Failed to initialize listener: \n");
-            print_listener_config(stderr, iter);
-            return -1;
-        }
-        count++;
+    SLIST_FOREACH(iter, listeners, entries)
+        i++;
+
+    fd_list = malloc(sizeof(int) * i);
+    if (fd_list == NULL) {
+        fprintf(stderr, "Failed to malloc\n");
+        return NULL;
     }
 
-    return count;
+    i = 0;
+
+    SLIST_FOREACH(iter, listeners, entries) {
+        fd_list[i] = init_listener(iter, tables);
+        if (fd_list[i] < 0) {
+            fprintf(stderr, "Failed to initialize listener #%d -- returned %d: \n", i, fd_list[i]);
+            free(fd_list);
+            print_listener_config(stderr, iter);
+            return NULL;
+        }
+        i++;
+    }
+    fd_list[i] = -1; /* sentinal value to mark end of list (0 is valid fd) */
+
+    return fd_list;
 }
 
 void
@@ -253,7 +270,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         return -3;
     }
 
-    if (listen(listener->sockfd, BACKLOG) < 0) {
+    if (listen(listener->sockfd, SOMAXCONN) < 0) {
         syslog(LOG_CRIT, "listen failed");
         close(listener->sockfd);
         return -4;
@@ -283,8 +300,10 @@ close_listener(struct Listener * listener) {
 
 void
 free_listener(struct Listener *listener) {
-    if (listener->table_name != NULL)
-        free(listener->table_name);
+    if (listener == NULL)
+        return;
+
+    free(listener->table_name);
     free(listener);
 }
 
@@ -373,7 +392,7 @@ parse_address(struct sockaddr_storage* saddr, const char* address, int port) {
     memset(addr.storage, 0, sizeof(struct sockaddr_storage));
     if (strncmp("unix:", address, 5) == 0) {
         addr.sun->sun_family = AF_UNIX;
-        strncpy(addr.sun->sun_path, address + 5, UNIX_PATH_MAX);
+        strncpy(addr.sun->sun_path, address + 5, sizeof(addr.sun->sun_path));
         return offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun->sun_path);
     }
 

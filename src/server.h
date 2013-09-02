@@ -28,7 +28,7 @@
 
 #include "config.h"
 
-int init_server(struct Config *);
+int *init_server(struct Config *);
 void run_server();
 
 #endif

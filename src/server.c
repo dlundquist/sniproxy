@@ -38,7 +38,7 @@ static volatile int sighup_received; /* For signal handler */
 static volatile int sigusr1_received; /* For signal handler */
 static struct Config *config;
 
-int
+int *
 init_server(struct Config *c) {
     config = c;
 

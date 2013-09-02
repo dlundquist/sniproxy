@@ -39,7 +39,7 @@
 
 
 static void usage();
-static void daemonize(const char *);
+static void daemonize(const char *, const int *);
 
 
 int
@@ -48,6 +48,7 @@ main(int argc, char **argv) {
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
     int opt;
+    int *fd_list;
 
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
@@ -70,14 +71,18 @@ main(int argc, char **argv) {
         return 1;
     }
 
-    init_server(config);
+    fd_list = init_server(config);
+    if (fd_list == NULL)
+        return 2;
 
     if (background_flag)
-        daemonize(config->user ? config->user : DEFAULT_USERNAME);
+        daemonize(config->user ? config->user : DEFAULT_USERNAME, fd_list);
 
     openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
 
     run_server();
+
+    free(fd_list);
 
     free_config(config);
 
@@ -85,8 +90,9 @@ main(int argc, char **argv) {
 }
 
 static void
-daemonize(const char *username) {
-    int i, fd0, fd1, fd2;
+daemonize(const char *username, const int *fd_list) {
+    int fd0, fd1, fd2;
+    int i, j, close_fd;;
     pid_t pid;
     struct rlimit rl;
     struct passwd *user;
@@ -122,12 +128,19 @@ daemonize(const char *username) {
         exit(1);
     }
 
-    /* close all non socket file descriptors */
+    /* close all file descriptors other than listeners */
     for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--) {
-        if (fstat(i, &sb) == -1 || S_ISSOCK(sb.st_mode))
-            continue;
+        close_fd = 1;
 
-        close(i);
+        for (j = 0; fd_list[j] != -1; j++) {
+            if (i == fd_list[j]) {
+                close_fd = 0;
+                break;
+            }
+        }
+
+        if (close_fd)
+            close(i);
     }
 
     fd0 = open("/dev/null", O_RDWR);

@@ -461,14 +461,13 @@ new_connection() {
 
 static void
 free_connection(struct Connection *c) {
+    if (c == NULL)
+        return;
+
     close_connection(c);
 
-    if (c->client.buffer)
-        free_buffer(c->client.buffer);
-
-    if (c->server.buffer)
-        free_buffer(c->server.buffer);
-
+    free_buffer(c->client.buffer);
+    free_buffer(c->server.buffer);
     free(c);
 }
 

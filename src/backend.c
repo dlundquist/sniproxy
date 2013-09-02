@@ -131,10 +131,11 @@ remove_backend(struct Backend_head *head, struct Backend *backend) {
 
 static void
 free_backend(struct Backend *backend) {
-    if (backend->hostname != NULL)
-        free(backend->hostname);
-    if (backend->address != NULL)
-        free(backend->address);
+    if (backend == NULL)
+        return;
+
+    free(backend->hostname);
+    free(backend->address);
     if (backend->hostname_re != NULL)
         pcre_free(backend->hostname_re);
     free(backend);
