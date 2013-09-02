@@ -73,7 +73,7 @@ parse_http_header(const char* data, int data_len, char **hostname) {
      *  Host: example.com:80
      *  so we trim off port portion
      */
-    for (i = result; i >= 0; i--)
+    for (i = result - 1; i >= 0; i--)
         if ((*hostname)[i] == ':') {
             (*hostname)[i] = '\0';
             result = i;
@@ -107,8 +107,9 @@ get_header(const char *header, const char *data, int data_len, char **value) {
                 return -4;
 
             strncpy(*value, data + header_len, len - header_len);
+            (*value)[len - header_len] = '\0';
 
-            return len - header_len;;
+            return len - header_len;
         }
 
     return -2;
