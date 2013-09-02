@@ -2,6 +2,12 @@ language: c
 compiler:
   - clang
   - gcc
-install: DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf; ./autogen.sh
-script: ./configure && make && make check && sudo make install && sudo make uninstall && dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
+install:
+  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf valgrind
+  - ./autogen.sh
+script:
+  - ./configure && make && make check
+  - sudo make install && sudo make uninstall
+  - bash -c "cd tests && ./functional_test valgrind"
+  - dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
 
