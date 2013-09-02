@@ -14,3 +14,4 @@ Makefile.in
 config.status
 config.log
 INSTALL
+sniproxy-*.tar.gz

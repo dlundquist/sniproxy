@@ -3,7 +3,7 @@
 int main() {
     struct Config *config;
 
-    config = init_config("../sni_proxy.conf");
+    config = init_config("../sniproxy.conf");
     if (config == NULL) {
         fprintf(stderr, "Failed to parse config\n");
         return 1;

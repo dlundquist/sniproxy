@@ -16,7 +16,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="HTTPS SNI proxy"     # Introduce a short description here
 NAME=sniproxy              # Introduce the short server's name here
-DAEMON=/usr/sbin/sni_proxy # Introduce the server's location here
+DAEMON=/usr/sbin/sniproxy  # Introduce the server's location here
 DAEMON_ARGS=""             # Arguments to run the daemon with
 SCRIPTNAME=/etc/init.d/$NAME
 ENABLED=1

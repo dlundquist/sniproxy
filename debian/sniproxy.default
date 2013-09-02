@@ -6,7 +6,7 @@
 #    by setting DAEMON_ARGS to -c <file>
 
 # Additional options that are passed to the Daemon.
-#DAEMON_ARGS="-c /etc/sni_proxy.conf"
+#DAEMON_ARGS="-c /etc/sniproxy.conf"
 
 # Whether or not to run the sniproxy daemon; set to 0 to disable, 1 to enable.
 ENABLED=0

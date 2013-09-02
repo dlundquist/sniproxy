@@ -230,7 +230,7 @@ handle_connections(fd_set *rfds, fd_set *wfds) {
 void
 print_connections() {
     struct Connection *iter;
-    char filename[] = "/tmp/sni-proxy-connections-XXXXXX";
+    char filename[] = "/tmp/sniproxy-connections-XXXXXX";
     int fd;
     FILE *temp;
 
