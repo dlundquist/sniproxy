@@ -31,15 +31,11 @@
 #include <errno.h>
 #include <sys/queue.h>
 #include <sys/types.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ev.h>
 #include "connection.h"
-
-#ifndef MAX
-#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
-#endif
 
 /* Linux may not include _SAFE macros */
 #ifndef LIST_FOREACH_SAFE
@@ -54,14 +50,14 @@
 static LIST_HEAD(ConnectionHead, Connection) connections;
 
 
-static int handle_connection_client_rx(struct Connection *);
-static int handle_connection_server_rx(struct Connection *);
-static int handle_connection_client_tx(struct Connection *);
-static int handle_connection_server_tx(struct Connection *);
-static void handle_connection_client_hello(struct Connection *);
-static void close_connection(struct Connection *);
-static void close_client_connection(struct Connection *);
-static void close_server_connection(struct Connection *);
+static void client_rx_cb(struct ev_loop *, struct ev_io *, int);
+static void server_rx_cb(struct ev_loop *, struct ev_io *, int);
+static void client_tx_cb(struct ev_loop *, struct ev_io *, int);
+static void server_tx_cb(struct ev_loop *, struct ev_io *, int);
+static void handle_connection_client_hello(struct ev_loop *, struct Connection *);
+static void close_connection(struct ev_loop *, struct Connection *);
+static void close_client_connection(struct ev_loop *, struct Connection *);
+static void close_server_connection(struct ev_loop *, struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
@@ -74,155 +70,35 @@ init_connections() {
 }
 
 void
+add_connection(struct ev_loop *loop, int sockfd, struct Listener *listener) {
+    struct Connection *c;
+
+    c = new_connection();
+    if (c == NULL) {
+        syslog(LOG_CRIT, "new_connection failed");
+        close(sockfd);
+        return;
+    }
+
+    ev_io_init(&c->client.rx_watcher, client_rx_cb, sockfd, EV_READ);
+    ev_io_init(&c->client.tx_watcher, client_tx_cb, sockfd, EV_WRITE);
+    c->client.rx_watcher.data = c;
+    c->client.tx_watcher.data = c;
+    c->state = ACCEPTED;
+    c->listener = listener;
+
+    LIST_INSERT_HEAD(&connections, c, entries);
+
+    ev_io_start(loop, &c->client.rx_watcher);
+}
+
+void
 free_connections() {
     struct Connection *iter;
 
     while ((iter = LIST_FIRST(&connections)) != NULL) {
         LIST_REMOVE(iter, entries);
         free_connection(iter);
-    }
-}
-
-void
-accept_connection(struct Listener *listener) {
-    struct Connection *c;
-
-    c = new_connection();
-    if (c == NULL) {
-        syslog(LOG_CRIT, "new_connection failed");
-        return;
-    }
-
-    c->client.sockfd = accept(listener->sockfd, NULL, NULL);
-    if (c->client.sockfd < 0) {
-        syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
-        free_connection(c);
-        return;
-    } else if (c->client.sockfd > (int)FD_SETSIZE) {
-        syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing incoming connection\n");
-        close_client_connection(c);     /* must close explicitly as state is still NEW */
-        free_connection(c);
-        return;
-    }
-    c->state = ACCEPTED;
-    c->listener = listener;
-
-    LIST_INSERT_HEAD(&connections, c, entries);
-}
-
-/*
- * Prepares the fd_set as a set of all active file descriptors in all our
- * currently active connections and one additional file descriptor fd that
- * can be used for a listening socket.
- * Returns the highest file descriptor in the set.
- */
-int
-fd_set_connections(fd_set *rfds, fd_set *wfds, int max) {
-    struct Connection *iter;
-
-    LIST_FOREACH(iter, &connections, entries) {
-        switch (iter->state) {
-            case CONNECTED:
-                if (buffer_room(iter->server.buffer))
-                    FD_SET(iter->server.sockfd, rfds);
-
-                if (buffer_len(iter->client.buffer))
-                    FD_SET(iter->server.sockfd, wfds);
-
-                max = MAX(max, iter->server.sockfd);
-                /* Fall through */
-            case ACCEPTED:
-                if (buffer_room(iter->client.buffer))
-                    FD_SET(iter->client.sockfd, rfds);
-
-                if (buffer_len(iter->server.buffer))
-                    FD_SET(iter->client.sockfd, wfds);
-
-                max = MAX(max, iter->client.sockfd);
-                break;
-            case SERVER_CLOSED:
-                /* we need to handle this connection even if we have no data
-                   to write so we can close the connection */
-                FD_SET(iter->client.sockfd, wfds);
-
-                max = MAX(max, iter->client.sockfd);
-                break;
-            case CLIENT_CLOSED:
-                FD_SET(iter->server.sockfd, wfds);
-
-                max = MAX(max, iter->server.sockfd);
-                break;
-            case CLOSED:
-                /* do nothing */
-                break;
-            default:
-                syslog(LOG_WARNING, "Invalid state %d", iter->state);
-        }
-    }
-
-    return max;
-}
-
-void
-handle_connections(fd_set *rfds, fd_set *wfds) {
-    struct Connection *iter, *tmp;
-    int err;
-
-    LIST_FOREACH_SAFE(iter, &connections, entries, tmp) {
-        err = 0;
-        switch (iter->state) {
-            case CONNECTED:
-                if (FD_ISSET(iter->server.sockfd, rfds) &&
-                        buffer_room(iter->server.buffer))
-                    err = handle_connection_server_rx(iter);
-
-                if (!err && FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
-                    err = handle_connection_server_tx(iter);
-
-                if (err)
-                    close_server_connection(iter);
-
-                err = 0;
-                /* Fall through */
-            case ACCEPTED:
-                if (FD_ISSET(iter->client.sockfd, rfds) &&
-                        buffer_room(iter->client.buffer))
-                    err = handle_connection_client_rx(iter);
-
-                if (!err && FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
-                    err = handle_connection_client_tx(iter);
-
-                if (err)
-                    close_client_connection(iter);
-
-                break;
-            case SERVER_CLOSED:
-                if (FD_ISSET(iter->client.sockfd, wfds) &&
-                        buffer_len(iter->server.buffer))
-                    err = handle_connection_client_tx(iter);
-
-                if (err || buffer_len(iter->server.buffer) == 0)
-                    close_client_connection(iter);
-
-                break;
-            case CLIENT_CLOSED:
-                if (FD_ISSET(iter->server.sockfd, wfds) &&
-                        buffer_len(iter->client.buffer))
-                    err = handle_connection_server_tx(iter);
-
-                if (err || buffer_len(iter->client.buffer) == 0)
-                    close_server_connection(iter);
-
-                break;
-            case CLOSED:
-                LIST_REMOVE(iter, entries);
-                free_connection(iter);
-                break;
-            default:
-                syslog(LOG_WARNING, "Invalid state %d", iter->state);
-        }
     }
 }
 
@@ -266,24 +142,24 @@ print_connection(FILE *file, const struct Connection *con) {
 
     switch (con->state) {
         case ACCEPTED:
-            get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
+            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
             fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CONNECTED:
-            get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
-            get_peer_address(con->server.sockfd, server, sizeof(server), &server_port);
+            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
+            get_peer_address(con->server.rx_watcher.fd, server, sizeof(server), &server_port);
             fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size,
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
         case SERVER_CLOSED:
-            get_peer_address(con->client.sockfd, client, sizeof(client), &client_port);
+            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
             fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CLIENT_CLOSED:
-            get_peer_address(con->server.sockfd, server, sizeof(server), &server_port);
+            get_peer_address(con->server.rx_watcher.fd, server, sizeof(server), &server_port);
             fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
@@ -295,72 +171,143 @@ print_connection(FILE *file, const struct Connection *con) {
     }
 }
 
-static int
-handle_connection_server_rx(struct Connection *con) {
+
+static void
+client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Connection *con = (struct Connection *)w->data;
     int n;
 
-    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
+    n = buffer_recv(con->client.buffer, con->client.rx_watcher.fd, MSG_DONTWAIT);
     if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return 1;
-    } else if (n == 0) { /* Server closed socket */
-        return 1;
-    }
-    return 0;
-}
-
-static int
-handle_connection_client_rx(struct Connection *con) {
-    int n;
-
-    n = buffer_recv(con->client.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return 1;
+        return;
     } else if (n == 0) { /* Client closed socket */
-        return 1;
+        close_client_connection(loop, con);
+        return;
     }
 
-    if (con->state == ACCEPTED)
-        handle_connection_client_hello(con);
+    /* if we filled the client receive buffer, stop the watcher for a while */
+    if (buffer_room(con->client.buffer) == 0)
+        ev_io_stop(loop, w);
 
-    return 0;
-}
-
-static int
-handle_connection_client_tx(struct Connection *con) {
-    int n;
-
-    n = buffer_send(con->server.buffer, con->client.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return 1;
+    switch (con->state) {
+        case(ACCEPTED):
+            handle_connection_client_hello(loop, con);
+            break;
+        case(CONNECTED):
+            if (buffer_len(con->client.buffer))
+                ev_io_start(loop, &con->server.tx_watcher);
+            break;
+        default:
+            syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
+                    con->state, __func__);
     }
-    return 0;
-}
-
-static int
-handle_connection_server_tx(struct Connection *con) {
-    int n;
-
-    n = buffer_send(con->client.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
-        syslog(LOG_INFO, "send failed: %s", strerror(errno));
-        return 1;
-    }
-    return 0;
 }
 
 static void
-handle_connection_client_hello(struct Connection *con) {
+client_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Connection *con = (struct Connection *)w->data;
+    int n;
+
+    n = buffer_send(con->server.buffer, con->client.tx_watcher.fd, MSG_DONTWAIT);
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+        return;
+    }
+
+    /* if we emptied the server receive buffer, stop the watcher for a while */
+    if (buffer_len(con->server.buffer) == 0)
+        ev_io_stop(loop, w);
+
+    switch (con->state) {
+        case(CONNECTED):
+            if (buffer_room(con->server.buffer))
+                ev_io_start(loop, &con->server.rx_watcher);
+            break;
+        case(ACCEPTED):
+        case(SERVER_CLOSED):
+            if (buffer_len(con->server.buffer) == 0)
+                close_connection(loop, con);
+        default:
+            syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
+                    con->state, __func__);
+    }
+}
+
+static void
+server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Connection *con = (struct Connection *)w->data;
+    int n;
+
+    n = buffer_recv(con->server.buffer, con->server.rx_watcher.fd, MSG_DONTWAIT);
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+        return;
+    } else if (n == 0) { /* Server closed socket */
+        close_server_connection(loop, con);
+        return;
+    }
+
+    /* if we filled the server receive buffer, stop the watcher for a while */
+    if (buffer_room(con->server.buffer) == 0)
+        ev_io_stop(loop, w);
+
+    switch (con->state) {
+        case(CONNECTED):
+            if (buffer_len(con->server.buffer))
+                ev_io_start(loop, &con->client.tx_watcher);
+            break;
+        case(CLIENT_CLOSED):
+            ev_io_stop(loop, w);
+            break;
+        default:
+            syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
+                    con->state, __func__);
+    }
+}
+
+static void
+server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Connection *con = (struct Connection *)w->data;
+    int n;
+
+    n = buffer_send(con->client.buffer, con->server.rx_watcher.fd, MSG_DONTWAIT);
+    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+        syslog(LOG_INFO, "send failed: %s", strerror(errno));
+        return;
+    }
+
+    /* if we emptied the client receive buffer, stop the watcher for a while */
+    if (buffer_len(con->client.buffer) == 0)
+        ev_io_stop(loop, w);
+
+    switch (con->state) {
+        case(CONNECTED):
+            if (buffer_room(con->client.buffer))
+                ev_io_start(loop, &con->client.rx_watcher);
+            break;
+        case(CLIENT_CLOSED):
+            if (buffer_len(con->client.buffer) == 0)
+                close_connection(loop, con);
+            break;
+        default:
+            syslog(LOG_INFO, "unspected state %d in connection:%s()",
+                    con->state, __func__);
+    }
+}
+
+static void
+handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len;
     char *hostname = NULL;
     int parse_result;
     char peeripstr[INET6_ADDRSTRLEN];
     int peerport = 0;
+    int sockfd;
 
-    get_peer_address(con->client.sockfd, peeripstr, sizeof(peeripstr), &peerport);
+    // TODO we could retain this from accept()
+    get_peer_address(con->client.rx_watcher.fd, peeripstr, sizeof(peeripstr), &peerport);
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -369,49 +316,54 @@ handle_connection_client_hello(struct Connection *con) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
         syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
-        close_connection(con);
+        close_connection(loop, con);
         return;
     } else if (parse_result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s:%d", peeripstr, peerport);
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
-        close_connection(con);
+        close_connection(loop, con);
         return;
     }
 
     syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
 
     /* lookup server for hostname and connect */
-    con->server.sockfd = lookup_server_socket(con->listener, hostname);
-    if (con->server.sockfd < 0) {
+    sockfd = lookup_server_socket(con->listener, hostname);
+    if (sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
-        close_connection(con);
-        free(hostname);
-        return;
-    } else if (con->server.sockfd > (int)FD_SETSIZE) {
-        syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE, closing server connection\n");
-        close_server_connection(con);   /* must close explicitly as state is not yet CONNECTED */
-        close_connection(con);
+        close_connection(loop, con);
         free(hostname);
         return;
     }
     free(hostname);
+
+    ev_io_init(&con->server.rx_watcher, server_rx_cb, sockfd, EV_READ);
+    ev_io_init(&con->server.tx_watcher, server_tx_cb, sockfd, EV_WRITE);
+    con->server.rx_watcher.data = con;
+    con->server.tx_watcher.data = con;
     con->state = CONNECTED;
+
+    ev_io_start(loop, &con->server.rx_watcher);
+    ev_io_start(loop, &con->server.tx_watcher);
 }
 
 static void
-close_connection(struct Connection *c) {
+close_connection(struct ev_loop *loop, struct Connection *c) {
     if (c->state == CONNECTED || c->state == ACCEPTED || c->state == SERVER_CLOSED)
-        close_client_connection(c);
+        close_client_connection(loop, c);
 
     if (c->state == CONNECTED || c->state == CLIENT_CLOSED)
-        close_server_connection(c);
+        close_server_connection(loop, c);
 }
 
 /* Close client socket. Caller must ensure that it has not been closed before. */
 static void
-close_client_connection(struct Connection *c) {
-    if (close(c->client.sockfd) < 0)
+close_client_connection(struct ev_loop *loop, struct Connection *c) {
+    ev_io_stop(loop, &c->client.rx_watcher);
+    ev_io_stop(loop, &c->client.tx_watcher);
+
+    if (close(c->client.rx_watcher.fd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
@@ -423,8 +375,11 @@ close_client_connection(struct Connection *c) {
 
 /* Close server socket. Caller must ensure that it has not been closed before. */
 static void
-close_server_connection(struct Connection *c) {
-    if (close(c->server.sockfd) < 0)
+close_server_connection(struct ev_loop *loop, struct Connection *c) {
+    ev_io_stop(loop, &c->server.rx_watcher);
+    ev_io_stop(loop, &c->server.tx_watcher);
+
+    if (close(c->server.rx_watcher.fd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
@@ -463,8 +418,6 @@ static void
 free_connection(struct Connection *c) {
     if (c == NULL)
         return;
-
-    close_connection(c);
 
     free_buffer(c->client.buffer);
     free_buffer(c->server.buffer);

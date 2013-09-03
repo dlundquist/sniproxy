@@ -28,7 +28,7 @@ Installation
 **Prerequisites**
 
 + Autotools (autoconf and automake)
-+ libpcre development headers
++ libev and libpcre development headers
 + Perl and cURL for test suite
     
 **Install**

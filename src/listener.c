@@ -30,9 +30,9 @@
 #include <stddef.h> /* offsetof */
 #include <strings.h> /* strcasecmp() */
 #include <unistd.h>
+#include <errno.h>
 #include <syslog.h>
 #include <sys/queue.h>
-#include <sys/select.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -40,42 +40,15 @@
 #include <arpa/inet.h>
 #include "util.h"
 #include "listener.h"
+#include "connection.h"
 #include "tls.h"
 #include "http.h"
 
 
-#ifndef MAX
-#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
-#endif
-
-
-static void close_listener(struct Listener *);
+static void close_listener(struct ev_loop *, struct Listener *);
+static void accept_cb (struct ev_loop *, struct ev_io *, int );
 static size_t parse_address(struct sockaddr_storage*, const char*, int);
 
-
-
-/*
- * Prepares the fd_set as a set of all active file descriptors in all our
- * currently active connections and one additional file descriptor fd that
- * can be used for a listening socket.
- * Returns the highest file descriptor in the set.
- */
-int
-fd_set_listeners(const struct Listener_head *listeners, fd_set *fds, int max) {
-    struct Listener *iter;
-
-    SLIST_FOREACH(iter, listeners, entries) {
-        if (iter->sockfd > (int)FD_SETSIZE) {
-            syslog(LOG_WARNING, "File descriptor > than FD_SETSIZE\n");
-            break;
-        }
-
-        FD_SET(iter->sockfd, fds);
-        max = MAX(max, iter->sockfd);
-    }
-
-    return max;
-}
 
 /*
  * Initialize each listener.
@@ -112,16 +85,6 @@ init_listeners(struct Listener_head *listeners, const struct Table_head *tables)
     fd_list[i] = -1; /* sentinal value to mark end of list (0 is valid fd) */
 
     return fd_list;
-}
-
-void
-handle_listeners(const struct Listener_head *listeners, const fd_set *rfds, void (*accept_cb)(struct Listener *)) {
-    struct Listener *iter;
-
-    SLIST_FOREACH(iter, listeners, entries) {
-        if (FD_ISSET (iter->sockfd, rfds))
-            accept_cb(iter);
-    }
 }
 
 struct Listener *
@@ -196,7 +159,7 @@ add_listener(struct Listener_head *listeners, struct Listener *listener) {
 void
 remove_listener(struct Listener_head *listeners, struct Listener *listener) {
     SLIST_REMOVE(listeners, listener, Listener, entries);
-    close_listener(listener);
+    close_listener(EV_DEFAULT, listener);
     free_listener(listener);
 }
 
@@ -248,34 +211,38 @@ int valid_listener(const struct Listener *listener) {
 
 int
 init_listener(struct Listener *listener, const struct Table_head *tables) {
+    int sockfd;
+    int on = 1;
+
     listener->table = lookup_table(tables, listener->table_name);
     if (listener->table == NULL) {
         fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
         return -1;
     }
 
-    listener->sockfd = socket(listener->addr.ss_family, SOCK_STREAM, 0);
-    if (listener->sockfd < 0) {
+    sockfd = socket(listener->addr.ss_family, SOCK_STREAM, 0);
+    if (sockfd < 0) {
         syslog(LOG_CRIT, "socket failed");
         return -2;
     }
 
-    // set SO_REUSEADDR on server socket to facilitate restart
-    int reuseval = 1;
-    setsockopt(listener->sockfd, SOL_SOCKET, SO_REUSEADDR, &reuseval, sizeof(reuseval));
+    /* set SO_REUSEADDR on server socket to facilitate restart */
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    if (bind(listener->sockfd, (struct sockaddr *)&listener->addr, listener->addr_len) < 0) {
+    if (bind(sockfd, (struct sockaddr *)&listener->addr, listener->addr_len) < 0) {
         syslog(LOG_CRIT, "bind failed");
-        close(listener->sockfd);
+        close(sockfd);
         return -3;
     }
 
-    if (listen(listener->sockfd, SOMAXCONN) < 0) {
+    if (listen(sockfd, SOMAXCONN) < 0) {
         syslog(LOG_CRIT, "listen failed");
-        close(listener->sockfd);
+        close(sockfd);
         return -4;
     }
 
+    ev_io_init(&listener->rx_watcher, accept_cb, sockfd, EV_READ);
+    listener->rx_watcher.data = listener;
     switch (listener->protocol) {
         case TLS:
             listener->parse_packet = parse_tls_header;
@@ -290,12 +257,15 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
             return -5;
     }
 
-    return listener->sockfd;
+    ev_io_start(EV_DEFAULT, &listener->rx_watcher);
+
+    return sockfd;
 }
 
 static void
-close_listener(struct Listener * listener) {
-    close(listener->sockfd);
+close_listener(struct ev_loop *loop, struct Listener * listener) {
+    ev_io_stop(loop, &listener->rx_watcher);
+    close(listener->rx_watcher.fd);
 }
 
 void
@@ -353,9 +323,25 @@ free_listeners(struct Listener_head *listeners) {
 
     while ((iter = SLIST_FIRST(listeners)) != NULL) {
         SLIST_REMOVE_HEAD(listeners, entries);
-        close_listener(iter);
+        close_listener(EV_DEFAULT, iter);
         free_listener(iter);
     }
+}
+
+static void
+accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Listener *listener = (struct Listener *)w->data;
+    int sockfd;
+
+    sockfd = accept(listener->rx_watcher.fd, NULL, NULL);
+    if (sockfd < 0) {
+        syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
+        return;
+    }
+
+    add_connection(loop, sockfd, listener);
+
+    return;
 }
 
 static size_t

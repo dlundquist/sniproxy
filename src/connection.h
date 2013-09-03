@@ -27,7 +27,7 @@
 #define CONNECTION_H
 
 #include <sys/queue.h>
-#include <sys/select.h>
+#include <ev.h>
 #include "listener.h"
 #include "buffer.h"
 
@@ -44,7 +44,8 @@ struct Connection {
     } state;
 
     struct {
-        int sockfd;
+        struct ev_io rx_watcher;
+        struct ev_io tx_watcher;
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
@@ -53,9 +54,7 @@ struct Connection {
 };
 
 void init_connections();
-void accept_connection(struct Listener *);
-int fd_set_connections(fd_set *, fd_set *, int);
-void handle_connections(fd_set *, fd_set *);
+void add_connection(struct ev_loop *, int, struct Listener *);
 void free_connections();
 void print_connections();
 

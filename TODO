@@ -2,7 +2,6 @@
 * PID file
 * Improved table backend lookup, currently this is a linear search
 ** Considering breaking hostname appart at label bounderies and search backwards from TLD
-* Move from select() to libevent to support more than FD_SETSIZE / 2 connections
 * Non-blocking DNS resolution
 * Improve handling of unparsable TLS client hello messages
 ** Optionally dump client hello to file

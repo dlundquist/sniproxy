@@ -24,28 +24,34 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdio.h>
-#include <sys/select.h>
 #include <signal.h>
 #include <string.h> /* memset() */
 #include <errno.h>
+#include <ev.h>
 #include "server.h"
 #include "connection.h"
 
-static void sig_handler(int);
+static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
 
-static volatile int running; /* For signal handler */
-static volatile int sighup_received; /* For signal handler */
-static volatile int sigusr1_received; /* For signal handler */
 static struct Config *config;
+static struct ev_signal sighup_watcher;
+static struct ev_signal sigusr1_watcher;
+static struct ev_signal sigint_watcher;
+static struct ev_signal sigterm_watcher;
 
 int *
 init_server(struct Config *c) {
     config = c;
 
-    signal(SIGINT, sig_handler);
-    signal(SIGTERM, sig_handler);
-    signal(SIGHUP, sig_handler);
-    signal(SIGUSR1, sig_handler);
+    ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
+    ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);
+    ev_signal_init(&sigint_watcher, signal_cb, SIGINT);
+    ev_signal_init(&sigterm_watcher, signal_cb, SIGTERM);
+    ev_signal_start(EV_DEFAULT, &sighup_watcher);
+    ev_signal_start(EV_DEFAULT, &sigusr1_watcher);
+    ev_signal_start(EV_DEFAULT, &sigint_watcher);
+    ev_signal_start(EV_DEFAULT, &sigterm_watcher);
+
     /* ignore SIGPIPE, or it will kill us */
     signal(SIGPIPE, SIG_IGN);
 
@@ -56,57 +62,23 @@ init_server(struct Config *c) {
 
 void
 run_server() {
-    int maxfd;
-    fd_set rfds, wfds;
-
     init_connections();
-    running = 1;
 
-    while (running) {
-        FD_ZERO(&rfds);
-        FD_ZERO(&wfds);
-        maxfd = fd_set_listeners(&config->listeners, &rfds, 0);
-        maxfd = fd_set_connections(&rfds, &wfds, maxfd);
-
-        if (select(maxfd + 1, &rfds, &wfds, NULL, NULL) < 0) {
-            /* select() might have failed because we received a signal, so we need to check */
-            if (errno != EINTR) {
-                perror("select");
-                return;
-            }
-            /* We where interrupted by a signal */
-            if (sighup_received) {
-                sighup_received = 0;
-                reload_config(config);
-            }
-            if (sigusr1_received) {
-                sigusr1_received = 0;
-                print_connections();
-            }
-            continue; /* our file descriptor sets are undefined, so select again */
-        }
-
-        handle_listeners(&config->listeners, &rfds, accept_connection);
-
-        handle_connections(&rfds, &wfds);
-    }
+    ev_run(EV_DEFAULT, 0);
 
     free_connections();
 }
 
 static void
-sig_handler(int sig) {
-    switch (sig) {
+signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
+    switch (w->signum) {
         case SIGHUP:
-            sighup_received = 1;
             break;
         case SIGUSR1:
-            sigusr1_received = 1;
+            print_connections();
             break;
         case SIGINT:
         case SIGTERM:
-            running = 0;
+            ev_unloop (loop, EVUNLOOP_ALL);
     }
-    /* Reinstall signal handler */
-    signal(sig, sig_handler);
 }

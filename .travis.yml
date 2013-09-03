@@ -3,7 +3,7 @@ compiler:
   - clang
   - gcc
 install:
-  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf valgrind
+  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libev-dev libpcre3-dev cdbs dh-autoreconf valgrind
   - ./autogen.sh
 script:
   - ./configure && make && make check
