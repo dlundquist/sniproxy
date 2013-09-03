@@ -8,6 +8,6 @@ install:
 script:
   - ./configure && make && make check
   - sudo make install && sudo make uninstall
-  - bash -c "cd tests && ./functional_test valgrind"
+  - bash -c "cd tests && ./functional_test valgrind--error-exitcode=1"
   - dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
 
