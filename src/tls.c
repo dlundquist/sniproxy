@@ -218,7 +218,7 @@ parse_server_name_extension(const char *data, size_t data_len, char **hostname) 
 
                 strncpy(*hostname, data + pos + 3, len);
 
-                hostname[len] = '\0';
+                (*hostname)[len] = '\0';
 
                 return len;
             default:
