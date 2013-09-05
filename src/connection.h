@@ -44,6 +44,8 @@ struct Connection {
     } state;
 
     struct {
+        struct sockaddr_storage addr;
+        socklen_t addr_len;
         int sockfd;
         struct Buffer *buffer;
     } client, server;

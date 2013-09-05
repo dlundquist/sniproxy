@@ -35,7 +35,7 @@ SLIST_HEAD(Listener_head, Listener);
 struct Listener {
     /* Configuration fields */
     struct sockaddr_storage addr;
-    size_t addr_len;
+    socklen_t addr_len;
     enum Protocol {
         TLS,
         HTTP
