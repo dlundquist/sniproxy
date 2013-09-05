@@ -28,6 +28,7 @@
  * This was created based primarily on Wireshark dissection of a TLS handshake and RFC4366.
  */
 #include <stdio.h>
+#include <stdlib.h> /* malloc() */
 #include <string.h> /* strncpy() */
 #include <unistd.h> /* close() */
 #include <sys/socket.h>
@@ -74,7 +75,7 @@ close_tls_socket(int sockfd) {
  *  < -4 - Invalid TLS client hello
  */
 int
-parse_tls_header(const char *data, int data_len, char **hostname) {
+parse_tls_header(const char *data, size_t data_len, char **hostname) {
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;

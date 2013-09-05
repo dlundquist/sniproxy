@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <stdlib.h> /* malloc() */
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
 #include <ctype.h> /* isblank() */
@@ -40,8 +41,8 @@ static const char http_503[] = "HTTP/1.1 503 Service Temporarily Unavailable\r\n
     "Backend not available";
 
 
-static int get_header(const char *, const char *, int, char **);
-static int next_header(const char **, int *);
+static int get_header(const char *, const char *, size_t, char **);
+static int next_header(const char **, size_t *);
 
 
 /*
@@ -58,7 +59,7 @@ static int next_header(const char **, int *);
  *
  */
 int
-parse_http_header(const char* data, int data_len, char **hostname) {
+parse_http_header(const char* data, size_t data_len, char **hostname) {
     int result, i;
 
     if (hostname == NULL)
@@ -90,7 +91,7 @@ close_http_socket(int sockfd) {
 }
 
 static int
-get_header(const char *header, const char *data, int data_len, char **value) {
+get_header(const char *header, const char *data, size_t data_len, char **value) {
     int len, header_len;
 
     header_len = strlen(header);
@@ -116,7 +117,7 @@ get_header(const char *header, const char *data, int data_len, char **value) {
 }
 
 static int
-next_header(const char **data, int *len) {
+next_header(const char **data, size_t *len) {
     int header_len;
 
     /* perhaps we can optimize this to reuse the value of header_len, rather than scanning twice */

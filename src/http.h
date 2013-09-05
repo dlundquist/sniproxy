@@ -26,7 +26,7 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-int parse_http_header(const char *, int, char **);
+int parse_http_header(const char *, size_t, char **);
 void close_http_socket(int);
 
 #endif
