@@ -38,22 +38,23 @@
 #include "connection.h"
 
 /* Linux may not include _SAFE macros */
-#ifndef LIST_FOREACH_SAFE
-#define LIST_FOREACH_SAFE(var, head, field, tvar)           \
-    for ((var) = LIST_FIRST((head));                \
-        (var) && ((tvar) = LIST_NEXT((var), field), 1);     \
+#ifndef TAILQ_FOREACH_SAFE
+#define TAILQ_FOREACH_SAFE(var, head, field, tvar)           \
+    for ((var) = TAILQ_FIRST((head));                \
+        (var) && ((tvar) = TAILQ_NEXT((var), field), 1);     \
         (var) = (tvar))
 #endif
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
 
-static LIST_HEAD(ConnectionHead, Connection) connections;
+static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
 
 static void client_rx_cb(struct ev_loop *, struct ev_io *, int);
 static void server_rx_cb(struct ev_loop *, struct ev_io *, int);
 static void client_tx_cb(struct ev_loop *, struct ev_io *, int);
 static void server_tx_cb(struct ev_loop *, struct ev_io *, int);
+static void move_to_head_of_queue(struct Connection *);
 static void handle_connection_client_hello(struct ev_loop *, struct Connection *);
 static void close_connection(struct ev_loop *, struct Connection *);
 static void close_client_connection(struct ev_loop *, struct Connection *);
@@ -66,7 +67,7 @@ static void get_peer_address(const struct sockaddr_storage *, char *, size_t, in
 
 void
 init_connections() {
-    LIST_INIT(&connections);
+    TAILQ_INIT(&connections);
 }
 
 void
@@ -87,7 +88,7 @@ add_connection(struct ev_loop *loop, int sockfd, struct Listener *listener) {
     c->state = ACCEPTED;
     c->listener = listener;
 
-    LIST_INSERT_HEAD(&connections, c, entries);
+    TAILQ_INSERT_HEAD(&connections, c, entries);
 
     ev_io_start(loop, &c->client.rx_watcher);
 }
@@ -96,8 +97,8 @@ void
 free_connections() {
     struct Connection *iter;
 
-    while ((iter = LIST_FIRST(&connections)) != NULL) {
-        LIST_REMOVE(iter, entries);
+    while ((iter = TAILQ_FIRST(&connections)) != NULL) {
+        TAILQ_REMOVE(&connections, iter, entries);
         free_connection(iter);
     }
 }
@@ -123,7 +124,7 @@ print_connections() {
     }
 
     fprintf(temp, "Running connections:\n");
-    LIST_FOREACH(iter, &connections, entries) {
+    TAILQ_FOREACH(iter, &connections, entries) {
         print_connection(temp, iter);
     }
 
@@ -202,6 +203,7 @@ client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
     }
+    move_to_head_of_queue(con);
 }
 
 static void
@@ -232,6 +234,7 @@ client_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
     }
+    move_to_head_of_queue(con);
 }
 
 static void
@@ -264,6 +267,7 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
     }
+    move_to_head_of_queue(con);
 }
 
 static void
@@ -294,6 +298,13 @@ server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             syslog(LOG_INFO, "unspected state %d in connection:%s()",
                     con->state, __func__);
     }
+    move_to_head_of_queue(con);
+}
+
+static void
+move_to_head_of_queue(struct Connection *con) {
+    TAILQ_REMOVE(&connections, con, entries);
+    TAILQ_INSERT_HEAD(&connections, con, entries);
 }
 
 static void
@@ -346,7 +357,9 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
      * passing this down from open_backend_socket() in lookup_server_socket()
      * would be cleaner
      */
-    getpeername(con->server.sockfd, &con->server.addr, &con->server.addr_len);
+    getpeername(con->server.rx_watcher.fd,
+                (struct sockaddr *)&con->server.addr,
+                &con->server.addr_len);
 
     con->state = CONNECTED;
 
@@ -430,7 +443,7 @@ free_connection(struct Connection *c) {
 
     free_buffer(c->client.buffer);
     free_buffer(c->server.buffer);
-    free(c->hostname);
+    free((void *)c->hostname);
     free(c);
 }
 

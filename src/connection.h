@@ -53,7 +53,7 @@ struct Connection {
     struct Listener * listener;
     const char *hostname; /* Requested hostname */
 
-    LIST_ENTRY(Connection) entries;
+    TAILQ_ENTRY(Connection) entries;
 };
 
 void init_connections();
