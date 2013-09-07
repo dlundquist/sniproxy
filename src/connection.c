@@ -61,7 +61,7 @@ static void close_server_connection(struct ev_loop *, struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
-static void get_peer_address(int, char *, size_t, int *);
+static void get_peer_address(const struct sockaddr_storage *, char *, size_t, int *);
 
 
 void
@@ -142,24 +142,24 @@ print_connection(FILE *file, const struct Connection *con) {
 
     switch (con->state) {
         case ACCEPTED:
-            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
+            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
             fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CONNECTED:
-            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
-            get_peer_address(con->server.rx_watcher.fd, server, sizeof(server), &server_port);
+            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
+            get_peer_address(&con->server.addr, server, sizeof(server), &server_port);
             fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size,
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
         case SERVER_CLOSED:
-            get_peer_address(con->client.rx_watcher.fd, client, sizeof(client), &client_port);
+            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
             fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
                 client, client_port, con->client.buffer->len, con->client.buffer->size);
             break;
         case CLIENT_CLOSED:
-            get_peer_address(con->server.rx_watcher.fd, server, sizeof(server), &server_port);
+            get_peer_address(&con->server.addr, server, sizeof(server), &server_port);
             fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
                 server, server_port, con->server.buffer->len, con->server.buffer->size);
             break;
@@ -306,8 +306,7 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     int peerport = 0;
     int sockfd;
 
-    // TODO we could retain this from accept()
-    get_peer_address(con->client.rx_watcher.fd, peeripstr, sizeof(peeripstr), &peerport);
+    get_peer_address(&con->client.addr, peeripstr, sizeof(peeripstr), &peerport);
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -336,12 +335,19 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
         free(hostname);
         return;
     }
-    free(hostname);
 
     ev_io_init(&con->server.rx_watcher, server_rx_cb, sockfd, EV_READ);
     ev_io_init(&con->server.tx_watcher, server_tx_cb, sockfd, EV_WRITE);
     con->server.rx_watcher.data = con;
     con->server.tx_watcher.data = con;
+    con->hostname = hostname;
+
+    /* record server socket address,
+     * passing this down from open_backend_socket() in lookup_server_socket()
+     * would be cleaner
+     */
+    getpeername(con->server.sockfd, &con->server.addr, &con->server.addr_len);
+
     con->state = CONNECTED;
 
     ev_io_start(loop, &con->server.rx_watcher);
@@ -398,6 +404,9 @@ new_connection() {
         return NULL;
 
     c->state = NEW;
+    c->client.addr_len = sizeof(c->client.addr);
+    c->server.addr_len = sizeof(c->server.addr);
+    c->hostname = NULL;
 
     c->client.buffer = new_buffer();
     if (c->client.buffer == NULL) {
@@ -421,28 +430,22 @@ free_connection(struct Connection *c) {
 
     free_buffer(c->client.buffer);
     free_buffer(c->server.buffer);
+    free(c->hostname);
     free(c);
 }
 
 static void
-get_peer_address(int sockfd, char *address, size_t len, int *port) {
-    struct sockaddr_storage addr;
-    socklen_t addr_len;
-
-    /* identify peer address */
-    addr_len = sizeof(addr);
-    getpeername(sockfd, (struct sockaddr*)&addr, &addr_len);
-
-    switch (addr.ss_family) {
+get_peer_address(const struct sockaddr_storage *addr, char *ip, size_t len, int *port) {
+    switch (addr->ss_family) {
         case AF_INET:
-            inet_ntop(AF_INET, &((struct sockaddr_in *)&addr)->sin_addr, address, len);
-            if (port)
-                *port = ntohs(((struct sockaddr_in *)&addr)->sin_port);
+            inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr, ip, len);
+            if (port != NULL)
+                *port = ntohs(((struct sockaddr_in *)addr)->sin_port);
             break;
         case AF_INET6:
-            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&addr)->sin6_addr, address, len);
-            if (port)
-                *port = ntohs(((struct sockaddr_in6 *)&addr)->sin6_port);
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)addr)->sin6_addr, ip, len);
+            if (port != NULL)
+                *port = ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
             break;
     }
 }

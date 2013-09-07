@@ -44,11 +44,14 @@ struct Connection {
     } state;
 
     struct {
+        struct sockaddr_storage addr;
+        socklen_t addr_len;
         struct ev_io rx_watcher;
         struct ev_io tx_watcher;
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
+    const char *hostname; /* Requested hostname */
 
     LIST_ENTRY(Connection) entries;
 };
