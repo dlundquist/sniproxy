@@ -397,7 +397,14 @@ handle_connection_client_hello(struct Connection *con) {
         free(hostname);
         return;
     }
-    free(hostname);
+    con->hostname = hostname;
+
+    /* record server socket address,
+     * passing this down from open_backend_socket() in lookup_server_socket()
+     * would be cleaner
+     */
+    getpeername(con->server.sockfd, &con->server.addr, &con->server.addr_len);
+
     con->state = CONNECTED;
 }
 
@@ -447,6 +454,7 @@ new_connection() {
     c->state = NEW;
     c->client.addr_len = sizeof(c->client.addr);
     c->server.addr_len = sizeof(c->server.addr);
+    c->hostname = NULL;
 
     c->client.buffer = new_buffer();
     if (c->client.buffer == NULL) {
@@ -472,6 +480,7 @@ free_connection(struct Connection *c) {
 
     free_buffer(c->client.buffer);
     free_buffer(c->server.buffer);
+    free(c->hostname);
     free(c);
 }
 

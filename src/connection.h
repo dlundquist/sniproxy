@@ -50,6 +50,7 @@ struct Connection {
         struct Buffer *buffer;
     } client, server;
     struct Listener * listener;
+    const char *hostname; /* Requested hostname */
 
     LIST_ENTRY(Connection) entries;
 };
