@@ -39,16 +39,18 @@ sub worker($$$$) {
 sub main {
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
+    my $workers = $ENV{WORKERS} || 10;
+    my $iterations = $ENV{ITERATIONS} || 10;
 
-    my $config = make_config($proxy_port, $httpd_port);
+    my $config = make_config($proxy_port, 80);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
     my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port);
 
     # Wait for proxy to load and parse config
     sleep 1;
 
-    for (my $i = 0; $i < 10; $i++) {
-        start_child('worker', \&worker, 'localhost', '', $proxy_port, 10);
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
     }
 
     # Wait for all our children to finish
