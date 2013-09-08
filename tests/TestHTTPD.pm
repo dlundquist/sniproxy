@@ -29,6 +29,8 @@ sub httpd {
                                        ReuseAddr => 1)
         or die $!;
 
+    $SIG{CHLD} = 'IGNORE';
+
     while(my $client = $server->accept()) {
         $count ++;
         my $pid = fork();
