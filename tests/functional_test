@@ -41,10 +41,11 @@ sub main {
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
     my $workers = $ENV{WORKERS} || 10;
     my $iterations = $ENV{ITERATIONS} || 10;
+    my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
 
-    my $config = make_config($proxy_port, 80);
+    my $config = make_config($proxy_port, $local_httpd || $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
 
     # Wait for proxy to load and parse config
     sleep 1;
