@@ -85,6 +85,7 @@ accept_connection(struct ev_loop *loop, const struct Listener *listener) {
                     &c->client.addr_len);
     if (sockfd < 0) {
         syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
+        free_connection(c);
         return;
     }
 
