@@ -50,7 +50,7 @@ struct Connection {
         struct ev_io tx_watcher;
         struct Buffer *buffer;
     } client, server;
-    struct Listener * listener;
+    struct Listener *listener;
     const char *hostname; /* Requested hostname */
 
     TAILQ_ENTRY(Connection) entries;
