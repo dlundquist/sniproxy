@@ -115,7 +115,7 @@ init_listeners(struct Listener_head *listeners, const struct Table_head *tables)
 }
 
 void
-handle_listeners(const struct Listener_head *listeners, const fd_set *rfds, void (*accept_cb)(struct Listener *)) {
+handle_listeners(const struct Listener_head *listeners, const fd_set *rfds, void (*accept_cb)(const struct Listener *)) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {

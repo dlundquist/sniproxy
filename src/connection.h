@@ -47,14 +47,14 @@ struct Connection {
         int sockfd;
         struct Buffer *buffer;
     } client, server;
-    struct Listener * listener;
+    const struct Listener *listener;
     const char *hostname; /* Requested hostname */
 
     TAILQ_ENTRY(Connection) entries;
 };
 
 void init_connections();
-void accept_connection(struct Listener *);
+void accept_connection(const struct Listener *);
 int fd_set_connections(fd_set *, fd_set *, int);
 void handle_connections(fd_set *, fd_set *);
 void free_connections();
