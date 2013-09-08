@@ -69,14 +69,22 @@ init_connections() {
 }
 
 void
-add_connection(struct ev_loop *loop, int sockfd,
-               const struct Listener *listener) {
+accept_connection(struct ev_loop *loop, const struct Listener *listener) {
     struct Connection *c;
+    int sockfd;
 
     c = new_connection();
     if (c == NULL) {
         syslog(LOG_CRIT, "new_connection failed");
         close(sockfd);
+        return;
+    }
+
+    sockfd = accept(listener->rx_watcher.fd,
+                    (struct sockaddr *)&c->client.addr,
+                    &c->client.addr_len);
+    if (sockfd < 0) {
+        syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
         return;
     }
 

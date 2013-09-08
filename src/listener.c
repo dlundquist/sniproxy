@@ -331,17 +331,8 @@ free_listeners(struct Listener_head *listeners) {
 static void
 accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Listener *listener = (struct Listener *)w->data;
-    int sockfd;
 
-    sockfd = accept(listener->rx_watcher.fd, NULL, NULL);
-    if (sockfd < 0) {
-        syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
-        return;
-    }
-
-    add_connection(loop, sockfd, listener);
-
-    return;
+    accept_connection(loop, listener);
 }
 
 static size_t
