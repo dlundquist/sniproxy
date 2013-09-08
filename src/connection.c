@@ -39,13 +39,15 @@
 
 /* Linux may not include _SAFE macros */
 #ifndef TAILQ_FOREACH_SAFE
-#define TAILQ_FOREACH_SAFE(var, head, field, tvar)           \
-    for ((var) = TAILQ_FIRST((head));                \
-        (var) && ((tvar) = TAILQ_NEXT((var), field), 1);     \
-        (var) = (tvar))
+#define TAILQ_FOREACH_SAFE(var, head, field, tvar)                      \
+        for ((var) = TAILQ_FIRST(head);                                 \
+            (var) != TAILQ_END(head) &&                                 \
+            ((tvar) = TAILQ_NEXT(var, field), 1);                       \
+            (var) = (tvar))
 #endif
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
+
 
 static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
@@ -229,7 +231,7 @@ client_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         case(ACCEPTED):
         case(SERVER_CLOSED):
             if (buffer_len(con->server.buffer) == 0)
-                close_connection(loop, con);
+                return close_connection(loop, con);
         default:
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
@@ -292,7 +294,7 @@ server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             break;
         case(CLIENT_CLOSED):
             if (buffer_len(con->client.buffer) == 0)
-                close_connection(loop, con);
+                return close_connection(loop, con);
             break;
         default:
             syslog(LOG_INFO, "unspected state %d in connection:%s()",
@@ -313,7 +315,7 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     ssize_t len;
     char *hostname = NULL;
     int parse_result;
-    char peeripstr[INET6_ADDRSTRLEN];
+    char peeripstr[INET6_ADDRSTRLEN] = {'\0'};
     int peerport = 0;
     int sockfd;
 
@@ -326,14 +328,12 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
         syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
-        close_connection(loop, con);
-        return;
+        return close_connection(loop, con);
     } else if (parse_result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s:%d", peeripstr, peerport);
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
-        close_connection(loop, con);
-        return;
+        return close_connection(loop, con);
     }
 
     syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
@@ -342,9 +342,8 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     sockfd = lookup_server_socket(con->listener, hostname);
     if (sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
-        close_connection(loop, con);
         free(hostname);
-        return;
+        return close_connection(loop, con);
     }
 
     ev_io_init(&con->server.rx_watcher, server_rx_cb, sockfd, EV_READ);
@@ -374,6 +373,9 @@ close_connection(struct ev_loop *loop, struct Connection *c) {
 
     if (c->state == CONNECTED || c->state == CLIENT_CLOSED)
         close_server_connection(loop, c);
+
+    TAILQ_REMOVE(&connections, c, entries);
+    free_connection(c);
 }
 
 /* Close client socket. Caller must ensure that it has not been closed before. */
