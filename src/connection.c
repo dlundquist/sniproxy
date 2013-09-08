@@ -80,16 +80,6 @@ init_connections() {
 }
 
 void
-free_connections() {
-    struct Connection *iter;
-
-    while ((iter = TAILQ_FIRST(&connections)) != NULL) {
-        TAILQ_REMOVE(&connections, iter, entries);
-        free_connection(iter);
-    }
-}
-
-void
 accept_connection(struct Listener *listener) {
     struct Connection *c;
 
@@ -116,6 +106,16 @@ accept_connection(struct Listener *listener) {
     c->listener = listener;
 
     TAILQ_INSERT_HEAD(&connections, c, entries);
+}
+
+void
+free_connections() {
+    struct Connection *iter;
+
+    while ((iter = TAILQ_FIRST(&connections)) != NULL) {
+        TAILQ_REMOVE(&connections, iter, entries);
+        free_connection(iter);
+    }
 }
 
 /*
@@ -304,22 +304,6 @@ print_connection(FILE *file, const struct Connection *con) {
 }
 
 static int
-handle_connection_server_rx(struct Connection *con) {
-    int n;
-
-    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
-    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
-        return 1;
-    } else if (n == 0) { /* Server closed socket */
-        return 1;
-    }
-    move_to_head_of_queue(con);
-
-    return 0;
-}
-
-static int
 handle_connection_client_rx(struct Connection *con) {
     int n;
 
@@ -354,6 +338,22 @@ handle_connection_client_tx(struct Connection *con) {
 }
 
 static int
+handle_connection_server_rx(struct Connection *con) {
+    int n;
+
+    n = buffer_recv(con->server.buffer, con->server.sockfd, MSG_DONTWAIT);
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        syslog(LOG_INFO, "recv failed: %s", strerror(errno));
+        return 1;
+    } else if (n == 0) { /* Server closed socket */
+        return 1;
+    }
+    move_to_head_of_queue(con);
+
+    return 0;
+}
+
+static int
 handle_connection_server_tx(struct Connection *con) {
     int n;
 
@@ -365,6 +365,12 @@ handle_connection_server_tx(struct Connection *con) {
     move_to_head_of_queue(con);
 
     return 0;
+}
+
+static void
+move_to_head_of_queue(struct Connection *con) {
+    TAILQ_REMOVE(&connections, con, entries);
+    TAILQ_INSERT_HEAD(&connections, con, entries);
 }
 
 static void
@@ -417,15 +423,11 @@ handle_connection_client_hello(struct Connection *con) {
      * passing this down from open_backend_socket() in lookup_server_socket()
      * would be cleaner
      */
-    getpeername(con->server.sockfd, (struct sockaddr *)&con->server.addr, &con->server.addr_len);
+    getpeername(con->server.sockfd,
+                (struct sockaddr *)&con->server.addr,
+                &con->server.addr_len);
 
     con->state = CONNECTED;
-}
-
-static void
-move_to_head_of_queue(struct Connection *con) {
-    TAILQ_REMOVE(&connections, con, entries);
-    TAILQ_INSERT_HEAD(&connections, con, entries);
 }
 
 static void

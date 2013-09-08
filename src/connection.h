@@ -31,8 +31,6 @@
 #include "listener.h"
 #include "buffer.h"
 
-#define BUFFER_LEN 4096
-
 struct Connection {
     enum State {
         NEW,            /* Before successful accept */
