@@ -42,11 +42,16 @@
 #endif
 
 /* Linux may not include _SAFE macros */
+#ifndef TAILQ_END
+#define        TAILQ_END(head)                 NULL
+#endif
+
 #ifndef TAILQ_FOREACH_SAFE
-#define TAILQ_FOREACH_SAFE(var, head, field, tvar)           \
-    for ((var) = TAILQ_FIRST((head));                \
-        (var) && ((tvar) = TAILQ_NEXT((var), field), 1);     \
-        (var) = (tvar))
+#define TAILQ_FOREACH_SAFE(var, head, field, tvar)                      \
+        for ((var) = TAILQ_FIRST(head);                                 \
+            (var) != TAILQ_END(head) &&                                 \
+            ((tvar) = TAILQ_NEXT(var, field), 1);                       \
+            (var) = (tvar))
 #endif
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
