@@ -69,7 +69,7 @@ sub main {
 
     # Orderly shutdown of the server
     kill 15, $proxy_pid;
-    kill 15, $httpd_pid;
+    kill 15, $httpd_pid unless $local_httpd;
     sleep 1;
 
     # Delete our test configuration
