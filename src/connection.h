@@ -31,8 +31,6 @@
 #include "listener.h"
 #include "buffer.h"
 
-#define BUFFER_LEN 4096
-
 struct Connection {
     enum State {
         NEW,            /* Before successful accept */
@@ -50,14 +48,14 @@ struct Connection {
         struct ev_io tx_watcher;
         struct Buffer *buffer;
     } client, server;
-    struct Listener *listener;
+    const struct Listener *listener;
     const char *hostname; /* Requested hostname */
 
     TAILQ_ENTRY(Connection) entries;
 };
 
 void init_connections();
-void add_connection(struct ev_loop *, int, struct Listener *);
+void add_connection(struct ev_loop *, int, const struct Listener *);
 void free_connections();
 void print_connections();
 

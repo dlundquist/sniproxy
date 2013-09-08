@@ -38,7 +38,9 @@
 #include "connection.h"
 
 
-#define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || _errno == EWOULDBLOCK || _errno == EINTR)
+#define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
+                                      _errno == EWOULDBLOCK || \
+                                      _errno == EINTR)
 
 
 static TAILQ_HEAD(ConnectionHead, Connection) connections;
@@ -49,14 +51,16 @@ static void server_rx_cb(struct ev_loop *, struct ev_io *, int);
 static void client_tx_cb(struct ev_loop *, struct ev_io *, int);
 static void server_tx_cb(struct ev_loop *, struct ev_io *, int);
 static void move_to_head_of_queue(struct Connection *);
-static void handle_connection_client_hello(struct ev_loop *, struct Connection *);
+static void handle_connection_client_hello(struct ev_loop *,
+                                           struct Connection *);
 static void close_connection(struct ev_loop *, struct Connection *);
 static void close_client_connection(struct ev_loop *, struct Connection *);
 static void close_server_connection(struct ev_loop *, struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
-static void get_peer_address(const struct sockaddr_storage *, char *, size_t, int *);
+static void get_peer_address(const struct sockaddr_storage *,
+                             char *, size_t, int *);
 
 
 void
@@ -65,7 +69,8 @@ init_connections() {
 }
 
 void
-add_connection(struct ev_loop *loop, int sockfd, struct Listener *listener) {
+add_connection(struct ev_loop *loop, int sockfd,
+               const struct Listener *listener) {
     struct Connection *c;
 
     c = new_connection();
@@ -137,26 +142,36 @@ print_connection(FILE *file, const struct Connection *con) {
 
     switch (con->state) {
         case ACCEPTED:
-            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
             fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
-                client, client_port, con->client.buffer->len, con->client.buffer->size);
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size);
             break;
         case CONNECTED:
-            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
-            get_peer_address(&con->server.addr, server, sizeof(server), &server_port);
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
+            get_peer_address(&con->server.addr,
+                             server, sizeof(server), &server_port);
             fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
-                client, client_port, con->client.buffer->len, con->client.buffer->size,
-                server, server_port, con->server.buffer->len, con->server.buffer->size);
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size,
+                    server, server_port,
+                    con->server.buffer->len, con->server.buffer->size);
             break;
         case SERVER_CLOSED:
-            get_peer_address(&con->client.addr, client, sizeof(client), &client_port);
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
             fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
-                client, client_port, con->client.buffer->len, con->client.buffer->size);
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size);
             break;
         case CLIENT_CLOSED:
-            get_peer_address(&con->server.addr, server, sizeof(server), &server_port);
+            get_peer_address(&con->server.addr,
+                             server, sizeof(server), &server_port);
             fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
-                server, server_port, con->server.buffer->len, con->server.buffer->size);
+                    server, server_port,
+                    con->server.buffer->len, con->server.buffer->size);
             break;
         case CLOSED:
             fprintf(file, "CLOSED        -\t-\n");
@@ -166,13 +181,13 @@ print_connection(FILE *file, const struct Connection *con) {
     }
 }
 
-
 static void
 client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int n;
 
-    n = buffer_recv(con->client.buffer, con->client.rx_watcher.fd, MSG_DONTWAIT);
+    n = buffer_recv(con->client.buffer,
+                    con->client.rx_watcher.fd, MSG_DONTWAIT);
     if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
@@ -205,7 +220,8 @@ client_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int n;
 
-    n = buffer_send(con->server.buffer, con->client.tx_watcher.fd, MSG_DONTWAIT);
+    n = buffer_send(con->server.buffer,
+                    con->client.tx_watcher.fd, MSG_DONTWAIT);
     if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
@@ -236,7 +252,8 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int n;
 
-    n = buffer_recv(con->server.buffer, con->server.rx_watcher.fd, MSG_DONTWAIT);
+    n = buffer_recv(con->server.buffer,
+                    con->server.rx_watcher.fd, MSG_DONTWAIT);
     if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
@@ -269,7 +286,8 @@ server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int n;
 
-    n = buffer_send(con->client.buffer, con->server.rx_watcher.fd, MSG_DONTWAIT);
+    n = buffer_send(con->client.buffer,
+                    con->server.rx_watcher.fd, MSG_DONTWAIT);
     if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
@@ -289,7 +307,7 @@ server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
                 return close_connection(loop, con);
             break;
         default:
-            syslog(LOG_INFO, "unspected state %d in connection:%s()",
+            syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
     }
     move_to_head_of_queue(con);
@@ -311,7 +329,8 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     int peerport = 0;
     int sockfd;
 
-    get_peer_address(&con->client.addr, peeripstr, sizeof(peeripstr), &peerport);
+    get_peer_address(&con->client.addr,
+                     peeripstr, sizeof(peeripstr), &peerport);
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -319,16 +338,19 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
     if (parse_result == -1) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
-        syslog(LOG_INFO, "Request from %s:%d did not include a hostname", peeripstr, peerport);
+        syslog(LOG_INFO, "Request from %s:%d did not include a hostname",
+               peeripstr, peerport);
         return close_connection(loop, con);
     } else if (parse_result < -2) {
-        syslog(LOG_INFO, "Unable to parse request from %s:%d", peeripstr, peerport);
+        syslog(LOG_INFO, "Unable to parse request from %s:%d",
+               peeripstr, peerport);
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
         return close_connection(loop, con);
     }
 
-    syslog(LOG_INFO, "Request for %s from %s:%d", hostname, peeripstr, peerport);
+    syslog(LOG_INFO, "Request for %s from %s:%d",
+           hostname, peeripstr, peerport);
 
     /* lookup server for hostname and connect */
     sockfd = lookup_server_socket(con->listener, hostname);
@@ -360,17 +382,22 @@ handle_connection_client_hello(struct ev_loop *loop, struct Connection *con) {
 
 static void
 close_connection(struct ev_loop *loop, struct Connection *c) {
-    if (c->state == CONNECTED || c->state == ACCEPTED || c->state == SERVER_CLOSED)
+    if (c->state == CONNECTED ||
+        c->state == ACCEPTED ||
+        c->state == SERVER_CLOSED)
         close_client_connection(loop, c);
 
-    if (c->state == CONNECTED || c->state == CLIENT_CLOSED)
+    if (c->state == CONNECTED ||
+        c->state == CLIENT_CLOSED)
         close_server_connection(loop, c);
 
     TAILQ_REMOVE(&connections, c, entries);
     free_connection(c);
 }
 
-/* Close client socket. Caller must ensure that it has not been closed before. */
+/* Close client socket.
+ * Caller must ensure that it has not been closed before.
+ */
 static void
 close_client_connection(struct ev_loop *loop, struct Connection *c) {
     ev_io_stop(loop, &c->client.rx_watcher);
@@ -386,7 +413,9 @@ close_client_connection(struct ev_loop *loop, struct Connection *c) {
         c->state = CLOSED;
 }
 
-/* Close server socket. Caller must ensure that it has not been closed before. */
+/* Close server socket.
+ * Caller must ensure that it has not been closed before.
+ */
 static void
 close_server_connection(struct ev_loop *loop, struct Connection *c) {
     ev_io_stop(loop, &c->server.rx_watcher);
@@ -442,15 +471,20 @@ free_connection(struct Connection *c) {
 }
 
 static void
-get_peer_address(const struct sockaddr_storage *addr, char *ip, size_t len, int *port) {
+get_peer_address(const struct sockaddr_storage *addr,
+                 char *ip, size_t len, int *port) {
     switch (addr->ss_family) {
         case AF_INET:
-            inet_ntop(AF_INET, &((struct sockaddr_in *)addr)->sin_addr, ip, len);
+            inet_ntop(AF_INET,
+                      &((struct sockaddr_in *)addr)->sin_addr,
+                      ip, len);
             if (port != NULL)
                 *port = ntohs(((struct sockaddr_in *)addr)->sin_port);
             break;
         case AF_INET6:
-            inet_ntop(AF_INET6, &((struct sockaddr_in6 *)addr)->sin6_addr, ip, len);
+            inet_ntop(AF_INET6,
+                      &((struct sockaddr_in6 *)addr)->sin6_addr,
+                      ip, len);
             if (port != NULL)
                 *port = ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
             break;
