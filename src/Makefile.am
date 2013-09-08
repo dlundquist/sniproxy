@@ -27,4 +27,4 @@ sniproxy_SOURCES = backend.c \
                    tls.h \
                    util.c \
                    util.h
-sniproxy_LDADD = -lpcre
+sniproxy_LDADD = -lpcre -lev
