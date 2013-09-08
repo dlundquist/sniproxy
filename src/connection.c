@@ -201,6 +201,8 @@ client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     } else if (n == 0) { /* Client closed socket */
         close_client_connection(loop, con);
+        if (con->state == CLOSED)
+            close_connection(loop, con);
         return;
     }
 
@@ -267,6 +269,8 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     } else if (n == 0) { /* Server closed socket */
         close_server_connection(loop, con);
+        if (con->state == CLOSED)
+            close_connection(loop, con);
         return;
     }
 
