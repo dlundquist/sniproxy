@@ -54,8 +54,8 @@ static void move_to_head_of_queue(struct Connection *);
 static void handle_connection_client_hello(struct ev_loop *,
                                            struct Connection *);
 static void close_connection(struct ev_loop *, struct Connection *);
-static void close_client_connection(struct ev_loop *, struct Connection *);
-static void close_server_connection(struct ev_loop *, struct Connection *);
+static void close_client_socket(struct ev_loop *, struct Connection *);
+static void close_server_socket(struct ev_loop *, struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
@@ -201,7 +201,7 @@ client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Client closed socket */
-        close_client_connection(loop, con);
+        close_client_socket(loop, con);
         if (con->state == CLOSED)
             close_connection(loop, con);
         return;
@@ -269,7 +269,7 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         syslog(LOG_INFO, "recv failed: %s", strerror(errno));
         return;
     } else if (n == 0) { /* Server closed socket */
-        close_server_connection(loop, con);
+        close_server_socket(loop, con);
         if (con->state == CLOSED)
             close_connection(loop, con);
         return;
@@ -301,7 +301,7 @@ server_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     n = buffer_send(con->client.buffer,
                     con->server.rx_watcher.fd, MSG_DONTWAIT);
-    if (n < 0 && (errno != EAGAIN && errno != EWOULDBLOCK)) {
+    if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
         syslog(LOG_INFO, "send failed: %s", strerror(errno));
         return;
     }
@@ -398,11 +398,11 @@ close_connection(struct ev_loop *loop, struct Connection *c) {
     if (c->state == CONNECTED ||
         c->state == ACCEPTED ||
         c->state == SERVER_CLOSED)
-        close_client_connection(loop, c);
+        close_client_socket(loop, c);
 
     if (c->state == CONNECTED ||
         c->state == CLIENT_CLOSED)
-        close_server_connection(loop, c);
+        close_server_socket(loop, c);
 
     TAILQ_REMOVE(&connections, c, entries);
     free_connection(c);
@@ -412,7 +412,7 @@ close_connection(struct ev_loop *loop, struct Connection *c) {
  * Caller must ensure that it has not been closed before.
  */
 static void
-close_client_connection(struct ev_loop *loop, struct Connection *c) {
+close_client_socket(struct ev_loop *loop, struct Connection *c) {
     ev_io_stop(loop, &c->client.rx_watcher);
     ev_io_stop(loop, &c->client.tx_watcher);
 
@@ -430,7 +430,7 @@ close_client_connection(struct ev_loop *loop, struct Connection *c) {
  * Caller must ensure that it has not been closed before.
  */
 static void
-close_server_connection(struct ev_loop *loop, struct Connection *c) {
+close_server_socket(struct ev_loop *loop, struct Connection *c) {
     ev_io_stop(loop, &c->server.rx_watcher);
     ev_io_stop(loop, &c->server.tx_watcher);
 
