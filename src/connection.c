@@ -202,9 +202,6 @@ client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     } else if (n == 0) { /* Client closed socket */
         close_client_socket(loop, con);
-        if (con->state == CLOSED)
-            close_connection(loop, con);
-        return;
     }
 
     /* if we filled the client receive buffer, stop the watcher for a while */
@@ -219,6 +216,9 @@ client_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             if (buffer_len(con->client.buffer))
                 ev_io_start(loop, &con->server.tx_watcher);
             break;
+        case(CLOSED):
+            close_connection(loop, con);
+            return;
         default:
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
@@ -270,9 +270,6 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     } else if (n == 0) { /* Server closed socket */
         close_server_socket(loop, con);
-        if (con->state == CLOSED)
-            close_connection(loop, con);
-        return;
     }
 
     /* if we filled the server receive buffer, stop the watcher for a while */
@@ -287,6 +284,9 @@ server_rx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         case(CLIENT_CLOSED):
             ev_io_stop(loop, w);
             break;
+        case(CLOSED):
+            close_connection(loop, con);
+            return;
         default:
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
