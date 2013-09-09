@@ -92,24 +92,20 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     tls_content_type = data[0];
     if (tls_content_type != TLS_HANDSHAKE_CONTENT_TYPE) {
         syslog(LOG_DEBUG,
-               "Did not receive TLS handshake");
+               "Request did not begin with TLS handshake.");
         return -5;
     }
 
     tls_version_major = data[1];
     tls_version_minor = data[2];
-    if (tls_version_major < 3) {
+    if (tls_version_major < 3 ||
+        (tls_version_major == 3 && tls_version_minor < 1)) {
         syslog(LOG_DEBUG,
-               "Received pre SSL 3.0 handshake");
+               "Received SSL %d.%d handshake which does not support "
+               "Server Name Indication.",
+               tls_version_major, tls_version_minor);
 
-        return -5;
-    }
-
-    if (tls_version_major == 3 && tls_version_minor < 1) {
-        syslog(LOG_DEBUG,
-               "Received SSL 3.0 handshake");
-
-        return -6;
+        return -2;
     }
 
     /* TLS record length */
