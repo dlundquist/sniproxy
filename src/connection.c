@@ -251,6 +251,7 @@ client_tx_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         case(SERVER_CLOSED):
             if (buffer_len(con->server.buffer) == 0)
                 return close_connection(loop, con);
+            break;
         default:
             syslog(LOG_INFO, "Unexpected state %d in connection:%s()",
                     con->state, __func__);
