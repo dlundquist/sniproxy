@@ -26,6 +26,8 @@
 #ifndef TLS_H
 #define TLS_H
 
+#include <stdio.h>
+
 int parse_tls_header(const char *, size_t, char **);
 void close_tls_socket(int);
 
