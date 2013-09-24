@@ -35,6 +35,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ev.h>
+#include <assert.h>
 #include "connection.h"
 
 
@@ -48,21 +49,23 @@ static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
 static void client_cb(struct ev_loop *, struct ev_io *, int);
 static void server_cb(struct ev_loop *, struct ev_io *, int);
-static int handle_connection_client_rx(struct Connection *,
-                                       struct ev_loop *);
-static int handle_connection_server_rx(struct Connection *,
-                                       struct ev_loop *);
-static int handle_connection_client_tx(struct Connection *,
-                                       struct ev_loop *);
-static int handle_connection_server_tx(struct Connection *,
-                                       struct ev_loop *);
+static void handle_connection_client_rx(struct Connection *,
+                                        struct ev_loop *);
+static void handle_connection_server_rx(struct Connection *,
+                                        struct ev_loop *);
+static void handle_connection_client_tx(struct Connection *,
+                                        struct ev_loop *);
+static void handle_connection_server_tx(struct Connection *,
+                                        struct ev_loop *);
 static void handle_connection_client_hello(struct Connection *,
                                            struct ev_loop *);
+static void close_connection(struct Connection *,
+                             struct ev_loop *);
 static void close_client_socket(struct Connection *,
                                 struct ev_loop *);
 static void close_server_socket(struct Connection *,
                                 struct ev_loop *);
-static void move_to_head_of_queue(struct Connection *);
+static inline void move_to_head_of_queue(struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
@@ -76,7 +79,7 @@ init_connections() {
 }
 
 void
-accept_connection(struct ev_loop *loop, const struct Listener *listener) {
+accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     struct Connection *c;
     int sockfd;
 
@@ -106,11 +109,12 @@ accept_connection(struct ev_loop *loop, const struct Listener *listener) {
 }
 
 void
-free_connections() {
+free_connections(struct ev_loop *loop) {
     struct Connection *iter;
 
     while ((iter = TAILQ_FIRST(&connections)) != NULL) {
         TAILQ_REMOVE(&connections, iter, entries);
+        close_connection(iter, loop);
         free_connection(iter);
     }
 }
@@ -154,6 +158,9 @@ print_connection(FILE *file, const struct Connection *con) {
     int server_port = 0;
 
     switch (con->state) {
+        case NEW:
+            fprintf(file, "NEW           -\t-\n");
+            break;
         case ACCEPTED:
             get_peer_address(&con->client.addr,
                              client, sizeof(client), &client_port);
@@ -189,9 +196,6 @@ print_connection(FILE *file, const struct Connection *con) {
         case CLOSED:
             fprintf(file, "CLOSED        -\t-\n");
             break;
-        case NEW:
-            fprintf(file, "NEW           -\t-\n");
-            break;
     }
 }
 
@@ -203,7 +207,7 @@ client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ)
         handle_connection_client_rx(con, loop);
 
-    switch(con->state) {
+    switch (con->state) {
         case ACCEPTED:
             handle_connection_client_hello(con, loop);
             break;
@@ -262,7 +266,7 @@ server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ)
         handle_connection_server_rx(con, loop);
 
-    switch(con->state) {
+    switch (con->state) {
         case CONNECTED:
             if (revents & EV_WRITE)
                 handle_connection_server_tx(con, loop);
@@ -310,7 +314,7 @@ server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     }
 }
 
-static int
+static void
 handle_connection_client_rx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
@@ -318,9 +322,11 @@ handle_connection_client_rx(struct Connection *con, struct ev_loop *loop) {
                     con->client.watcher.fd, MSG_DONTWAIT);
     if (n < 0) {
         if (IS_TEMPORARY_SOCKERR(errno))
-            return n;
+            return;
 
-        syslog(LOG_INFO, "recv failed: %s, closing connection", strerror(errno));
+        syslog(LOG_INFO, "recv failed: %s, closing connection",
+                strerror(errno));
+
         close_client_socket(con, loop);
     } else if (n == 0) { /* Client closed socket */
         close_client_socket(con, loop);
@@ -332,10 +338,9 @@ handle_connection_client_rx(struct Connection *con, struct ev_loop *loop) {
         con->server.watcher.events |= EV_WRITE;
         ev_io_start(loop, &con->server.watcher);
     }
-    return n;
 }
 
-static int
+static void
 handle_connection_client_tx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
@@ -343,16 +348,15 @@ handle_connection_client_tx(struct Connection *con, struct ev_loop *loop) {
                     con->client.watcher.fd, MSG_DONTWAIT);
     if (n < 0) {
         if (IS_TEMPORARY_SOCKERR(errno))
-            return n;
+            return;
 
-        syslog(LOG_INFO, "send failed: %s, closing connection", strerror(errno));
+        syslog(LOG_INFO, "send failed: %s, closing connection",
+                strerror(errno));
         close_client_socket(con, loop);
     }
-
-    return n;
 }
 
-static int
+static void
 handle_connection_server_rx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
@@ -360,9 +364,10 @@ handle_connection_server_rx(struct Connection *con, struct ev_loop *loop) {
                     con->server.watcher.fd, MSG_DONTWAIT);
     if (n < 0) {
         if (IS_TEMPORARY_SOCKERR(errno))
-            return n;
+            return;
 
-        syslog(LOG_INFO, "recv failed: %s, closing connection", strerror(errno));
+        syslog(LOG_INFO, "recv failed: %s, closing connection",
+                         strerror(errno));
         close_server_socket(con, loop);
     } else if (n == 0) { /* Server closed socket */
         close_server_socket(con, loop);
@@ -374,10 +379,9 @@ handle_connection_server_rx(struct Connection *con, struct ev_loop *loop) {
         con->client.watcher.events |= EV_WRITE;
         ev_io_start(loop, &con->client.watcher);
     }
-    return n;
 }
 
-static int
+static void
 handle_connection_server_tx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
@@ -385,13 +389,12 @@ handle_connection_server_tx(struct Connection *con, struct ev_loop *loop) {
                     con->server.watcher.fd, MSG_DONTWAIT);
     if (n < 0) {
         if (IS_TEMPORARY_SOCKERR(errno))
-            return n;
+            return;
 
-        syslog(LOG_INFO, "send failed: %s, closing connection", strerror(errno));
+        syslog(LOG_INFO, "send failed: %s, closing connection",
+                         strerror(errno));
         close_server_socket(con, loop);
     }
-
-    return n;
 }
 
 static void
@@ -450,6 +453,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
                 (struct sockaddr *)&con->server.addr,
                 &con->server.addr_len);
 
+    assert(con->state == ACCEPTED);
     con->state = CONNECTED;
 
     ev_io_init(&con->server.watcher, server_cb, sockfd, EV_READ | EV_WRITE);
@@ -461,35 +465,51 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
  * Caller must ensure that it has not been closed before.
  */
 static void
-close_client_socket(struct Connection *c, struct ev_loop *loop) {
-    ev_io_stop(loop, &c->client.watcher);
+close_client_socket(struct Connection *con, struct ev_loop *loop) {
+    assert(con->state != CLOSED);
+    assert(con->state != CLIENT_CLOSED);
 
-    if (close(c->client.watcher.fd) < 0)
+    ev_io_stop(loop, &con->client.watcher);
+
+    if (close(con->client.watcher.fd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
-    if (c->state == SERVER_CLOSED || c->state == ACCEPTED)
-        c->state = CLOSED;
+    if (con->state == SERVER_CLOSED || con->state == ACCEPTED)
+        con->state = CLOSED;
     else
-        c->state = CLIENT_CLOSED;
+        con->state = CLIENT_CLOSED;
 }
 
 /* Close server socket.
  * Caller must ensure that it has not been closed before.
  */
 static void
-close_server_socket(struct Connection *c, struct ev_loop *loop) {
-    ev_io_stop(loop, &c->server.watcher);
+close_server_socket(struct Connection *con, struct ev_loop *loop) {
+    assert(con->state != CLOSED);
+    assert(con->state != SERVER_CLOSED);
 
-    if (close(c->server.watcher.fd) < 0)
+    ev_io_stop(loop, &con->server.watcher);
+
+    if (close(con->server.watcher.fd) < 0)
         syslog(LOG_INFO, "close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
-    if (c->state == CLIENT_CLOSED)
-        c->state = CLOSED;
+    if (con->state == CLIENT_CLOSED)
+        con->state = CLOSED;
     else
-        c->state = SERVER_CLOSED;
+        con->state = SERVER_CLOSED;
+}
 
+static void
+close_connection(struct Connection *con, struct ev_loop *loop) {
+    if (con->state == CONNECTED || con->state == CLIENT_CLOSED)
+        close_server_socket(con, loop);
+
+    if (con->state == SERVER_CLOSED)
+        close_client_socket(con, loop);
+
+    assert(con->state == CLOSED);
 }
 
 static struct Connection *
@@ -521,14 +541,14 @@ new_connection() {
 }
 
 static void
-free_connection(struct Connection *c) {
-    if (c == NULL)
+free_connection(struct Connection *con) {
+    if (con == NULL)
         return;
 
-    free_buffer(c->client.buffer);
-    free_buffer(c->server.buffer);
-    free((void *)c->hostname);
-    free(c);
+    free_buffer(con->client.buffer);
+    free_buffer(con->server.buffer);
+    free((void *)con->hostname);
+    free(con);
 }
 
 static void

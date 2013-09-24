@@ -66,7 +66,7 @@ run_server() {
 
     ev_run(EV_DEFAULT, 0);
 
-    free_connections();
+    free_connections(EV_DEFAULT);
 }
 
 static void
