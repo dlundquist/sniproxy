@@ -441,7 +441,6 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     sockfd = lookup_server_socket(con->listener, hostname);
     if (sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
-        free(hostname);
         return close_client_socket(con, loop);
     }
 
@@ -503,10 +502,14 @@ close_server_socket(struct Connection *con, struct ev_loop *loop) {
 
 static void
 close_connection(struct Connection *con, struct ev_loop *loop) {
+    assert(con->state != NEW); /* only used during initialization */
+
     if (con->state == CONNECTED || con->state == CLIENT_CLOSED)
         close_server_socket(con, loop);
 
-    if (con->state == SERVER_CLOSED)
+    /* state will now be either: ACCEPTED, SERVER_CLOSED or CLOSED */
+
+    if (con->state == ACCEPTED || con->state == SERVER_CLOSED)
         close_client_socket(con, loop);
 
     assert(con->state == CLOSED);
@@ -547,7 +550,7 @@ free_connection(struct Connection *con) {
 
     free_buffer(con->client.buffer);
     free_buffer(con->server.buffer);
-    free((void *)con->hostname);
+    free((char *)con->hostname); /* cast away const'ness */
     free(con);
 }
 
