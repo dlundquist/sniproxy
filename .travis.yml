@@ -3,6 +3,7 @@ compiler:
   - clang
   - gcc
 install:
+  - sudo apt-get update
   - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libev-dev libpcre3-dev cdbs dh-autoreconf valgrind apache2-utils
   - ./autogen.sh
 script:
