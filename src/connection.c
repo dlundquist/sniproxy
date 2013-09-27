@@ -248,6 +248,9 @@ client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             }
 
             break;
+       default:
+            /* no op */
+            break;
     }
 
     if (con->state == CLOSED) {
@@ -303,6 +306,9 @@ server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
                 ev_io_start(loop, w);
             }
 
+            break;
+       default:
+            /* no op */
             break;
     }
 
