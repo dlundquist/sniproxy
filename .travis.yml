@@ -7,10 +7,15 @@ install:
   - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf valgrind apache2-utils
   - ./autogen.sh
 script:
-  - ./configure && make && make check
-  - sudo make install && sudo make uninstall
+  - ./configure
+  - make all
+  - make check
+  - sudo make install
+  - sudo make uninstall
   - bash -c "cd tests && ./functional_test valgrind --error-exitcode=1"
-  - bash -c "cd tests && ./bench_test_httpd"
-  - bash -c "cd tests && ./bench_sniproxy"
-  - dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
-
+  - dpkg-buildpackage
+  - sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
+  - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
+  - echo -e "listen 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
+  - sudo service sniproxy start
+  - pgrep sniproxy
