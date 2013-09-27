@@ -149,7 +149,6 @@ open_backend_socket(struct Backend *b, const char *req_hostname) {
         target_hostname = req_hostname;
 
     snprintf(portstr, sizeof(portstr), "%d", b->port);
-    syslog(LOG_DEBUG, "Connecting to %s:%s", target_hostname, portstr);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;

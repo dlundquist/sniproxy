@@ -292,7 +292,7 @@ server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Server socket may have been closed by server_rx() */
     if (revents & EV_WRITE &&
-            client_socket_open(con) &&
+            server_socket_open(con) &&
             buffer_len(con->client.buffer))
         server_tx(con, loop);
 
@@ -423,9 +423,6 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         return close_client_socket(con, loop);
     }
     con->hostname = hostname;
-
-    syslog(LOG_INFO, "Request for %s from %s:%d",
-           hostname, peeripstr, peerport);
 
     /* lookup server for hostname and connect */
     sockfd = lookup_server_socket(con->listener, hostname);
