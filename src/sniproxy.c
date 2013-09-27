@@ -78,7 +78,7 @@ main(int argc, char **argv) {
     if (background_flag)
         daemonize(config->user ? config->user : DEFAULT_USERNAME, fd_list);
 
-    openlog(SYSLOG_IDENT, LOG_CONS, SYSLOG_FACILITY);
+    openlog(SYSLOG_IDENT, LOG_NDELAY, SYSLOG_FACILITY);
 
     run_server();
 
