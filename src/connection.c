@@ -272,6 +272,12 @@ client_tx(struct Connection *con, struct ev_loop *loop) {
                 strerror(errno));
         close_client_socket(con, loop);
     }
+
+    if (server_socket_open(con) && buffer_room(con->server.buffer)) {
+        ev_io_stop(loop, &con->server.watcher);
+        con->server.watcher.events |= EV_READ;
+        ev_io_start(loop, &con->server.watcher);
+    }
 }
 
 static void
@@ -372,6 +378,12 @@ server_tx(struct Connection *con, struct ev_loop *loop) {
         syslog(LOG_INFO, "send failed: %s, closing connection",
                          strerror(errno));
         close_server_socket(con, loop);
+    }
+
+    if (client_socket_open(con) && buffer_room(con->client.buffer)) {
+        ev_io_stop(loop, &con->client.watcher);
+        con->client.watcher.events |= EV_READ;
+        ev_io_start(loop, &con->client.watcher);
     }
 }
 
