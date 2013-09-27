@@ -56,7 +56,7 @@ int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
-int *init_listeners(struct Listener_head *, const struct Table_head *);
+void init_listeners(struct Listener_head *, const struct Table_head *);
 int fd_set_listeners(const struct Listener_head *, fd_set *, int);
 void handle_listeners(const struct Listener_head *, const fd_set *, void (*)(const struct Listener *));
 void remove_listener(struct Listener_head *, struct Listener *);

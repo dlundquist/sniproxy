@@ -79,39 +79,18 @@ fd_set_listeners(const struct Listener_head *listeners, fd_set *fds, int max) {
 
 /*
  * Initialize each listener.
- * Returns an integer pointer to an array of file discriptors allocated
- * terminated by the value -1 or NULL in the case of an error.
  */
-int *
+void
 init_listeners(struct Listener_head *listeners, const struct Table_head *tables) {
     struct Listener *iter;
-    int i = 1; /* include one for terminating -1 */
-    int *fd_list = NULL;
-
-    SLIST_FOREACH(iter, listeners, entries)
-        i++;
-
-    fd_list = malloc(sizeof(int) * i);
-    if (fd_list == NULL) {
-        fprintf(stderr, "Failed to malloc\n");
-        return NULL;
-    }
-
-    i = 0;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        fd_list[i] = init_listener(iter, tables);
-        if (fd_list[i] < 0) {
-            fprintf(stderr, "Failed to initialize listener #%d -- returned %d: \n", i, fd_list[i]);
-            free(fd_list);
+        if (init_listener(iter, tables) < 0) {
+            fprintf(stderr, "Failed to initialize listener\n");
             print_listener_config(stderr, iter);
-            return NULL;
+            exit(1);
         }
-        i++;
     }
-    fd_list[i] = -1; /* sentinal value to mark end of list (0 is valid fd) */
-
-    return fd_list;
 }
 
 void
