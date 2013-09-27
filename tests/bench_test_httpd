@@ -13,7 +13,7 @@ done
 echo ""
 
 # Run apache bench
-ab -n10000 -c100 http://127.0.0.1:${TEST_HTTPD_PORT}/
+ab -n 65536 -c 256 http://127.0.0.1:${TEST_HTTPD_PORT}/
 RESULT=$?
 
 # Cleanup TestHTTPD
