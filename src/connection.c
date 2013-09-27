@@ -47,24 +47,19 @@
 static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
 
+static inline int client_socket_open(const struct Connection *);
+static inline int server_socket_open(const struct Connection *);
 static void client_cb(struct ev_loop *, struct ev_io *, int);
+static void client_rx(struct Connection *, struct ev_loop *);
+static void client_tx(struct Connection *, struct ev_loop *);
 static void server_cb(struct ev_loop *, struct ev_io *, int);
-static void handle_connection_client_rx(struct Connection *,
-                                        struct ev_loop *);
-static void handle_connection_server_rx(struct Connection *,
-                                        struct ev_loop *);
-static void handle_connection_client_tx(struct Connection *,
-                                        struct ev_loop *);
-static void handle_connection_server_tx(struct Connection *,
-                                        struct ev_loop *);
+static void server_rx(struct Connection *, struct ev_loop *);
+static void server_tx(struct Connection *, struct ev_loop *);
 static void handle_connection_client_hello(struct Connection *,
                                            struct ev_loop *);
-static void close_connection(struct Connection *,
-                             struct ev_loop *);
-static void close_client_socket(struct Connection *,
-                                struct ev_loop *);
-static void close_server_socket(struct Connection *,
-                                struct ev_loop *);
+static void close_connection(struct Connection *, struct ev_loop *);
+static void close_client_socket(struct Connection *, struct ev_loop *);
+static void close_server_socket(struct Connection *, struct ev_loop *);
 static inline void move_to_head_of_queue(struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
@@ -150,53 +145,27 @@ print_connections() {
     syslog(LOG_INFO, "Dumped connections to %s", filename);
 }
 
-static void
-print_connection(FILE *file, const struct Connection *con) {
-    char client[INET6_ADDRSTRLEN];
-    char server[INET6_ADDRSTRLEN];
-    int client_port = 0;
-    int server_port = 0;
+/*
+ * Test is client socket is open
+ *
+ * Returns true iff the client socket is opened based on connection state.
+ */
+static inline int
+client_socket_open(const struct Connection *con) {
+    return con->state == ACCEPTED ||
+           con->state == CONNECTED ||
+           con->state == SERVER_CLOSED;
+}
 
-    switch (con->state) {
-        case NEW:
-            fprintf(file, "NEW           -\t-\n");
-            break;
-        case ACCEPTED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
-                    client, client_port,
-                    con->client.buffer->len, con->client.buffer->size);
-            break;
-        case CONNECTED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            get_peer_address(&con->server.addr,
-                             server, sizeof(server), &server_port);
-            fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
-                    client, client_port,
-                    con->client.buffer->len, con->client.buffer->size,
-                    server, server_port,
-                    con->server.buffer->len, con->server.buffer->size);
-            break;
-        case SERVER_CLOSED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
-                    client, client_port,
-                    con->client.buffer->len, con->client.buffer->size);
-            break;
-        case CLIENT_CLOSED:
-            get_peer_address(&con->server.addr,
-                             server, sizeof(server), &server_port);
-            fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
-                    server, server_port,
-                    con->server.buffer->len, con->server.buffer->size);
-            break;
-        case CLOSED:
-            fprintf(file, "CLOSED        -\t-\n");
-            break;
-    }
+/*
+ * Test is server socket is open
+ *
+ * Returns true iff the server socket is opened based on connection state.
+ */
+static inline int
+server_socket_open(const struct Connection *con) {
+    return con->state == CONNECTED ||
+           con->state == CLIENT_CLOSED;
 }
 
 static void
@@ -204,17 +173,23 @@ client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int events = 0;
 
+    assert(client_socket_open(con));
+
     if (revents & EV_READ)
-        handle_connection_client_rx(con, loop);
+        client_rx(con, loop);
+
+    /* Client socket may have been closed by client_rx() */
+    if (revents & EV_WRITE &&
+            client_socket_open(con) &&
+            buffer_len(con->server.buffer))
+        client_tx(con, loop);
+
+    if (con->state == ACCEPTED)
+        handle_connection_client_hello(con, loop);
 
     switch (con->state) {
         case ACCEPTED:
-            handle_connection_client_hello(con, loop);
-            break;
         case CONNECTED:
-            if (revents & EV_WRITE)
-                handle_connection_client_tx(con, loop);
-
             if (buffer_room(con->client.buffer))
                 events |= EV_READ;
 
@@ -230,10 +205,7 @@ client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             }
 
             break;
-       case SERVER_CLOSED:
-            if (revents & EV_WRITE)
-                handle_connection_client_tx(con, loop);
-
+        case SERVER_CLOSED:
             if (buffer_len(con->server.buffer))
                 events |= EV_WRITE;
             else
@@ -248,80 +220,20 @@ client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             }
 
             break;
-       default:
+        case CLOSED:
+            TAILQ_REMOVE(&connections, con, entries);
+            free_connection(con);
+            return;
+        default:
             /* no op */
             break;
     }
 
-    if (con->state == CLOSED) {
-        TAILQ_REMOVE(&connections, con, entries);
-        free_connection(con);
-    } else {
-        move_to_head_of_queue(con);
-    }
+    move_to_head_of_queue(con);
 }
 
 static void
-server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
-    struct Connection *con = (struct Connection *)w->data;
-    int events = 0;
-
-    if (revents & EV_READ)
-        handle_connection_server_rx(con, loop);
-
-    switch (con->state) {
-        case CONNECTED:
-            if (revents & EV_WRITE)
-                handle_connection_server_tx(con, loop);
-
-            if (buffer_room(con->server.buffer))
-                events |= EV_READ;
-
-            if (buffer_len(con->client.buffer))
-                events |= EV_WRITE;
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-        case CLIENT_CLOSED:
-            if (revents & EV_WRITE)
-                handle_connection_server_tx(con, loop);
-
-            if (buffer_len(con->client.buffer))
-                events |= EV_WRITE;
-            else
-                close_server_socket(con, loop);
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-       default:
-            /* no op */
-            break;
-    }
-
-    if (con->state == CLOSED) {
-        TAILQ_REMOVE(&connections, con, entries);
-        free_connection(con);
-    } else {
-        move_to_head_of_queue(con);
-    }
-}
-
-static void
-handle_connection_client_rx(struct Connection *con, struct ev_loop *loop) {
+client_rx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
     n = buffer_recv(con->client.buffer,
@@ -347,7 +259,7 @@ handle_connection_client_rx(struct Connection *con, struct ev_loop *loop) {
 }
 
 static void
-handle_connection_client_tx(struct Connection *con, struct ev_loop *loop) {
+client_tx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
     n = buffer_send(con->server.buffer,
@@ -363,7 +275,67 @@ handle_connection_client_tx(struct Connection *con, struct ev_loop *loop) {
 }
 
 static void
-handle_connection_server_rx(struct Connection *con, struct ev_loop *loop) {
+server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
+    struct Connection *con = (struct Connection *)w->data;
+    int events = 0;
+
+    assert(server_socket_open(con));
+
+    if (revents & EV_READ)
+        server_rx(con, loop);
+
+    /* Server socket may have been closed by server_rx() */
+    if (revents & EV_WRITE &&
+            client_socket_open(con) &&
+            buffer_len(con->client.buffer))
+        server_tx(con, loop);
+
+    switch (con->state) {
+        case CONNECTED:
+            if (buffer_room(con->server.buffer))
+                events |= EV_READ;
+
+            if (buffer_len(con->client.buffer))
+                events |= EV_WRITE;
+
+            if (events == 0)
+                ev_io_stop(loop, w);
+            else if (events != revents) {
+                ev_io_stop(loop, w);
+                ev_io_set(w, w->fd, events);
+                ev_io_start(loop, w);
+            }
+
+            break;
+        case CLIENT_CLOSED:
+            if (buffer_len(con->client.buffer))
+                events |= EV_WRITE;
+            else
+                close_server_socket(con, loop);
+
+            if (events == 0)
+                ev_io_stop(loop, w);
+            else if (events != revents) {
+                ev_io_stop(loop, w);
+                ev_io_set(w, w->fd, events);
+                ev_io_start(loop, w);
+            }
+
+            break;
+       case CLOSED:
+            TAILQ_REMOVE(&connections, con, entries);
+            free_connection(con);
+            return;
+       default:
+            /* no op */
+            break;
+    }
+
+    move_to_head_of_queue(con);
+}
+
+static void
+server_rx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
     n = buffer_recv(con->server.buffer,
@@ -388,7 +360,7 @@ handle_connection_server_rx(struct Connection *con, struct ev_loop *loop) {
 }
 
 static void
-handle_connection_server_tx(struct Connection *con, struct ev_loop *loop) {
+server_tx(struct Connection *con, struct ev_loop *loop) {
     int n;
 
     n = buffer_send(con->client.buffer,
@@ -558,6 +530,55 @@ free_connection(struct Connection *con) {
     free_buffer(con->server.buffer);
     free((char *)con->hostname); /* cast away const'ness */
     free(con);
+}
+
+static void
+print_connection(FILE *file, const struct Connection *con) {
+    char client[INET6_ADDRSTRLEN];
+    char server[INET6_ADDRSTRLEN];
+    int client_port = 0;
+    int server_port = 0;
+
+    switch (con->state) {
+        case NEW:
+            fprintf(file, "NEW           -\t-\n");
+            break;
+        case ACCEPTED:
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
+            fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size);
+            break;
+        case CONNECTED:
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
+            get_peer_address(&con->server.addr,
+                             server, sizeof(server), &server_port);
+            fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size,
+                    server, server_port,
+                    con->server.buffer->len, con->server.buffer->size);
+            break;
+        case SERVER_CLOSED:
+            get_peer_address(&con->client.addr,
+                             client, sizeof(client), &client_port);
+            fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
+                    client, client_port,
+                    con->client.buffer->len, con->client.buffer->size);
+            break;
+        case CLIENT_CLOSED:
+            get_peer_address(&con->server.addr,
+                             server, sizeof(server), &server_port);
+            fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
+                    server, server_port,
+                    con->server.buffer->len, con->server.buffer->size);
+            break;
+        case CLOSED:
+            fprintf(file, "CLOSED        -\t-\n");
+            break;
+    }
 }
 
 static void
