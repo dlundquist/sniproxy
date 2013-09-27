@@ -3,11 +3,12 @@ compiler:
   - clang
   - gcc
 install:
-  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf valgrind
+  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y libpcre3-dev cdbs dh-autoreconf valgrind apache2-utils
   - ./autogen.sh
 script:
   - ./configure && make && make check
   - sudo make install && sudo make uninstall
   - bash -c "cd tests && ./functional_test valgrind --error-exitcode=1"
+  - bash -c "cd tests && ./bench_test_httpd"
   - dpkg-buildpackage && sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
 

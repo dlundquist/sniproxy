@@ -1,0 +1,28 @@
+#!/bin/sh
+
+TEST_HTTPD_PORT=8081
+
+perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
+TEST_HTTPD_PID=$!
+
+echo -n "Wait for TestHTTPD to start"
+until netstat -ltn | grep -q :${TEST_HTTPD_PORT}; do
+    echo -n .
+done
+
+echo ""
+
+# Run apache bench
+ab -n10000 -c100 http://127.0.0.1:${TEST_HTTPD_PORT}/
+RESULT=$?
+
+# Cleanup TestHTTPD
+kill ${TEST_HTTPD_PID}
+echo -n "Wait for TestHTTPD to stop"
+while netstat -ltn | grep -q :${TEST_HTTPD_PORT}; do
+    echo -n .
+done
+
+echo ""
+
+exit ${RESULT}

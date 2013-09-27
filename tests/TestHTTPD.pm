@@ -3,6 +3,7 @@ package TestHTTPD;
 use warnings;
 use strict;
 require IO::Socket::INET;
+require Socket;
 require List::Util;
 require Exporter;
 require Time::HiRes;
@@ -22,7 +23,7 @@ sub httpd {
     my $port = shift;
     my $count = 0;
 
-    my $server = IO::Socket::INET->new(Listen    => 10,
+    my $server = IO::Socket::INET->new(Listen    => Socket::SOMAXCONN(),
                                        Proto     => 'tcp',
                                        LocalAddr => 'localhost',
                                        LocalPort => $port,
@@ -40,23 +41,26 @@ sub httpd {
         # Child
         my @chunks = @{$responses->[$count % scalar @{$responses}]};
         my $content_length = 0;
-        map { $content_length += length $_ } @chunks;
+        map { $content_length += $_ } @chunks;
 
         while (my $line = $client->getline()) {
-            # print "CLIENT: $line";
-            last if $line =~ /^GET/;
+            # Wait for blank line indicating the end of the request
+            last if $line eq "\r\n";
         }
 
-        print $client "HTTP/1.0 200 OK\r\n";
+        # Assume a GET request
+
+        print $client "HTTP/1.1 200 OK\r\n";
         print $client "Content-Type: text/plain\r\n";
         print $client "Content-Length: $content_length\r\n";
+        print $client "Connection: close\r\n";
         print $client "\r\n";
 
         # Return data in chunks specified in responses
         while (my $length = shift @chunks) {
             print $client 'X' x $length;
             $client->flush();
-            Time::HiRes::usleep(200) if @chunks;
+            Time::HiRes::usleep(100) if @chunks;
         }
 
         close($client);
