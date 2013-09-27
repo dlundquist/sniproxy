@@ -39,7 +39,7 @@
 
 
 static void usage();
-static void daemonize(const char *, const int *);
+static void daemonize(const char *);
 
 
 int
@@ -48,8 +48,6 @@ main(int argc, char **argv) {
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
     int opt;
-    int *fd_list;
-
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
         switch (opt) {
@@ -71,18 +69,14 @@ main(int argc, char **argv) {
         return 1;
     }
 
-    fd_list = init_server(config);
-    if (fd_list == NULL)
-        return 2;
+    init_server(config);
 
     if (background_flag)
-        daemonize(config->user ? config->user : DEFAULT_USERNAME, fd_list);
+        daemonize(config->user ? config->user : DEFAULT_USERNAME);
 
     openlog(SYSLOG_IDENT, LOG_NDELAY, SYSLOG_FACILITY);
 
     run_server();
-
-    free(fd_list);
 
     free_config(config);
 
@@ -90,11 +84,8 @@ main(int argc, char **argv) {
 }
 
 static void
-daemonize(const char *username, const int *fd_list) {
-    int fd0, fd1, fd2;
-    int i, j, close_fd;;
+daemonize(const char *username) {
     pid_t pid;
-    struct rlimit rl;
     struct passwd *user;
 
     user = getpwnam(username);
@@ -104,11 +95,6 @@ daemonize(const char *username, const int *fd_list) {
     }
 
     umask(0);
-
-    if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
-        perror("getrlimit()");
-        exit(1);
-    }
 
     if ((pid = fork()) < 0) {
         perror("fork()");
@@ -127,28 +113,19 @@ daemonize(const char *username, const int *fd_list) {
         exit(1);
     }
 
-    /* close all file descriptors other than listeners */
-    for (i = sysconf(_SC_OPEN_MAX); i >= 0; i--) {
-        close_fd = 1;
-
-        for (j = 0; fd_list[j] != -1; j++) {
-            if (i == fd_list[j]) {
-                close_fd = 0;
-                break;
-            }
-        }
-
-        if (close_fd)
-            close(i);
+    if (freopen("/dev/null", "r", stdin) == NULL) {
+        perror("freopen(stdin)");
+        exit(1);
     }
 
-    fd0 = open("/dev/null", O_RDWR);
-    fd1 = dup(fd0);
-    fd2 = dup(fd0);
+    if (freopen("/dev/null", "a", stdout) == NULL) {
+        perror("freopen(stdout)");
+        exit(1);
+    }
 
-    if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
-        fprintf(stderr, "Unexpected file descriptors\n");
-        exit(2);
+    if (freopen("/dev/null", "a", stderr) == NULL) {
+        perror("freopen(stderr)");
+        exit(1);
     }
 
     if (setgid(user->pw_gid) < 0) {
