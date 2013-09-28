@@ -39,6 +39,7 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
+#include <stdarg.h>
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"
@@ -58,6 +59,11 @@ struct resolv_cb_data {
     int cb_free_addr;
 };
 
+struct ConnectionEvent {
+   ev_tstamp ts;
+   TAILQ_ENTRY(ConnectionEvent) entries;
+   char msg[];
+};
 
 static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
@@ -85,6 +91,11 @@ static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 static void free_resolv_cb_data(struct resolv_cb_data *);
+static void insert_event(struct Connection *, const char *, ...)
+    __attribute__ ((format (printf, 2, 3)));
+static void print_events(const struct Connection *);
+static void free_events(struct Connection *);
+static int slow_connection(const struct Connection *);
 
 
 void
@@ -125,6 +136,9 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
         errno = saved_errno;
         return 0;
     }
+    char address[ADDRESS_BUFFER_SIZE];
+    insert_event(con, "Accepting new connection from %s",
+            display_sockaddr(&con->client.addr, address, sizeof(address)));
 
 #ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -249,9 +263,11 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     void (*close_socket)(struct Connection *, struct ev_loop *) =
         is_client ? close_client_socket : close_server_socket;
 
+    insert_event(con, is_client ? "connection_cb:client" : "connection_cb:server");
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
+        insert_event(con, "recv complete");
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("recv(%s): %s, closing connection",
                     socket_name,
@@ -268,6 +284,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, 0, loop);
+        insert_event(con, "send complete");
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(%s): %s, closing connection",
                     socket_name,
@@ -473,6 +490,8 @@ parse_client_request(struct Connection *con) {
     con->hostname = hostname;
     con->hostname_len = (size_t)result;
     con->state = PARSED;
+    insert_event(con, "Parsed connection hostname \"%.*s\"",
+            result, hostname);
 }
 
 static void
@@ -544,6 +563,7 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         con->query_handle = resolv_query(address_hostname(result.address),
                 resolv_mode, resolv_cb,
                 (void (*)(void *))free_resolv_cb_data, cb_data);
+        insert_event(con, "Submitted DNS query for %s", address_hostname(server_address));
 
         con->state = RESOLVING;
 #endif
@@ -570,6 +590,7 @@ resolv_cb(struct Address *result, void *data) {
     struct Connection *con = cb_data->connection;
     struct ev_loop *loop = cb_data->loop;
 
+    insert_event(con, "resolv_cb");
     if (con->state != RESOLVING) {
         info("resolv_cb() called for connection not in RESOLVING state");
         return;
@@ -607,6 +628,7 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 
 static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
+    insert_event(con, "initiate_server_connect start");
 #ifdef HAVE_ACCEPT4
     int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
 #else
@@ -661,6 +683,8 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             return;
         }
 
+        insert_event(con, "initiate_server_connect trying to bind()");
+
         int tries = 5;
         do {
             result = bind(sockfd,
@@ -676,11 +700,14 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             abort_connection(con);
             return;
         }
+        insert_event(con, "initiate_server_connect bind() completed");
     }
 
+    insert_event(con, "initiate_server_connect connect() stating");
     int result = connect(sockfd,
             (struct sockaddr *)&con->server.addr,
             con->server.addr_len);
+    insert_event(con, "initiate_server_connect connect() completed");
     /* TODO retry connect in EADDRNOTAVAIL case */
     if (result < 0 && errno != EINPROGRESS) {
         close(sockfd);
@@ -713,6 +740,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     con->state = CONNECTED;
 
     ev_io_start(loop, server_watcher);
+    insert_event(con, "initiate_server_connect completed");
 }
 
 /* Close client socket.
@@ -725,6 +753,7 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
 
     ev_io_stop(loop, &con->client.watcher);
 
+    insert_event(con, "close_client_socket");
     if (close(con->client.watcher.fd) < 0)
         warn("close failed: %s", strerror(errno));
 
@@ -754,6 +783,7 @@ close_server_socket(struct Connection *con, struct ev_loop *loop) {
 
     ev_io_stop(loop, &con->server.watcher);
 
+    insert_event(con, "close_server_socket");
     if (close(con->server.watcher.fd) < 0)
         warn("close failed: %s", strerror(errno));
 
@@ -810,6 +840,7 @@ new_connection(struct ev_loop *loop) {
     con->header_len = 0;
     con->query_handle = NULL;
     con->use_proxy_header = 0;
+    TAILQ_INIT(&con->events);
 
     con->client.buffer = new_buffer(4096, loop);
     if (con->client.buffer == NULL) {
@@ -893,9 +924,13 @@ free_connection(struct Connection *con) {
     if (con == NULL)
         return;
 
+    if (slow_connection(con))
+       print_events(con);
+
     listener_ref_put(con->listener);
     free_buffer(con->client.buffer);
     free_buffer(con->server.buffer);
+    free_events(con);
     free((void *)con->hostname); /* cast away const'ness */
     free(con);
 }
@@ -949,5 +984,77 @@ print_connection(FILE *file, const struct Connection *con) {
         case CLOSED:
             fprintf(file, "CLOSED        -\t-\n");
             break;
+    }
+}
+
+static void
+insert_event(struct Connection *con, const char *format, ...) {
+    va_list args;
+    /* Fetch current timestamp before malloc and string formating */
+    ev_tstamp ts = ev_time();
+
+    va_start(args, format);
+    int result = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+    if (result < 0) {
+        err("Failed to insert event: %s", strerror(errno));
+        return;
+    }
+
+    size_t msg_len = (unsigned)result + 1;
+    struct ConnectionEvent *event =
+            malloc(sizeof(struct ConnectionEvent) + msg_len);
+    if (event == NULL) {
+        err("Failed to allocation memory for event: %s",
+            strerror(errno));
+        return;
+    }
+
+    event->ts = ts;
+
+    va_start(args, format);
+    vsnprintf(event->msg, msg_len, format, args);
+    va_end(args);
+
+    TAILQ_INSERT_TAIL(&con->events, event, entries);
+}
+
+static int
+slow_connection(const struct Connection *con) {
+    struct ConnectionEvent *first, *last;
+
+    first = TAILQ_FIRST(&con->events);
+    last = TAILQ_LAST(&con->events, ConnectionEventHead);
+    if (first == NULL || last == NULL)
+        return 0;
+
+    return last->ts - first->ts > 0.005;
+}
+
+static void
+print_events(const struct Connection *con) {
+    struct ConnectionEvent *iter, *first;
+
+    fprintf(stderr, "\nSlow connection:\n");
+    print_connection(stderr, con);
+
+    first = TAILQ_FIRST(&con->events);
+    if (first == NULL)
+        return;
+
+    TAILQ_FOREACH(iter, &con->events, entries) {
+        fprintf(stderr, "%2.9f\t%s\n",
+                        iter->ts - first->ts,
+                        iter->msg);
+    }
+}
+
+static void
+free_events(struct Connection *con) {
+    struct ConnectionEvent *iter;
+
+    while ((iter = TAILQ_FIRST(&con->events)) != NULL) {
+        TAILQ_REMOVE(&con->events, iter, entries);
+        free(iter);
     }
 }
