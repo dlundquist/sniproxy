@@ -49,12 +49,15 @@ static TAILQ_HEAD(ConnectionHead, Connection) connections;
 
 static inline int client_socket_open(const struct Connection *);
 static inline int server_socket_open(const struct Connection *);
+
+static void rx_tx(struct Connection *, struct ev_loop *, int,
+        int, struct Buffer *, struct Buffer *,
+        void (*)(struct Connection *, struct ev_loop *));
+static void rearm_watcher(struct ev_loop *, struct ev_io *,
+        const struct Buffer *, const struct Buffer *);
+
 static void client_cb(struct ev_loop *, struct ev_io *, int);
-static void client_rx(struct Connection *, struct ev_loop *);
-static void client_tx(struct Connection *, struct ev_loop *);
 static void server_cb(struct ev_loop *, struct ev_io *, int);
-static void server_rx(struct Connection *, struct ev_loop *);
-static void server_tx(struct Connection *, struct ev_loop *);
 static void handle_connection_client_hello(struct Connection *,
                                            struct ev_loop *);
 static void close_connection(struct Connection *, struct ev_loop *);
@@ -171,220 +174,153 @@ server_socket_open(const struct Connection *con) {
 static void
 client_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
-    int events = 0;
 
     assert(client_socket_open(con));
 
-    if (revents & EV_READ)
-        client_rx(con, loop);
-
-    /* Client socket may have been closed by client_rx() */
-    if (revents & EV_WRITE &&
-            client_socket_open(con) &&
-            buffer_len(con->server.buffer))
-        client_tx(con, loop);
+    rx_tx(con, loop, con->client.watcher.fd, revents, con->client.buffer,
+            con->server.buffer, close_client_socket);
 
     if (con->state == ACCEPTED)
         handle_connection_client_hello(con, loop);
 
-    switch (con->state) {
-        case ACCEPTED:
-        case CONNECTED:
-            if (buffer_room(con->client.buffer))
-                events |= EV_READ;
+    /* Close other socket if we have flushed corresponding buffer */
+    if (con->state == SERVER_CLOSED && buffer_len(con->server.buffer) == 0)
+        close_client_socket(con, loop);
+    if (con->state == CLIENT_CLOSED && buffer_len(con->client.buffer) == 0)
+        close_server_socket(con, loop);
 
-            if (buffer_len(con->server.buffer))
-                events |= EV_WRITE;
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-        case SERVER_CLOSED:
-            if (buffer_len(con->server.buffer))
-                events |= EV_WRITE;
-            else
-                close_client_socket(con, loop);
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-        case CLOSED:
-            TAILQ_REMOVE(&connections, con, entries);
-            free_connection(con);
-            return;
-        default:
-            /* no op */
-            break;
+    if (con->state == CLOSED) {
+        TAILQ_REMOVE(&connections, con, entries);
+        free_connection(con);
+        return;
     }
+
+    if (client_socket_open(con))
+        rearm_watcher(loop, w, con->client.buffer, con->server.buffer);
+
+    if (server_socket_open(con))
+        rearm_watcher(loop, &con->server.watcher,
+                con->server.buffer, con->client.buffer);
+
+    /* Neither watcher is active when the corresponding socket is closed */
+    assert(client_socket_open(con) || !ev_is_active(&con->client.watcher));
+    assert(server_socket_open(con) || !ev_is_active(&con->server.watcher));
+
+    /* At least one watcher is still active for this connection */
+    assert(ev_is_active(&con->client.watcher) && con->client.watcher.events ||
+           ev_is_active(&con->server.watcher) && con->server.watcher.events);
+
+    ev_verify(loop);
 
     move_to_head_of_queue(con);
 }
 
-static void
-client_rx(struct Connection *con, struct ev_loop *loop) {
+static void rx_tx(struct Connection *con, struct ev_loop *loop, int fd,
+        int revents, struct Buffer *input_buffer, struct Buffer *output_buffer,
+        void (*close_fd)(struct Connection *, struct ev_loop *)) {
     int n;
 
-    n = buffer_recv(con->client.buffer,
-                    con->client.watcher.fd, MSG_DONTWAIT);
-    if (n < 0) {
-        if (IS_TEMPORARY_SOCKERR(errno))
+    while (revents & EV_READ && buffer_room(input_buffer)) {
+        n = buffer_recv(input_buffer, fd, MSG_DONTWAIT);
+        if (n < 0) {
+            if (IS_TEMPORARY_SOCKERR(errno))
+                break;
+
+            syslog(LOG_INFO, "%s: recv(): %s, closing connection",
+                    __func__,
+                    strerror(errno));
+
+            close_fd(con, loop);
             return;
-
-        syslog(LOG_INFO, "recv failed: %s, closing connection",
-                strerror(errno));
-
-        close_client_socket(con, loop);
-    } else if (n == 0) { /* Client closed socket */
-        close_client_socket(con, loop);
+        } else if (n == 0) { /* peer closed socket */
+            close_fd(con, loop);
+            return;
+        }
     }
 
-    if (con->state == CLIENT_CLOSED ||
-            (con->state == CONNECTED && buffer_len(con->client.buffer))) {
-        ev_io_stop(loop, &con->server.watcher);
-        con->server.watcher.events |= EV_WRITE;
-        ev_io_start(loop, &con->server.watcher);
+    while (revents & EV_WRITE && buffer_len(output_buffer)) {
+        n = buffer_send(output_buffer, fd, MSG_DONTWAIT);
+        if (n < 0) {
+            if (IS_TEMPORARY_SOCKERR(errno))
+                break;
+
+            syslog(LOG_INFO, "%s: send(): %s, closing connection",
+                    __func__,
+                    strerror(errno));
+
+            close_fd(con, loop);
+            return;
+        }
     }
 }
 
+
+
 static void
-client_tx(struct Connection *con, struct ev_loop *loop) {
-    int n;
+rearm_watcher(struct ev_loop *loop, struct ev_io *w,
+        const struct Buffer *input_buffer,
+        const struct Buffer *output_buffer) {
+    int events = 0;
 
-    n = buffer_send(con->server.buffer,
-                    con->client.watcher.fd, MSG_DONTWAIT);
-    if (n < 0) {
-        if (IS_TEMPORARY_SOCKERR(errno))
-            return;
+    if (buffer_room(input_buffer))
+        events |= EV_READ;
 
-        syslog(LOG_INFO, "send failed: %s, closing connection",
-                strerror(errno));
-        close_client_socket(con, loop);
-    }
+    if (buffer_len(output_buffer))
+        events |= EV_WRITE;
 
-    if (server_socket_open(con) && buffer_room(con->server.buffer)) {
-        ev_io_stop(loop, &con->server.watcher);
-        con->server.watcher.events |= EV_READ;
-        ev_io_start(loop, &con->server.watcher);
+    if (ev_is_active(w)) {
+        if (events == 0)
+            ev_io_stop(loop, w);
+        else if (events != w->events) {
+            ev_io_stop(loop, w);
+            ev_io_set(w, w->fd, events);
+            ev_io_start(loop, w);
+        }
+    } else if (events != 0) {
+        ev_io_set(w, w->fd, events);
+        ev_io_start(loop, w);
     }
 }
 
 static void
 server_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
-    int events = 0;
 
     assert(server_socket_open(con));
 
-    if (revents & EV_READ)
-        server_rx(con, loop);
+    rx_tx(con, loop, con->server.watcher.fd, revents, con->server.buffer,
+            con->client.buffer, close_server_socket);
 
-    /* Server socket may have been closed by server_rx() */
-    if (revents & EV_WRITE &&
-            server_socket_open(con) &&
-            buffer_len(con->client.buffer))
-        server_tx(con, loop);
+    /* Close other socket if we have flushed corresponding buffer */
+    if (con->state == SERVER_CLOSED && buffer_len(con->server.buffer) == 0)
+        close_client_socket(con, loop);
+    if (con->state == CLIENT_CLOSED && buffer_len(con->client.buffer) == 0)
+        close_server_socket(con, loop);
 
-    switch (con->state) {
-        case CONNECTED:
-            if (buffer_room(con->server.buffer))
-                events |= EV_READ;
-
-            if (buffer_len(con->client.buffer))
-                events |= EV_WRITE;
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-        case CLIENT_CLOSED:
-            if (buffer_len(con->client.buffer))
-                events |= EV_WRITE;
-            else
-                close_server_socket(con, loop);
-
-            if (events == 0)
-                ev_io_stop(loop, w);
-            else if (events != revents) {
-                ev_io_stop(loop, w);
-                ev_io_set(w, w->fd, events);
-                ev_io_start(loop, w);
-            }
-
-            break;
-       case CLOSED:
-            TAILQ_REMOVE(&connections, con, entries);
-            free_connection(con);
-            return;
-       default:
-            /* no op */
-            break;
+    if (con->state == CLOSED) {
+        TAILQ_REMOVE(&connections, con, entries);
+        free_connection(con);
+        return;
     }
+
+    if (server_socket_open(con))
+        rearm_watcher(loop, w, con->server.buffer, con->client.buffer);
+
+    if (client_socket_open(con))
+        rearm_watcher(loop, &con->client.watcher,
+                con->client.buffer, con->server.buffer);
+
+    /* Neither watcher is active when the corresponding socket is closed */
+    assert(client_socket_open(con) || !ev_is_active(&con->client.watcher));
+    assert(server_socket_open(con) || !ev_is_active(&con->server.watcher));
+
+    /* At least one watcher is still active for this connection */
+    assert(ev_is_active(&con->client.watcher) && con->client.watcher.events ||
+           ev_is_active(&con->server.watcher) && con->server.watcher.events);
+
+    ev_verify(loop);
 
     move_to_head_of_queue(con);
-}
-
-static void
-server_rx(struct Connection *con, struct ev_loop *loop) {
-    int n;
-
-    n = buffer_recv(con->server.buffer,
-                    con->server.watcher.fd, MSG_DONTWAIT);
-    if (n < 0) {
-        if (IS_TEMPORARY_SOCKERR(errno))
-            return;
-
-        syslog(LOG_INFO, "recv failed: %s, closing connection",
-                         strerror(errno));
-        close_server_socket(con, loop);
-    } else if (n == 0) { /* Server closed socket */
-        close_server_socket(con, loop);
-    }
-
-    if (con->state == SERVER_CLOSED ||
-            (con->state == CONNECTED && buffer_len(con->server.buffer))) {
-        ev_io_stop(loop, &con->client.watcher);
-        con->client.watcher.events |= EV_WRITE;
-        ev_io_start(loop, &con->client.watcher);
-    }
-}
-
-static void
-server_tx(struct Connection *con, struct ev_loop *loop) {
-    int n;
-
-    n = buffer_send(con->client.buffer,
-                    con->server.watcher.fd, MSG_DONTWAIT);
-    if (n < 0) {
-        if (IS_TEMPORARY_SOCKERR(errno))
-            return;
-
-        syslog(LOG_INFO, "send failed: %s, closing connection",
-                         strerror(errno));
-        close_server_socket(con, loop);
-    }
-
-    if (client_socket_open(con) && buffer_room(con->client.buffer)) {
-        ev_io_stop(loop, &con->client.watcher);
-        con->client.watcher.events |= EV_READ;
-        ev_io_start(loop, &con->client.watcher);
-    }
 }
 
 static void
