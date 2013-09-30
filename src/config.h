@@ -33,6 +33,7 @@
 struct Config {
     char *filename;
     char *user;
+    char *pidfile;
     struct Listener_head listeners;
     struct Table_head tables;
 };
