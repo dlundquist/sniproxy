@@ -220,12 +220,9 @@ static void rx_tx(struct Connection *con, struct ev_loop *loop, int fd,
         void (*close_fd)(struct Connection *, struct ev_loop *)) {
     int n;
 
-    while (revents & EV_READ && buffer_room(input_buffer)) {
+    if (revents & EV_READ && buffer_room(input_buffer)) {
         n = buffer_recv(input_buffer, fd, MSG_DONTWAIT);
-        if (n < 0) {
-            if (IS_TEMPORARY_SOCKERR(errno))
-                break;
-
+        if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             syslog(LOG_INFO, "%s: recv(): %s, closing connection",
                     __func__,
                     strerror(errno));
@@ -238,12 +235,9 @@ static void rx_tx(struct Connection *con, struct ev_loop *loop, int fd,
         }
     }
 
-    while (revents & EV_WRITE && buffer_len(output_buffer)) {
+    if (revents & EV_WRITE && buffer_len(output_buffer)) {
         n = buffer_send(output_buffer, fd, MSG_DONTWAIT);
-        if (n < 0) {
-            if (IS_TEMPORARY_SOCKERR(errno))
-                break;
-
+        if (n < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             syslog(LOG_INFO, "%s: send(): %s, closing connection",
                     __func__,
                     strerror(errno));
