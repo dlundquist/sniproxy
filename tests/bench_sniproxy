@@ -1,7 +1,7 @@
 #!/bin/sh
 
-SNI_PROXY_PORT=8080
-TEST_HTTPD_PORT=8081
+SNI_PROXY_PORT=${SNI_PROXY_PORT:=8080}
+TEST_HTTPD_PORT=${TEST_HTTPD_PORT:=8081}
 
 perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
 TEST_HTTPD_PID=$!
@@ -19,7 +19,7 @@ table {
 }
 " > ${CONFIG_FILE}
 
-../src/sniproxy -f -c ${CONFIG_FILE} &
+$@ ../src/sniproxy -f -c ${CONFIG_FILE} &
 SNI_PROXY_PID=$!
 
 
