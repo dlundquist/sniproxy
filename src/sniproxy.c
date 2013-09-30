@@ -40,6 +40,7 @@
 
 static void usage();
 static void daemonize(const char *);
+static void write_pidfile(const char *);
 
 
 int
@@ -75,6 +76,9 @@ main(int argc, char **argv) {
         daemonize(config->user ? config->user : DEFAULT_USERNAME);
 
     openlog(SYSLOG_IDENT, LOG_NDELAY, SYSLOG_FACILITY);
+
+    if (background_flag && config->pidfile != NULL)
+        write_pidfile(config->pidfile);
 
     run_server();
 
@@ -150,4 +154,17 @@ daemonize(const char *username) {
 static void
 usage() {
     fprintf(stderr, "Usage: sniproxy [-c <config>] [-f]\n");
+}
+
+static void
+write_pidfile(const char *path) {
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) {
+        perror("fopen");
+        return;
+    }
+
+    fprintf(fp, "%d\n", getpid());
+
+    fclose(fp);
 }

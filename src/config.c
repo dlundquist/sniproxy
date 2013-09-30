@@ -31,6 +31,7 @@
 
 
 static int accept_username(struct Config *, char *);
+static int accept_pidfile(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
@@ -64,6 +65,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_username,
             NULL,
             NULL},
+    { "pidfile",
+            NULL,
+            (int(*)(void *, char *))accept_pidfile,
+            NULL,
+            NULL},
     { "listener",
             (void *(*)())new_listener,
             (int(*)(void *, char *))accept_listener_arg,
@@ -92,6 +98,7 @@ init_config(const char *filename) {
 
     config->filename = NULL;
     config->user = NULL;
+    config->pidfile = NULL;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -130,10 +137,9 @@ init_config(const char *filename) {
 
 void
 free_config(struct Config *config) {
-    if (config->filename)
-        free(config->filename);
-    if (config->user)
-        free(config->user);
+    free(config->filename);
+    free(config->user);
+    free(config->pidfile);
 
     free_listeners(&config->listeners);
 
@@ -166,6 +172,9 @@ print_config(FILE *file, struct Config *config) {
     if (config->user)
         fprintf(file, "username %s\n\n", config->user);
 
+    if (config->pidfile)
+        fprintf(file, "pidfile %s\n\n", config->pidfile);
+
     SLIST_FOREACH(listener, &config->listeners, entries) {
         print_listener_config(file, listener);
     }
@@ -186,6 +195,16 @@ accept_username(struct Config *config, char *username) {
         return 1;
 }
 
+static int
+accept_pidfile(struct Config *config, char *pidfile) {
+        config->pidfile = strdup(pidfile);
+        if (config->pidfile == NULL) {
+            perror("malloc:");
+            return -1;
+        }
+
+        return 1;
+}
 
 static int
 end_listener_stanza(struct Config *config, struct Listener *listener) {
