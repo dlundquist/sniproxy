@@ -18,4 +18,4 @@ script:
   - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
   - echo -e "pidfile /tmp/sniproxy.pid\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
   - sudo service sniproxy start
-  - test -e cat /tmp/sniproxy.pid && ps -up `cat /tmp/sniproxy.pid`
+  - test -e /tmp/sniproxy.pid && ps -up `cat /tmp/sniproxy.pid`
