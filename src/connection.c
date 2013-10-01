@@ -233,8 +233,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     assert(server_socket_open(con) || !ev_is_active(&con->server.watcher));
 
     /* At least one watcher is still active for this connection */
-    assert(ev_is_active(&con->client.watcher) && con->client.watcher.events ||
-           ev_is_active(&con->server.watcher) && con->server.watcher.events);
+    assert((ev_is_active(&con->client.watcher) && con->client.watcher.events) ||
+           (ev_is_active(&con->server.watcher) && con->server.watcher.events));
 
     ev_verify(loop);
 
@@ -294,13 +294,15 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     } else if (parse_result == -2) {
         syslog(LOG_INFO, "Request from %s:%d did not include a hostname",
                peeripstr, peerport);
-        return close_client_socket(con, loop);
+        close_client_socket(con, loop);
+        return;
     } else if (parse_result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s:%d",
                peeripstr, peerport);
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
-        return close_client_socket(con, loop);
+        close_client_socket(con, loop);
+        return;
     }
     con->hostname = hostname;
 
@@ -308,7 +310,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     sockfd = lookup_server_socket(con->listener, hostname);
     if (sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
-        return close_client_socket(con, loop);
+        close_client_socket(con, loop);
+        return;
     }
 
     /* record server socket address,
