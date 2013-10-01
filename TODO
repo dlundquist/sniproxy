@@ -1,5 +1,4 @@
 * Non-blocking connect() to backend server
-* Move from select() to libevent to support more than FD_SETSIZE / 2 connections
 * Non-blocking DNS resolution
 ** Allow nameservers to be specified in configuration file
 * Allow source address for connection to backend to be specified

@@ -10,6 +10,7 @@ AM_INIT_AUTOMAKE
 AC_PROG_CC
 
 # Checks for libraries.
+AC_SEARCH_LIBS([ev_run], [ev],,AC_MSG_ERROR([libev not found]))
 AC_SEARCH_LIBS([pcre_exec], [pcre],,AC_MSG_ERROR([libpcre not found]))
 
 # Checks for header files.
@@ -27,7 +28,7 @@ AC_TYPE_SSIZE_T
 AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([memset select socket strcasecmp strdup strerror strncasecmp],,
+AC_CHECK_FUNCS([memset socket strcasecmp strdup strerror strncasecmp],,
     AC_MSG_ERROR([required functions(s) not found]))
 
 AC_CONFIG_FILES([Makefile
