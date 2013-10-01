@@ -79,7 +79,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;
-    int pos = TLS_HEADER_LEN;
+    size_t pos = TLS_HEADER_LEN;
     size_t len;
 
     if (hostname == NULL)
