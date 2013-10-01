@@ -76,17 +76,15 @@ ssize_t
 buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     ssize_t bytes;
     struct iovec iov[2];
-    struct msghdr msg = {
-        NULL,   // *msg_name
-        0,      //  msg_namelen
-        iov,    // *msg_iov
-        0,      //  msg_iovlen
-        NULL,   // *msg_control
-        0,      //  msg_controllen
-        0       //  msg_flags
-    };
+    struct msghdr msg;
 
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+    msg.msg_iov = iov;
     msg.msg_iovlen = setup_write_iov(buffer, iov, 0);
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
 
     bytes = recvmsg(sockfd, &msg, flags);
 
@@ -100,17 +98,15 @@ ssize_t
 buffer_send(struct Buffer *buffer, int sockfd, int flags) {
     ssize_t bytes;
     struct iovec iov[2];
-    struct msghdr msg = {
-        NULL,   // *msg_name
-        0,      //  msg_namelen
-        iov,    // *msg_iov
-        0,      //  msg_iovlen
-        NULL,   // *msg_control
-        0,      //  msg_controllen
-        0       //  msg_flags
-    };
+    struct msghdr msg;
 
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+    msg.msg_iov = iov;
     msg.msg_iovlen = setup_read_iov(buffer, iov, 0);
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
 
     bytes = sendmsg(sockfd, &msg, flags);
 
