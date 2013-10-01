@@ -26,8 +26,9 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
+#include <sys/socket.h>
 #include <sys/queue.h>
-#include <sys/select.h>
+#include <ev.h>
 #include "listener.h"
 #include "buffer.h"
 
@@ -44,7 +45,7 @@ struct Connection {
     struct {
         struct sockaddr_storage addr;
         socklen_t addr_len;
-        int sockfd;
+        struct ev_io watcher;
         struct Buffer *buffer;
     } client, server;
     const struct Listener *listener;
@@ -54,10 +55,8 @@ struct Connection {
 };
 
 void init_connections();
-void accept_connection(const struct Listener *);
-int fd_set_connections(fd_set *, fd_set *, int);
-void handle_connections(fd_set *, fd_set *);
-void free_connections();
+void accept_connection(const struct Listener *, struct ev_loop *);
+void free_connections(struct ev_loop *);
 void print_connections();
 
 #endif
