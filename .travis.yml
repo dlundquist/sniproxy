@@ -16,6 +16,6 @@ script:
   - dpkg-buildpackage
   - sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
   - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
-  - echo -e "listen 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
+  - echo -e "pidfile /tmp/sniproxy.pid\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
   - sudo service sniproxy start
-  - pgrep sniproxy
+  - test -e cat /tmp/sniproxy.pid && ps -up `cat /tmp/sniproxy.pid`
