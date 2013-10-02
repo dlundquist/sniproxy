@@ -7,7 +7,7 @@ AC_CONFIG_SRCDIR([src/sniproxy.c])
 AM_INIT_AUTOMAKE
 
 # Checks for programs.
-AC_PROG_CC
+AC_PROG_CC_C99
 
 # Checks for libraries.
 AC_SEARCH_LIBS([ev_run], [ev],,AC_MSG_ERROR([libev not found]))
