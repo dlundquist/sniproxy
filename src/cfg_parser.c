@@ -111,12 +111,9 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
 
 static const struct Keyword *
 find_keyword(const struct Keyword *grammar, const char *word) {
-    while (grammar->keyword) {
+    for (grammar; grammar->keyword; grammar++)
         if (strncmp(grammar->keyword, word, strlen(word)) == 0)
             return grammar;
-
-        grammar++;
-    }
 
     /* Special case for wildcard grammars i.e. tables */
     if (grammar->keyword == NULL && grammar->create)
