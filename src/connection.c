@@ -35,6 +35,7 @@
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
+#include <fcntl.h>
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
@@ -57,8 +58,9 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
         const struct Buffer *, const struct Buffer *);
 
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
-static void handle_connection_client_hello(struct Connection *,
-                                           struct ev_loop *);
+static void parse_client_request(struct Connection *, struct ev_loop *);
+static void resolve_server_address(struct Connection *, struct ev_loop *);
+static void initiate_server_connect(struct Connection *, struct ev_loop *);
 static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
@@ -94,6 +96,9 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
         free_connection(c);
         return;
     }
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
     ev_io_init(&c->client.watcher, connection_cb, sockfd, EV_READ);
     c->client.watcher.data = c;
@@ -158,6 +163,9 @@ print_connections() {
 static inline int
 client_socket_open(const struct Connection *con) {
     return con->state == ACCEPTED ||
+           con->state == PARSED ||
+           con->state == RESOLVED ||
+           con->state == CONNECTING ||
            con->state == CONNECTED ||
            con->state == SERVER_CLOSED;
 }
@@ -193,6 +201,19 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     void (*close_socket)(struct Connection *, struct ev_loop *) =
         is_client ? close_client_socket : close_server_socket;
 
+    /* Handle server half open connecting state */
+    if (revents & EV_WRITE && !is_client && con->state == CONNECTING) {
+        int error = 0;
+        socklen_t error_len = sizeof(error);
+
+        int result = getsockopt(w->fd, SOL_SOCKET, SO_ERROR, &error, &error_len);
+        if (result != 0 || error != 0) {
+            close_socket(con, loop);
+            revents = 0;
+        }
+        con->state = CONNECTED;
+    }
+
     ssize_t bytes_received;
     ssize_t bytes_transmitted;
 
@@ -224,7 +245,11 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Handle any state specific logic */
     if (is_client && con->state == ACCEPTED)
-        handle_connection_client_hello(con, loop);
+        parse_client_request(con, loop);
+    if (is_client && con->state == PARSED)
+        resolve_server_address(con, loop);
+    if (is_client && con->state == RESOLVED)
+        initiate_server_connect(con, loop);
 
     /* Close other socket if we have flushed corresponding buffer */
     if (con->state == SERVER_CLOSED && buffer_len(con->server.buffer) == 0)
@@ -249,7 +274,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Neither watcher is active when the corresponding socket is closed */
     assert(client_socket_open(con) || !ev_is_active(&con->client.watcher));
-    assert(server_socket_open(con) || !ev_is_active(&con->server.watcher));
+    assert(server_socket_open(con) || !ev_is_active(&con->server.watcher) ||
+            con->state == CONNECTING);
 
     /* At least one watcher is still active for this connection */
     assert((ev_is_active(&con->client.watcher) && con->client.watcher.events) ||
@@ -288,41 +314,27 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
     }
 }
 
-/*
- * Handle client request: this combines several phases
- *  + parse the client request
- *  + lookup which server to use
- *  + resolve the server name if necessary
- *  + connect to the server
- *
- * These really need to be broken up into separate states
- */
 static void
-handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
+parse_client_request(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
-    ssize_t len;
-    char *hostname = NULL;
-    int parse_result;
-    char peer_ip[INET6_ADDRSTRLEN + 8];
-    int sockfd = -1;
+    ssize_t len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
+    char *hostname;
 
-    len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
-
-    parse_result = con->listener->parse_packet(buffer, len, &hostname);
-    if (parse_result == -1) {
+    int result = con->listener->parse_packet(buffer, len, &hostname);
+    if (result == -1) {
         return;  /* incomplete request: try again */
-    } else if (parse_result == -2) {
+    } else if (result == -2) {
         syslog(LOG_INFO, "Request from %s did not include a hostname",
-                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+                display_sockaddr(&con->client.addr, buffer, sizeof(buffer)));
 
         if (con->listener->fallback_address == NULL) {
             close_client_socket(con, loop);
             return;
         }
-    } else if (parse_result < -2) {
+    } else if (result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s",
-                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-        syslog(LOG_DEBUG, "parse() returned %d", parse_result);
+                display_sockaddr(&con->client.addr, buffer, sizeof(buffer)));
+        syslog(LOG_DEBUG, "parse() returned %d", result);
         /* TODO optionally dump request to file */
 
         if (con->listener->fallback_address == NULL) {
@@ -331,85 +343,51 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         }
     }
     con->hostname = hostname;
-    /* TODO break the remainder out into other states */
+    con->state = PARSED;
+}
 
-    /* lookup server for hostname and connect */
+static void
+resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     struct Address *server_address =
-        listener_lookup_server_address(con->listener, hostname);
-    if (server_address == NULL) {
-        close_client_socket(con, loop);
-        return;
-    }
+        listener_lookup_server_address(con->listener, con->hostname);
+    assert(!address_is_wildcard(server_address));
 
     if (address_is_hostname(server_address)) {
-        int error;
-        struct addrinfo hints, *results, *iter;
-        char portstr[6];
-
-        snprintf(portstr, sizeof(portstr), "%d", address_port(server_address));
-
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = PF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-
-        /* TODO blocking DNS lookup */
-        error = getaddrinfo(address_hostname(server_address), portstr,
-                &hints, &results);
-        if (error != 0) {
-            syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
-            close_client_socket(con, loop);
-            free(server_address);
-            return;
-        }
-        free(server_address);
-
-        for (iter = results; iter; iter = iter->ai_next) {
-            sockfd = socket(iter->ai_family, iter->ai_socktype,
-                    iter->ai_protocol);
-            if (sockfd < 0)
-                continue;
-
-            /* TODO blocking connect */
-            if (connect(sockfd, iter->ai_addr, iter->ai_addrlen) < 0) {
-                close(sockfd);
-                sockfd = -1;
-                continue;
-            }
-
-            con->server.addr_len = iter->ai_addrlen;
-            memcpy(&con->server.addr, iter->ai_addr, iter->ai_addrlen);
-
-            break;
-        }
-
-        freeaddrinfo(results);
-    } else if (address_is_sockaddr(server_address)) {
-        con->server.addr_len = address_sa_len(server_address);
-        memcpy(&con->server.addr, address_sa(server_address),
-                con->server.addr_len);
-        free(server_address);
-
-        /* TODO blocking connect */
-        sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
-        if (sockfd >= 0 &&
-                connect(sockfd, (struct sockaddr *)&con->server.addr,
-                    con->server.addr_len) < 0) {
-            close(sockfd);
-            sockfd = -1;
-        }
-    }
-
-    if (sockfd < 0) {
-        syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
+        syslog(LOG_ERR, "DNS lookups not supported at this time");
         close_client_socket(con, loop);
         return;
     }
 
-    assert(con->state == ACCEPTED);
-    con->state = CONNECTED;
+    con->server.addr_len = address_len(server_address);
+    assert(con->server.addr_len <= sizeof(con->server.addr));
+    memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
 
+    con->state = RESOLVED;
+}
+
+static void
+initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
+    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        syslog(LOG_CRIT, "socket failed");
+        return;
+    }
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    int result = connect(sockfd,
+            (struct sockaddr *)&con->server.addr,
+            con->server.addr_len);
+    if (result < 0 && errno != EINPROGRESS) {
+        close(sockfd);
+        syslog(LOG_CRIT, "connect_failed");
+        return;
+    }
+
+    con->state = CONNECTING;
     ev_io_init(&con->server.watcher,
-            connection_cb, sockfd, EV_READ | EV_WRITE);
+        connection_cb, sockfd, EV_WRITE);
     con->server.watcher.data = con;
     ev_io_start(loop, &con->server.watcher);
 }

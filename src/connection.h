@@ -36,7 +36,10 @@ struct Connection {
     enum State {
         NEW,            /* Before successful accept */
         ACCEPTED,       /* Newly accepted client connection */
-        CONNECTED,      /* Parsed client hello and connected to server */
+        PARSED,         /* Parsed initial request and extracted hostname */
+        RESOLVED,       /* Server socket address resolved */
+        CONNECTING,     /* Connecting to server */
+        CONNECTED,      /* Connected to server */
         SERVER_CLOSED,  /* Client closed socket */
         CLIENT_CLOSED,  /* Server closed socket */
         CLOSED          /* Both sockets closed */
