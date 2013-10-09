@@ -3,3 +3,5 @@ tls_test
 buffer_test
 cfg_tokenizer_test
 config_test
+*.log
+*.trs
