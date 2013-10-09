@@ -27,10 +27,10 @@ Installation
 
 **Prerequisites**
 
-+ Autotools (autoconf and automake)
-+ libev and libpcre development headers
++ Autotools (autoconf,  automake and libtool)
++ libev4 and libpcre development headers
 + Perl and cURL for test suite
-    
+
 **Install**
 
     ./autogen.sh && ./configure && make check && sudo make install

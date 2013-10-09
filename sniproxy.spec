@@ -9,13 +9,13 @@ URL: https://github.com/dlundquist/sniproxy
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires: autoconf, automake, curl, pcre-devel, perl
+BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl
 Requires: pcre
 
 %description
 Proxies incoming HTTP and TLS connections based on the hostname contained in
 the initial request. This enables HTTPS name based virtual hosting to seperate
-backend servers without the installing the private key on the proxy machine.  
+backend servers without the installing the private key on the proxy machine.
 
 
 %prep

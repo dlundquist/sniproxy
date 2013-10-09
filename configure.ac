@@ -10,7 +10,7 @@ AM_INIT_AUTOMAKE
 AC_PROG_CC_C99
 
 # Checks for libraries.
-AC_SEARCH_LIBS([ev_run], [ev],,AC_MSG_ERROR([libev not found]))
+AC_SEARCH_LIBS([ev_run], [ev],,AC_MSG_ERROR([libev4 not found]))
 AC_SEARCH_LIBS([pcre_exec], [pcre],,AC_MSG_ERROR([libpcre not found]))
 
 # Checks for header files.
