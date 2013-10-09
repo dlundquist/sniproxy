@@ -71,14 +71,16 @@ run_server() {
 
 static void
 signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
-    switch (w->signum) {
-        case SIGHUP:
-            break;
-        case SIGUSR1:
-            print_connections();
-            break;
-        case SIGINT:
-        case SIGTERM:
-            ev_unloop (loop, EVUNLOOP_ALL);
+    if (revents & EV_SIGNAL) {
+        switch (w->signum) {
+            case SIGHUP:
+                break;
+            case SIGUSR1:
+                print_connections();
+                break;
+            case SIGINT:
+            case SIGTERM:
+                ev_unloop (loop, EVUNLOOP_ALL);
+        }
     }
 }

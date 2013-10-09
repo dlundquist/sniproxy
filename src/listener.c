@@ -308,7 +308,8 @@ static void
 accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Listener *listener = (struct Listener *)w->data;
 
-    accept_connection(listener, loop);
+    if (revents & EV_READ)
+        accept_connection(listener, loop);
 }
 
 static size_t

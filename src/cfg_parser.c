@@ -111,7 +111,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
 
 static const struct Keyword *
 find_keyword(const struct Keyword *grammar, const char *word) {
-    for (grammar; grammar->keyword; grammar++)
+    for (; grammar->keyword; grammar++)
         if (strncmp(grammar->keyword, word, strlen(word)) == 0)
             return grammar;
 
