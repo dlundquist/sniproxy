@@ -29,6 +29,18 @@
 #include <syslog.h>
 #include "table.h"
 #include "backend.h"
+#include "address.h"
+
+
+static inline struct Backend *
+table_lookup_backend(const struct Table *table, const char *hostname) {
+    return lookup_backend(&table->backends, hostname);
+}
+
+static inline void
+remove_table_backend(struct Table *table, struct Backend *backend) {
+    remove_backend(&table->backends, backend);
+}
 
 
 struct Table *
@@ -87,7 +99,7 @@ free_tables(struct Table_head *tables) {
 }
 
 struct Table *
-lookup_table(const struct Table_head *tables, const char *name) {
+table_lookup(const struct Table_head *tables, const char *name) {
     struct Table *iter;
 
     SLIST_FOREACH(iter, tables, entries) {
@@ -109,17 +121,17 @@ remove_table(struct Table_head *tables, struct Table *table) {
     free_table(table);
 }
 
-int
-lookup_table_server_socket(const struct Table *table, const char *hostname) {
+const struct Address *
+table_lookup_server_address(const struct Table *table, const char *hostname) {
     struct Backend *b;
 
-    b = lookup_table_backend(table, hostname);
+    b = table_lookup_backend(table, hostname);
     if (b == NULL) {
         syslog(LOG_INFO, "No match found for %s", hostname);
-        return -1;
+        return NULL;
     }
 
-    return open_backend_socket(b, hostname);
+    return b->address;
 }
 
 void
@@ -132,10 +144,7 @@ print_table_config(FILE *file, struct Table *table) {
         fprintf(file, "table %s {\n", table->name);
 
     STAILQ_FOREACH(backend, &table->backends, entries) {
-        if (backend->port == 0)
-            fprintf(file, "\t%s %s\n", backend->hostname, backend->address);
-        else
-            fprintf(file, "\t%s %s %d\n", backend->hostname, backend->address, backend->port);
+        print_backend_config(file, backend);
     }
     fprintf(file, "}\n\n");
 }
@@ -153,3 +162,4 @@ free_table(struct Table *table) {
     free(table->name);
     free(table);
 }
+

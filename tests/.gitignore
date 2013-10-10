@@ -1,7 +1,8 @@
-http_test
-tls_test
+address_test
 buffer_test
 cfg_tokenizer_test
 config_test
+http_test
+tls_test
 *.log
 *.trs

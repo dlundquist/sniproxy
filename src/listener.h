@@ -28,14 +28,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <ev.h>
+#include "address.h"
 #include "table.h"
 
 SLIST_HEAD(Listener_head, Listener);
 
 struct Listener {
     /* Configuration fields */
-    struct sockaddr_storage addr;
-    socklen_t addr_len;
+    struct Address *address;
     enum Protocol {
         TLS,
         HTTP
@@ -50,6 +50,7 @@ struct Listener {
     SLIST_ENTRY(Listener) entries;
 };
 
+
 struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
@@ -61,11 +62,11 @@ void remove_listener(struct Listener_head *, struct Listener *);
 void free_listeners(struct Listener_head *);
 
 int valid_listener(const struct Listener *);
-void print_listener_config(FILE *, const struct Listener *);
 int init_listener(struct Listener *, const struct Table_head *);
+struct Address *listener_lookup_server_address(const struct Listener *,
+        const char *);
+void print_listener_config(FILE *, const struct Listener *);
 void free_listener(struct Listener *);
 
-static inline int lookup_server_socket(const struct Listener *listener, const char *hostname) {
-    return lookup_table_server_socket(listener->table, hostname);
-}
+
 #endif
