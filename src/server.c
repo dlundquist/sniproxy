@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <ev.h>
 #include "server.h"
+#include "listener.h"
 #include "connection.h"
 
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);

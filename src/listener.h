@@ -62,7 +62,6 @@ void free_listeners(struct Listener_head *);
 
 int valid_listener(const struct Listener *);
 void print_listener_config(FILE *, const struct Listener *);
-void print_listener_status(FILE *, const struct Listener *);
 int init_listener(struct Listener *, const struct Table_head *);
 void free_listener(struct Listener *);
 

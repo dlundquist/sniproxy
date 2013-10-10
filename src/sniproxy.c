@@ -35,6 +35,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "sniproxy.h"
+#include "config.h"
 #include "server.h"
 
 
