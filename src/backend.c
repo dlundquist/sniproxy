@@ -94,13 +94,15 @@ init_backend(struct Backend *backend) {
     const char *reerr;
     int reerroffset;
 
-    backend->hostname_re = pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
     if (backend->hostname_re == NULL) {
-        syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
-        return 0;
-    }
+        backend->hostname_re = pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
+        if (backend->hostname_re == NULL) {
+            syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+            return 0;
+        }
 
-    syslog(LOG_DEBUG, "Parsed %s %s %d", backend->hostname, backend->address, backend->port);
+        syslog(LOG_DEBUG, "Parsed %s %s %d", backend->hostname, backend->address, backend->port);
+    }
 
     return 1;
 }

@@ -56,8 +56,6 @@ init_server(struct Config *c) {
     /* ignore SIGPIPE, or it will kill us */
     signal(SIGPIPE, SIG_IGN);
 
-    init_tables(&config->tables);
-
     init_listeners(&config->listeners, &config->tables);
 }
 

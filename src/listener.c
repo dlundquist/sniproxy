@@ -198,6 +198,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
         return -1;
     }
+    init_table(listener->table);
 
     sockfd = socket(listener->addr.ss_family, SOCK_STREAM, 0);
     if (sockfd < 0) {

@@ -30,7 +30,6 @@
 #include "table.h"
 #include "backend.h"
 
-static void init_table(struct Table *);
 
 struct Table *
 new_table() {
@@ -70,14 +69,7 @@ add_table(struct Table_head *tables, struct Table *table) {
     SLIST_INSERT_HEAD(tables, table, entries);
 }
 
-void init_tables(struct Table_head *tables) {
-    struct Table *iter;
-
-    SLIST_FOREACH(iter, tables, entries)
-        init_table(iter);
-}
-
-static void init_table(struct Table *table) {
+void init_table(struct Table *table) {
     struct Backend *iter;
 
     STAILQ_FOREACH(iter, &table->backends, entries)
