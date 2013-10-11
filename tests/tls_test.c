@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "tls.h"
@@ -81,6 +82,8 @@ int main() {
         assert(NULL != hostname);
 
         assert(0 == strcmp("localhost", hostname));
+
+        free(hostname);
     }
 
     for (i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
@@ -92,6 +95,8 @@ int main() {
         assert(result < 0 ||
                hostname == NULL ||
                strcmp("localhost", hostname) != 0);
+
+        free(hostname);
     }
 
     return 0;
