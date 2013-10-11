@@ -33,10 +33,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h> /* getaddrinfo */
+#include <unistd.h> /* close */
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
 #include "connection.h"
+#include "address.h"
 
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
@@ -63,8 +66,6 @@ static inline void move_to_head_of_queue(struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
-static void get_peer_address(const struct sockaddr_storage *,
-                             char *, size_t, int *);
 
 
 void
@@ -279,12 +280,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     ssize_t len;
     char *hostname = NULL;
     int parse_result;
-    char peeripstr[INET6_ADDRSTRLEN] = {'\0'};
-    int peerport = 0;
-    int sockfd;
-
-    get_peer_address(&con->client.addr,
-                     peeripstr, sizeof(peeripstr), &peerport);
+    char peer_ip[INET6_ADDRSTRLEN + 8];
+    int sockfd = -1;
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -292,13 +289,13 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     if (parse_result == -1) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
-        syslog(LOG_INFO, "Request from %s:%d did not include a hostname",
-               peeripstr, peerport);
+        syslog(LOG_INFO, "Request from %s did not include a hostname",
+               display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
         close_client_socket(con, loop);
         return;
     } else if (parse_result < -2) {
-        syslog(LOG_INFO, "Unable to parse request from %s:%d",
-               peeripstr, peerport);
+        syslog(LOG_INFO, "Unable to parse request from %s",
+               display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
         close_client_socket(con, loop);
@@ -307,20 +304,67 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     con->hostname = hostname;
 
     /* lookup server for hostname and connect */
-    sockfd = lookup_server_socket(con->listener, hostname);
+    struct Address *server_address = listener_lookup_server_address(con->listener, hostname);
+    if (server_address == NULL) {
+        close_client_socket(con, loop);
+        return;
+    }
+
+    if (address_is_hostname(server_address)) {
+        int error;
+        struct addrinfo hints, *results, *iter;
+        char portstr[6];
+
+        snprintf(portstr, sizeof(portstr), "%d", address_port(server_address));
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        error = getaddrinfo(address_hostname(server_address), portstr, &hints, &results);
+        if (error != 0) {
+            syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
+            close_client_socket(con, loop);
+            free(server_address);
+            return;
+        }
+        free(server_address);
+
+        for (iter = results; iter; iter = iter->ai_next) {
+            sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol);
+            if (sockfd < 0)
+                continue;
+
+            if (connect(sockfd, iter->ai_addr, iter->ai_addrlen) < 0) {
+                close(sockfd);
+                sockfd = -1;
+                continue;
+            }
+
+            con->server.addr_len = iter->ai_addrlen;
+            memcpy(&con->server.addr, iter->ai_addr, iter->ai_addrlen);
+
+            break;
+        }
+
+        freeaddrinfo(results);
+    } else if (address_is_sockaddr(server_address)) {
+        con->server.addr_len = address_sa_len(server_address);
+        memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
+        free(server_address);
+
+        sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
+        if (sockfd >= 0 && connect(sockfd, (struct sockaddr *)&con->server.addr, con->server.addr_len) < 0) {
+            close(sockfd);
+            sockfd = -1;
+        }
+    }
+
     if (sockfd < 0) {
         syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
         close_client_socket(con, loop);
         return;
     }
-
-    /* record server socket address,
-     * passing this down from open_backend_socket() in lookup_server_socket()
-     * would be cleaner
-     */
-    getpeername(sockfd,
-                (struct sockaddr *)&con->server.addr,
-                &con->server.addr_len);
 
     assert(con->state == ACCEPTED);
     con->state = CONNECTED;
@@ -426,45 +470,33 @@ free_connection(struct Connection *con) {
 
 static void
 print_connection(FILE *file, const struct Connection *con) {
-    char client[INET6_ADDRSTRLEN];
-    char server[INET6_ADDRSTRLEN];
-    int client_port = 0;
-    int server_port = 0;
+    char client[INET6_ADDRSTRLEN + 8];
+    char server[INET6_ADDRSTRLEN + 8];
 
     switch (con->state) {
         case NEW:
             fprintf(file, "NEW           -\t-\n");
             break;
         case ACCEPTED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            fprintf(file, "ACCEPTED      %s %d %zu/%zu\t-\n",
-                    client, client_port,
+            fprintf(file, "ACCEPTED      %s %zu/%zu\t-\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size);
             break;
         case CONNECTED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            get_peer_address(&con->server.addr,
-                             server, sizeof(server), &server_port);
-            fprintf(file, "CONNECTED     %s %d %zu/%zu\t%s %d %zu/%zu\n",
-                    client, client_port,
+            fprintf(file, "CONNECTED     %s %zu/%zu\t%s %zu/%zu\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size,
-                    server, server_port,
+                    display_sockaddr(&con->server.addr, server, sizeof(server)),
                     con->server.buffer->len, con->server.buffer->size);
             break;
         case SERVER_CLOSED:
-            get_peer_address(&con->client.addr,
-                             client, sizeof(client), &client_port);
-            fprintf(file, "SERVER_CLOSED %s %d %zu/%zu\t-\n",
-                    client, client_port,
+            fprintf(file, "SERVER_CLOSED %s %zu/%zu\t-\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size);
             break;
         case CLIENT_CLOSED:
-            get_peer_address(&con->server.addr,
-                             server, sizeof(server), &server_port);
-            fprintf(file, "CLIENT_CLOSED -\t%s %d %zu/%zu\n",
-                    server, server_port,
+            fprintf(file, "CLIENT_CLOSED -\t%s %zu/%zu\n",
+                    display_sockaddr(&con->server.addr, server, sizeof(server)),
                     con->server.buffer->len, con->server.buffer->size);
             break;
         case CLOSED:
@@ -472,25 +504,3 @@ print_connection(FILE *file, const struct Connection *con) {
             break;
     }
 }
-
-static void
-get_peer_address(const struct sockaddr_storage *addr,
-                 char *ip, size_t len, int *port) {
-    switch (addr->ss_family) {
-        case AF_INET:
-            inet_ntop(AF_INET,
-                      &((struct sockaddr_in *)addr)->sin_addr,
-                      ip, len);
-            if (port != NULL)
-                *port = ntohs(((struct sockaddr_in *)addr)->sin_port);
-            break;
-        case AF_INET6:
-            inet_ntop(AF_INET6,
-                      &((struct sockaddr_in6 *)addr)->sin6_addr,
-                      ip, len);
-            if (port != NULL)
-                *port = ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
-            break;
-    }
-}
-

@@ -1,7 +1,9 @@
 
 sbin_PROGRAMS = sniproxy
 
-sniproxy_SOURCES = backend.c \
+sniproxy_SOURCES = address.c \
+                   address.h \
+                   backend.c \
                    backend.h \
                    buffer.c \
                    buffer.h \
@@ -24,7 +26,6 @@ sniproxy_SOURCES = backend.c \
                    table.c \
                    table.h \
                    tls.c \
-                   tls.h \
-                   util.c \
-                   util.h
+                   tls.h
+
 sniproxy_LDADD = -lpcre -lev
