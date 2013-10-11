@@ -50,8 +50,6 @@ static const char valid_label_bytes[] =
 "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
 
 
-static struct Address *new_address_sa_port(struct sockaddr *, socklen_t,
-        const char *);
 static int valid_hostname(const char *);
 
 
@@ -382,26 +380,6 @@ is_numeric(const char *s) {
 
     return n ^ n || /* to suppress unused return value of strtod() */
         *p == '\0'; /* to check entire string was numeric */
-}
-
-static struct Address *
-new_address_sa_port(struct sockaddr *sa, socklen_t sa_len,
-        const char *portstr) {
-    if (portstr == NULL)
-        return NULL;
-
-    if (!is_numeric(portstr))
-        return NULL; /* bad port portion of address */
-
-    int port = atoi(portstr);
-    if (port < 0 || port > 65535)
-        return NULL;
-
-    struct Address *addr = new_address_sa(sa, sa_len);
-    if (addr != NULL)
-        address_set_port(addr, port);
-
-    return addr;
 }
 
 static int
