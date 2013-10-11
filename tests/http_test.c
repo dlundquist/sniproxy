@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "http.h"
@@ -54,6 +55,8 @@ int main() {
         assert(NULL != hostname);
 
         assert(0 == strcmp("localhost", hostname));
+
+        free(hostname);
     }
 
     for (i = 0; i < sizeof(bad) / sizeof(const char *); i++) {

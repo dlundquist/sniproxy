@@ -325,8 +325,10 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         if (error != 0) {
             syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
             close_client_socket(con, loop);
+            free(server_address);
             return;
         }
+        free(server_address);
 
         for (iter = results; iter; iter = iter->ai_next) {
             sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol);
@@ -349,6 +351,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     } else if (address_is_sockaddr(server_address)) {
         con->server.addr_len = address_sa_len(server_address);
         memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
+        free(server_address);
 
         sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
         if (sockfd >= 0 && connect(sockfd, (struct sockaddr *)&con->server.addr, con->server.addr_len) < 0) {
