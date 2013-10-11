@@ -58,12 +58,55 @@ static int valid_hostname(const char *);
 struct Address *
 new_address(const char *hostname_or_ip) {
     struct sockaddr_storage sa;
-    char ip_buf[INET6_ADDRSTRLEN];
+    char ip_buf[256];
     char *port;
     size_t len;
 
     if (hostname_or_ip == NULL)
         return NULL;
+
+    /* IPv6 address */
+    /* we need to test for raw IPv6 address for IPv4 port combinations since a
+     * colon would give false positives
+     */
+    memset(&sa, 0, sizeof(sa));
+    if (inet_pton(AF_INET6, hostname_or_ip,
+                &((struct sockaddr_in6 *)&sa)->sin6_addr) == 1) {
+        ((struct sockaddr_in6 *)&sa)->sin6_family = AF_INET6;
+
+        return new_address_sa(
+                (struct sockaddr *)&sa,
+                sizeof(struct sockaddr_in6));
+    }
+
+    /* Unix socket */
+    memset(&sa, 0, sizeof(sa));
+    if (strncmp("unix:", hostname_or_ip, 5) == 0) {
+        ((struct sockaddr_un *)&sa)->sun_family = AF_UNIX;
+        strncpy(((struct sockaddr_un *)&sa)->sun_path,
+                hostname_or_ip + 5, sizeof(sa) -
+                offsetof(struct sockaddr_un, sun_path));
+
+        return new_address_sa(
+                (struct sockaddr *)&sa, offsetof(struct sockaddr_un, sun_path) +
+                strlen(((struct sockaddr_un *)&sa)->sun_path) + 1);
+    }
+
+    /* Trailing port */
+    if ((port = strrchr(hostname_or_ip, ':')) != NULL && is_numeric(port + 1)) {
+        len = port - hostname_or_ip;
+        int port_num = atoi(port + 1);
+
+        if (len < sizeof(ip_buf) && port_num >= 0 && port_num <= 65535) {
+            strncpy(ip_buf, hostname_or_ip, len);
+            ip_buf[len] = '\0';
+
+            struct Address *addr = new_address(ip_buf);
+            address_set_port(addr, port_num);
+
+            return addr;
+        }
+    }
 
     /* Wildcard */
     if (strcmp("*", hostname_or_ip) == 0) {
@@ -71,6 +114,17 @@ new_address(const char *hostname_or_ip) {
         if (addr != NULL)
             addr->type = WILDCARD;
         return addr;
+    }
+
+    /* IPv4 address */
+    memset(&sa, 0, sizeof(sa));
+    if (inet_pton(AF_INET, hostname_or_ip,
+                &((struct sockaddr_in *)&sa)->sin_addr) == 1) {
+        ((struct sockaddr_in *)&sa)->sin_family = AF_INET;
+
+        return new_address_sa(
+                (struct sockaddr *)&sa,
+                sizeof(struct sockaddr_in));
     }
 
     /* [IPv6 address] */
@@ -88,77 +142,10 @@ new_address(const char *hostname_or_ip) {
                     &((struct sockaddr_in6 *)&sa)->sin6_addr) == 1) {
             ((struct sockaddr_in6 *)&sa)->sin6_family = AF_INET6;
 
-            if (port[1] == ':') {
-                return new_address_sa_port(
-                        (struct sockaddr *)&sa,
-                        sizeof(struct sockaddr_in6),
-                        port + 2 /* skipping past square bracket colon */);
-
-                return new_address_sa(
-                        (struct sockaddr *)&sa,
-                        sizeof(struct sockaddr_in6));
-            }
-
             return new_address_sa(
                     (struct sockaddr *)&sa,
                     sizeof(struct sockaddr_in6));
         }
-    }
-
-    /* Unix socket */
-    memset(&sa, 0, sizeof(sa));
-    if (strncmp("unix:", hostname_or_ip, 5) == 0) {
-        ((struct sockaddr_un *)&sa)->sun_family = AF_UNIX;
-        strncpy(((struct sockaddr_un *)&sa)->sun_path,
-                hostname_or_ip + 5, sizeof(sa) -
-                offsetof(struct sockaddr_un, sun_path));
-
-        return new_address_sa(
-                (struct sockaddr *)&sa, offsetof(struct sockaddr_un, sun_path) +
-                strlen(((struct sockaddr_un *)&sa)->sun_path) + 1);
-    }
-
-    /* IPv6 address */
-    /* we need to test for raw IPv6 address for IPv4 port combinations since a
-     * colon would give false positives
-     */
-    memset(&sa, 0, sizeof(sa));
-    if (inet_pton(AF_INET6, hostname_or_ip,
-                &((struct sockaddr_in6 *)&sa)->sin6_addr) == 1) {
-        ((struct sockaddr_in6 *)&sa)->sin6_family = AF_INET6;
-
-        return new_address_sa(
-                (struct sockaddr *)&sa,
-                sizeof(struct sockaddr_in6));
-    }
-
-    /* IPv4 address with port */
-    if ((port = strchr(hostname_or_ip, ':')) != NULL) {
-        len = port - hostname_or_ip;
-
-        strncpy(ip_buf, hostname_or_ip, len);
-        ip_buf[len] = '\0';
-
-        if (inet_pton(AF_INET, ip_buf,
-                    &((struct sockaddr_in *)&sa)->sin_addr) == 1) {
-            ((struct sockaddr_in *)&sa)->sin_family = AF_INET;
-
-            return new_address_sa_port(
-                    (struct sockaddr *)&sa,
-                    sizeof(struct sockaddr_in6),
-                    port + 1 /* skipping past colon */);
-        }
-    }
-
-    /* IPv4 address */
-    memset(&sa, 0, sizeof(sa));
-    if (inet_pton(AF_INET, hostname_or_ip,
-                &((struct sockaddr_in *)&sa)->sin_addr) == 1) {
-        ((struct sockaddr_in *)&sa)->sin_family = AF_INET;
-
-        return new_address_sa(
-                (struct sockaddr *)&sa,
-                sizeof(struct sockaddr_in));
     }
 
     /* hostname */
@@ -171,6 +158,7 @@ new_address(const char *hostname_or_ip) {
             addr->port = 0;
             addr->len = strlen(hostname_or_ip);
             memcpy(addr->data, hostname_or_ip, len);
+            addr->data[addr->len] = '\0';
         }
 
         return addr;

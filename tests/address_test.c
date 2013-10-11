@@ -17,6 +17,8 @@ struct Test {
 
 static const struct Test good[] = {
     {"www.example.com", "www.example.com", TYPE_HOSTNAME},
+    {"www.example.com:80", "www.example.com:80", TYPE_HOSTNAME},
+    {"hyphens-are-permited.example.com", "hyphens-are-permited.example.com", TYPE_HOSTNAME},
     {"localhost", "localhost", TYPE_HOSTNAME},
     {"192.0.2.10", "192.0.2.10", TYPE_SOCKADDR},
     {"192.0.2.10:80", "192.0.2.10:80", TYPE_SOCKADDR},
@@ -39,6 +41,8 @@ static const struct Test good[] = {
 static const char *bad[] = {
     NULL,
     "www..example.com",
+    "5www.example.com",
+    "-www.example.com",
     "1n\\/l1|>|-|0$T|\\|4M"
 };
 
@@ -68,7 +72,6 @@ int main() {
             fprintf(stderr, "Expected %s to be a wildcard\n", buffer);
             return 1;
         }
-
 
         if (strcmp(buffer, good[i].output)) {
             fprintf(stderr, "display_address() returned \"%s\", expected \"%s\"\n", buffer, good[i].output);
