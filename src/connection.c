@@ -281,7 +281,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     char *hostname = NULL;
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
-    int sockfd;
+    int sockfd = -1;
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
