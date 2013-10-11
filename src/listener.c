@@ -265,7 +265,7 @@ listener_lookup_server_address(const struct Listener *listener, const char *host
 
 void
 print_listener_config(FILE *file, const struct Listener *listener) {
-    char address[INET_ADDRSTRLEN + 8];
+    char address[256];
 
     fprintf(file, "listener %s {\n", display_address(listener->address, address, sizeof(address)));
 
