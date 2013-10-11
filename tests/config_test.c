@@ -1,9 +1,13 @@
 #include "config.h"
 
-int main() {
+int main(int argc, char **argv) {
+    char *config_file = "../sniproxy.conf";
     struct Config *config;
 
-    config = init_config("../sniproxy.conf");
+    if (argc >= 2)
+        config_file = argv[1];
+
+    config = init_config(config_file);
     if (config == NULL) {
         fprintf(stderr, "Failed to parse config\n");
         return 1;
