@@ -241,6 +241,9 @@ listener_lookup_server_address(const struct Listener *listener, const char *host
     const struct Address *addr =
         table_lookup_server_address(listener->table, hostname);
 
+    if (addr == NULL)
+        return NULL;
+
     int port = address_port(addr);
 
     if (address_is_wildcard(addr)) {

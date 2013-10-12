@@ -35,6 +35,8 @@ until netstat -ltn | grep -q :${SNI_PROXY_PORT}; do
 done
 echo ""
 
+sleep 1;
+
 # Run apache bench
 ab -n 65536 -c 256 http://127.0.0.1:${SNI_PROXY_PORT}/
 RESULT=$?
