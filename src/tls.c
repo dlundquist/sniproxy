@@ -109,7 +109,8 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     }
 
     /* TLS record length */
-    len = ((unsigned char)data[3] << 8) + (unsigned char)data[4] + TLS_HEADER_LEN;
+    len = ((unsigned char)data[3] << 8) +
+        (unsigned char)data[4] + TLS_HEADER_LEN;
     data_len = MIN(data_len, len);
 
     /* Check we received entire TLS record length */
@@ -175,7 +176,8 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
     /* Parse each 4 bytes for the extension header */
     while (pos + 4 < data_len) {
         /* Extension Length */
-        len = ((unsigned char)data[pos + 2] << 8) + (unsigned char)data[pos + 3];
+        len = ((unsigned char)data[pos + 2] << 8) +
+            (unsigned char)data[pos + 3];
 
         /* Check if it's a server name extension */
         if (data[pos] == 0x00 && data[pos + 1] == 0x00) {
@@ -195,12 +197,14 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
 }
 
 static int
-parse_server_name_extension(const char *data, size_t data_len, char **hostname) {
+parse_server_name_extension(const char *data, size_t data_len,
+        char **hostname) {
     size_t pos = 2; /* skip server name list length */
     size_t len;
 
     while (pos + 3 < data_len) {
-        len = ((unsigned char)data[pos + 1] << 8) + (unsigned char)data[pos + 2];
+        len = ((unsigned char)data[pos + 1] << 8) +
+            (unsigned char)data[pos + 2];
 
         if (pos + 3 + len > data_len)
             return -5;

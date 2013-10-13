@@ -133,7 +133,7 @@ stop_binder() {
 
 
 /* This function is invoked right after the binder is forked */
-static void run_binder(int sock_fd) {
+static void run_binder(int sockfd) {
     int running = 1, fd, len;
     int *fdptr;
     struct msghdr msg;
@@ -143,7 +143,7 @@ static void run_binder(int sock_fd) {
     char buffer[256];
 
     while (running) {
-        len = recv(sock_fd, buffer, sizeof(buffer), 0);
+        len = recv(sockfd, buffer, sizeof(buffer), 0);
         if (len < 0) {
             perror("recv()");
             return;
@@ -192,7 +192,7 @@ static void run_binder(int sock_fd) {
         memcpy(fdptr, &fd, sizeof(fd));
         msg.msg_controllen = cmsg->cmsg_len;
 
-        if (sendmsg(sock_fd, &msg, 0) < 0) {
+        if (sendmsg(sockfd, &msg, 0) < 0) {
             perror("sendmsg()");
             return;
         }
@@ -202,9 +202,10 @@ static void run_binder(int sock_fd) {
         continue;
 
         error:
-        strncpy(buffer + strlen(buffer), strerror(errno), sizeof(buffer) - strlen(buffer));
+        strncpy(buffer + strlen(buffer), strerror(errno),
+                sizeof(buffer) - strlen(buffer));
 
-        if (send(sock_fd, buffer, strlen(buffer), 0) < 0) {
+        if (send(sockfd, buffer, strlen(buffer), 0) < 0) {
             perror("send()");
             return;
         }

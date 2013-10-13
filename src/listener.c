@@ -46,14 +46,15 @@
 
 
 static void close_listener(struct ev_loop *, struct Listener *);
-static void accept_cb (struct ev_loop *, struct ev_io *, int );
+static void accept_cb(struct ev_loop *, struct ev_io *, int);
 
 
 /*
  * Initialize each listener.
  */
 void
-init_listeners(struct Listener_head *listeners, const struct Table_head *tables) {
+init_listeners(struct Listener_head *listeners,
+        const struct Table_head *tables) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
@@ -202,7 +203,8 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     /* set SO_REUSEADDR on server socket to facilitate restart */
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    if (bind(sockfd, address_sa(listener->address), address_sa_len(listener->address)) < 0) {
+    if (bind(sockfd, address_sa(listener->address),
+                address_sa_len(listener->address)) < 0) {
         syslog(LOG_CRIT, "bind failed");
         close(sockfd);
         return -3;
@@ -236,7 +238,8 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 }
 
 struct Address *
-listener_lookup_server_address(const struct Listener *listener, const char *hostname) {
+listener_lookup_server_address(const struct Listener *listener,
+        const char *hostname) {
     struct Address *new_addr = NULL;
     const struct Address *addr =
         table_lookup_server_address(listener->table, hostname);
@@ -270,7 +273,8 @@ void
 print_listener_config(FILE *file, const struct Listener *listener) {
     char address[256];
 
-    fprintf(file, "listener %s {\n", display_address(listener->address, address, sizeof(address)));
+    fprintf(file, "listener %s {\n",
+            display_address(listener->address, address, sizeof(address)));
 
     if (listener->protocol == TLS)
         fprintf(file, "\tprotocol tls\n");

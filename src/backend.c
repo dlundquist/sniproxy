@@ -89,15 +89,18 @@ init_backend(struct Backend *backend) {
     int reerroffset;
 
     if (backend->hostname_re == NULL) {
-        backend->hostname_re = pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
+        backend->hostname_re =
+            pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
         if (backend->hostname_re == NULL) {
-            syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d", reerr, reerroffset);
+            syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d",
+                    reerr, reerroffset);
             return 0;
         }
 
         syslog(LOG_DEBUG, "Parsed %s %s",
                 backend->hostname,
-                display_address(backend->address, address_buf, sizeof(address_buf)));
+                display_address(backend->address,
+                    address_buf, sizeof(address_buf)));
     }
 
     return 1;
@@ -111,7 +114,8 @@ lookup_backend(const struct Backend_head *head, const char *hostname) {
         hostname = "";
 
     STAILQ_FOREACH(iter, head, entries)
-        if (pcre_exec(iter->hostname_re, NULL, hostname, strlen(hostname), 0, 0, NULL, 0) >= 0)
+        if (pcre_exec(iter->hostname_re, NULL,
+                    hostname, strlen(hostname), 0, 0, NULL, 0) >= 0)
             return iter;
 
     return NULL;

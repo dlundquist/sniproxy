@@ -75,7 +75,8 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 break;
             case OBRACE:
                 if (keyword && sub_context && keyword->block_grammar) {
-                    result = parse_config(sub_context, cfg, keyword->block_grammar);
+                    result = parse_config(sub_context, cfg,
+                            keyword->block_grammar);
                     if (result <= 0)
                         return result;
                 } else {

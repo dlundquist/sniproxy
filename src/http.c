@@ -35,7 +35,8 @@
 
 #define SERVER_NAME_LEN 256
 
-static const char http_503[] = "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
+static const char http_503[] =
+    "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
     "Content-Type: text/html\r\n"
     "Connection: close\r\n\r\n"
     "Backend not available";
@@ -120,8 +121,9 @@ static int
 next_header(const char **data, int *len) {
     int header_len;
 
-    /* perhaps we can optimize this to reuse the value of header_len, rather than scanning twice */
-    /* walk our data stream until the end of the header */
+    /* perhaps we can optimize this to reuse the value of header_len, rather
+     * than scanning twice.
+     * Walk our data stream until the end of the header */
     while (*len > 2 && (*data)[0] != '\r' && (*data)[1] != '\n') {
         (*len)--;
         (*data)++;

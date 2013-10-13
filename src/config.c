@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <syslog.h>
 #include "cfg_parser.h"
@@ -118,13 +119,14 @@ init_config(const char *filename) {
     }
 
     if (parse_config((void *)config, file, global_grammar) <= 0) {
-        long whence = ftell(file);
+        uint64_t whence = ftell(file);
         char buffer[256];
 
         fprintf(stderr, "error parsing %s at %ld near:\n", filename, whence);
         fseek(file, -20, SEEK_CUR);
         for (i = 0; i < 5; i++)
-            fprintf(stderr, "%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
+            fprintf(stderr, "%ld\t%s", ftell(file),
+                    fgets(buffer, sizeof(buffer), file));
 
         free_config(config);
         config = NULL;

@@ -304,7 +304,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     con->hostname = hostname;
 
     /* lookup server for hostname and connect */
-    struct Address *server_address = listener_lookup_server_address(con->listener, hostname);
+    struct Address *server_address =
+        listener_lookup_server_address(con->listener, hostname);
     if (server_address == NULL) {
         close_client_socket(con, loop);
         return;
@@ -321,7 +322,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
-        error = getaddrinfo(address_hostname(server_address), portstr, &hints, &results);
+        error = getaddrinfo(address_hostname(server_address), portstr,
+                &hints, &results);
         if (error != 0) {
             syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
             close_client_socket(con, loop);
@@ -331,7 +333,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         free(server_address);
 
         for (iter = results; iter; iter = iter->ai_next) {
-            sockfd = socket(iter->ai_family, iter->ai_socktype, iter->ai_protocol);
+            sockfd = socket(iter->ai_family, iter->ai_socktype,
+                    iter->ai_protocol);
             if (sockfd < 0)
                 continue;
 
@@ -350,11 +353,14 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         freeaddrinfo(results);
     } else if (address_is_sockaddr(server_address)) {
         con->server.addr_len = address_sa_len(server_address);
-        memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
+        memcpy(&con->server.addr, address_sa(server_address),
+                con->server.addr_len);
         free(server_address);
 
         sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
-        if (sockfd >= 0 && connect(sockfd, (struct sockaddr *)&con->server.addr, con->server.addr_len) < 0) {
+        if (sockfd >= 0 &&
+                connect(sockfd, (struct sockaddr *)&con->server.addr,
+                    con->server.addr_len) < 0) {
             close(sockfd);
             sockfd = -1;
         }
@@ -369,7 +375,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     assert(con->state == ACCEPTED);
     con->state = CONNECTED;
 
-    ev_io_init(&con->server.watcher, connection_cb, sockfd, EV_READ | EV_WRITE);
+    ev_io_init(&con->server.watcher,
+            connection_cb, sockfd, EV_READ | EV_WRITE);
     con->server.watcher.data = con;
     ev_io_start(loop, &con->server.watcher);
 }

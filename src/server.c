@@ -79,7 +79,7 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
                 break;
             case SIGINT:
             case SIGTERM:
-                ev_unloop (loop, EVUNLOOP_ALL);
+                ev_unloop(loop, EVUNLOOP_ALL);
         }
     }
 }

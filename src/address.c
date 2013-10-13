@@ -394,7 +394,7 @@ valid_hostname(const char *hostname) {
     if (hostname[0] == '.')
         return 0;
 
-    for(const char *label = hostname;
+    for (const char *label = hostname;
             label - 1 != NULL && label[0] != '\0';
             label = strchr(label, '.') + 1) {
         char *next_label = strchr(label, '.');
