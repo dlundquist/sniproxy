@@ -10,7 +10,6 @@ Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl
-Requires: pcre
 
 %description
 Proxies incoming HTTP and TLS connections based on the hostname contained in
