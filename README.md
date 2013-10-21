@@ -76,8 +76,8 @@ This is the preferred installation method for modern Fedora based distributions.
     ./autogen && ./configure && make dist
 
 3. Build a RPM package
-    
-    rpmbuild --define "_sourcedir `pwd`" -ba sniproxy.spec
+
+    rpmbuild --define "_sourcedir `pwd`" -ba redhat/sniproxy.spec
 
 4. Install resulting RPM
 
@@ -94,17 +94,20 @@ Configuration Syntax
 
     user daemon
 
-    listener 127.0.0.1 443 {
+    pidfile /tmp/sniproxy.pid
+
+    listener 127.0.0.1:443 {
         protocol tls
-        table "TableName"
+        table TableName
     }
 
-    table "TableName" {
+    table TableName {
         # Match exact request hostnames
-        example.com 192.0.2.10      4343
-        example.net 2001:DB8::1:10  443
-        # Or use PCRE to match
-        .*\\.com    2001:DB8::1:11  443
-        # Combining PCRE and wildcard will resolve the hostname client requested and proxy to it
-        .*\\.edu    *               443
+        example.com 192.0.2.10:4343
+        example.net [2001:DB8::1:10]:443
+        # Or use regular expression to match
+        .*\\.com    [2001:DB8::1:11]:443
+        # Combining regular expression and wildcard will resolve the hostname
+        # client requested and proxy to it
+        .*\\.edu    *:443
     }
