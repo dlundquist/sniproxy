@@ -290,16 +290,22 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
         syslog(LOG_INFO, "Request from %s did not include a hostname",
-               display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-        close_client_socket(con, loop);
-        return;
+                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+
+        if (con->listener->fallback_address == NULL) {
+            close_client_socket(con, loop);
+            return;
+        }
     } else if (parse_result < -2) {
         syslog(LOG_INFO, "Unable to parse request from %s",
-               display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
         syslog(LOG_DEBUG, "parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
-        close_client_socket(con, loop);
-        return;
+
+        if (con->listener->fallback_address == NULL) {
+            close_client_socket(con, loop);
+            return;
+        }
     }
     con->hostname = hostname;
 
