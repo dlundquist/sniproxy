@@ -35,7 +35,7 @@ SLIST_HEAD(Listener_head, Listener);
 
 struct Listener {
     /* Configuration fields */
-    struct Address *address;
+    struct Address *address, *fallback_address;
     enum Protocol {
         TLS,
         HTTP
@@ -54,6 +54,7 @@ struct Listener {
 struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
+int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);

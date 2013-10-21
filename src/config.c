@@ -49,6 +49,11 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_table_name,
             NULL,
             NULL},
+    { "fallback",
+            NULL,
+            (int(*)(void *, char *))accept_listener_fallback_address,
+            NULL,
+            NULL},
     { NULL, NULL, NULL, NULL, NULL }
 };
 

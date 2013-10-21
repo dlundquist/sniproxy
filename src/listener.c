@@ -77,6 +77,7 @@ new_listener() {
     }
 
     listener->address = NULL;
+    listener->fallback_address = NULL;
     listener->protocol = TLS;
 
     return listener;
@@ -134,6 +135,30 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     return 1;
 }
 
+int
+accept_listener_fallback_address(struct Listener *listener, char *fallback) {
+    if (listener->fallback_address != NULL) {
+        fprintf(stderr, "Duplicate fallback address: %s\n", fallback);
+        return 0;
+    }
+    listener->fallback_address = new_address(fallback);
+    if (listener->fallback_address == NULL) {
+        fprintf(stderr, "Unable to parse fallback address: %s\n", fallback);
+        return 0;
+    }
+    if (address_is_wildcard(listener->fallback_address)) {
+        free(listener->fallback_address);
+        listener->fallback_address = NULL;
+        /* The wildcard functionality requires successfully parsing the
+         * hostname from the client's request, if we couldn't find the
+         * hostname and are using a fallback address it doesn't make
+         * much sense to configure it as a wildcard. */
+        fprintf(stderr, "Wildcard address prohibited as fallback address\n");
+        return 0;
+    }
+
+    return 1;
+}
 
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {
@@ -194,6 +219,13 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     }
     init_table(listener->table);
 
+    /* If no port was specified on the fallback address, inherit the address
+     * from the listening address */
+    if (listener->fallback_address &&
+            address_port(listener->fallback_address) == 0)
+        address_set_port(listener->fallback_address,
+                address_port(listener->address));
+
     sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         syslog(LOG_CRIT, "socket failed");
@@ -243,6 +275,9 @@ listener_lookup_server_address(const struct Listener *listener,
     struct Address *new_addr = NULL;
     const struct Address *addr =
         table_lookup_server_address(listener->table, hostname);
+
+    if (addr == NULL)
+        addr = listener->fallback_address;
 
     if (addr == NULL)
         return NULL;
@@ -299,6 +334,7 @@ free_listener(struct Listener *listener) {
         return;
 
     free(listener->address);
+    free(listener->fallback_address);
     free(listener->table_name);
     free(listener);
 }
