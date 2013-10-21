@@ -18,7 +18,7 @@ script:
   - dpkg-buildpackage
   - echo "Testing RPM package build"
   - make dist
-  - rpmbuild --define "_sourcedir `pwd`" -ba --nodeps sniproxy.spec
+  - rpmbuild --define "_sourcedir `pwd`" -ba --nodeps redhat/sniproxy.spec
   - echo "Testing Debian package installation, configuration, and usage"
   - sudo dpkg -i ../sniproxy_0.1-1_`dpkg --print-architecture`.deb
   - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
