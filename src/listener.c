@@ -319,6 +319,11 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     if (listener->table_name)
         fprintf(file, "\ttable %s\n", listener->table_name);
 
+    if (listener->fallback_address)
+        fprintf(file, "\tfallback %s\n",
+                display_address(listener->fallback_address,
+                    address, sizeof(address)));
+
     fprintf(file, "}\n\n");
 }
 
