@@ -79,6 +79,7 @@ void
 accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     struct Connection *c;
     int sockfd;
+    int on = 1;
 
     c = new_connection();
     if (c == NULL) {
@@ -94,6 +95,9 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
         free_connection(c);
         return;
     }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0)
+        syslog(LOG_CRIT, "setsockopt(): %s", strerror(errno));
 
     ev_io_init(&c->client.watcher, connection_cb, sockfd, EV_READ);
     c->client.watcher.data = c;
@@ -305,6 +309,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
     int sockfd = -1;
+    int on = 1;
+
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -405,6 +411,9 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
+    if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0)
+        syslog(LOG_CRIT, "setsockopt(): %s", strerror(errno));
+
     assert(con->state == ACCEPTED);
     con->state = CONNECTED;
 
@@ -485,13 +494,13 @@ new_connection() {
     c->server.addr_len = sizeof(c->server.addr);
     c->hostname = NULL;
 
-    c->client.buffer = new_buffer();
+    c->client.buffer = new_buffer(4096);
     if (c->client.buffer == NULL) {
         free_connection(c);
         return NULL;
     }
 
-    c->server.buffer = new_buffer();
+    c->server.buffer = new_buffer(4096);
     if (c->server.buffer == NULL) {
         free_connection(c);
         return NULL;
