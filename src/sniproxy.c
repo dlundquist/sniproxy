@@ -143,13 +143,6 @@ daemonize(const char *username) {
         exit(1);
     }
 
-    pid = fork();
-    if (pid < 0) {
-        perror("fork()");
-        exit(1);
-    } else if (pid > 0) {
-        exit(0);
-    }
 }
 
 static void
