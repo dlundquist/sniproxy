@@ -53,7 +53,7 @@ static TAILQ_HEAD(ConnectionHead, Connection) connections;
 static inline int client_socket_open(const struct Connection *);
 static inline int server_socket_open(const struct Connection *);
 
-static void rearm_watcher(struct ev_loop *, struct ev_io *,
+static void reactivate_watcher(struct ev_loop *, struct ev_io *,
         const struct Buffer *, const struct Buffer *);
 
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
@@ -62,7 +62,6 @@ static void handle_connection_client_hello(struct Connection *,
 static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
-static inline void move_to_head_of_queue(struct Connection *);
 static struct Connection *new_connection();
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
@@ -73,6 +72,9 @@ init_connections() {
     TAILQ_INIT(&connections);
 }
 
+/*
+ * Accept a new incoming connection
+ */
 void
 accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     struct Connection *c;
@@ -103,6 +105,9 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     ev_io_start(loop, &c->client.watcher);
 }
 
+/*
+ * Close and free all connections
+ */
 void
 free_connections(struct ev_loop *loop) {
     struct Connection *iter;
@@ -168,6 +173,15 @@ server_socket_open(const struct Connection *con) {
            con->state == CLIENT_CLOSED;
 }
 
+/*
+ * Main client callback: this is used by both the client and server watchers
+ *
+ * The logic is almost the same except for:
+ *  + input buffer
+ *  + output buffer
+ *  + how to close the socket
+ *
+ */
 static void
 connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
@@ -182,6 +196,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     ssize_t bytes_received;
     ssize_t bytes_transmitted;
 
+    /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
@@ -196,6 +211,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         }
     }
 
+    /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         bytes_transmitted = buffer_send(output_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
@@ -206,6 +222,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         }
     }
 
+    /* Handle any state specific logic */
     if (is_client && con->state == ACCEPTED)
         handle_connection_client_hello(con, loop);
 
@@ -221,12 +238,13 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     }
 
+    /* Reactivate watchers */
     if (client_socket_open(con))
-        rearm_watcher(loop, &con->client.watcher,
+        reactivate_watcher(loop, &con->client.watcher,
                 con->client.buffer, con->server.buffer);
 
     if (server_socket_open(con))
-        rearm_watcher(loop, &con->server.watcher,
+        reactivate_watcher(loop, &con->server.watcher,
                 con->server.buffer, con->client.buffer);
 
     /* Neither watcher is active when the corresponding socket is closed */
@@ -239,11 +257,13 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     ev_verify(loop);
 
-    move_to_head_of_queue(con);
+    /* Move to head of queue, so we can find inactive connections */
+    TAILQ_REMOVE(&connections, con, entries);
+    TAILQ_INSERT_HEAD(&connections, con, entries);
 }
 
 static void
-rearm_watcher(struct ev_loop *loop, struct ev_io *w,
+reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
         const struct Buffer *input_buffer,
         const struct Buffer *output_buffer) {
     int events = 0;
@@ -268,12 +288,15 @@ rearm_watcher(struct ev_loop *loop, struct ev_io *w,
     }
 }
 
-static void
-move_to_head_of_queue(struct Connection *con) {
-    TAILQ_REMOVE(&connections, con, entries);
-    TAILQ_INSERT_HEAD(&connections, con, entries);
-}
-
+/*
+ * Handle client request: this combines several phases
+ *  + parse the client request
+ *  + lookup which server to use
+ *  + resolve the server name if necessary
+ *  + connect to the server
+ *
+ * These really need to be broken up into separate states
+ */
 static void
 handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
@@ -308,6 +331,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         }
     }
     con->hostname = hostname;
+    /* TODO break the remainder out into other states */
 
     /* lookup server for hostname and connect */
     struct Address *server_address =
@@ -328,6 +352,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
+        /* TODO blocking DNS lookup */
         error = getaddrinfo(address_hostname(server_address), portstr,
                 &hints, &results);
         if (error != 0) {
@@ -344,6 +369,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
             if (sockfd < 0)
                 continue;
 
+            /* TODO blocking connect */
             if (connect(sockfd, iter->ai_addr, iter->ai_addrlen) < 0) {
                 close(sockfd);
                 sockfd = -1;
@@ -363,6 +389,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
                 con->server.addr_len);
         free(server_address);
 
+        /* TODO blocking connect */
         sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
         if (sockfd >= 0 &&
                 connect(sockfd, (struct sockaddr *)&con->server.addr,
@@ -434,7 +461,7 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
     if (con->state == CONNECTED || con->state == CLIENT_CLOSED)
         close_server_socket(con, loop);
 
-    /* state will now be either: ACCEPTED, SERVER_CLOSED or CLOSED */
+    /* State is now: ACCEPTED, SERVER_CLOSED or CLOSED */
 
     if (con->state == ACCEPTED || con->state == SERVER_CLOSED)
         close_client_socket(con, loop);
@@ -442,6 +469,9 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
     assert(con->state == CLOSED);
 }
 
+/*
+ * Allocate and initialize a new connection
+ */
 static struct Connection *
 new_connection() {
     struct Connection *c;
@@ -470,6 +500,11 @@ new_connection() {
     return c;
 }
 
+/*
+ * Free a connection and associated data
+ *
+ * Requires that no watchers remain active
+ */
 static void
 free_connection(struct Connection *con) {
     if (con == NULL)
@@ -477,7 +512,7 @@ free_connection(struct Connection *con) {
 
     free_buffer(con->client.buffer);
     free_buffer(con->server.buffer);
-    free((char *)con->hostname); /* cast away const'ness */
+    free((void *)con->hostname); /* cast away const'ness */
     free(con);
 }
 

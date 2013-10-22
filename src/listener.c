@@ -172,7 +172,8 @@ remove_listener(struct Listener_head *listeners, struct Listener *listener) {
     free_listener(listener);
 }
 
-int valid_listener(const struct Listener *listener) {
+int
+valid_listener(const struct Listener *listener) {
     if (listener->address == NULL) {
         fprintf(stderr, "No address specified\n");
         return 0;

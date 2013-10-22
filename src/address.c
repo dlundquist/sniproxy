@@ -181,7 +181,8 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
     return addr;
 }
 
-size_t address_len(const struct Address *addr) {
+size_t
+address_len(const struct Address *addr) {
     switch (addr->type) {
         case HOSTNAME:
             return addr->len +
@@ -212,21 +213,24 @@ address_is_wildcard(const struct Address *addr) {
     return addr != NULL && addr->type == WILDCARD;
 }
 
-const char *address_hostname(const struct Address *addr) {
+const char *
+address_hostname(const struct Address *addr) {
     if (addr->type != HOSTNAME)
         return NULL;
 
     return addr->data;
 }
 
-const struct sockaddr *address_sa(const struct Address *addr) {
+const struct sockaddr *
+address_sa(const struct Address *addr) {
     if (addr->type != SOCKADDR)
         return NULL;
 
     return (struct sockaddr *)addr->data;
 }
 
-socklen_t address_sa_len(const struct Address *addr) {
+socklen_t
+address_sa_len(const struct Address *addr) {
     if (addr->type != SOCKADDR)
         return 0;
 
@@ -408,9 +412,11 @@ valid_hostname(const char *hostname) {
 
         if (len > 63 || len < 1)
             return 0;
+
         if ((label[0] >= '0' && label[0] <= '9') ||
                 label[0] == '-' || label[len - 1] == '-')
             return 0;
+
         if (strspn(label, valid_label_bytes) < len)
             return 0;
     }

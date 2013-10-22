@@ -277,4 +277,3 @@ advance_read_position(struct Buffer *buffer, size_t offset) {
     buffer->head = (buffer->head + offset) & (buffer->size - 1);
     buffer->len -= offset;
 }
-

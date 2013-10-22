@@ -133,7 +133,8 @@ stop_binder() {
 
 
 /* This function is invoked right after the binder is forked */
-static void run_binder(int sockfd) {
+static void
+run_binder(int sockfd) {
     int running = 1, fd, len;
     int *fdptr;
     struct msghdr msg;
