@@ -3,9 +3,11 @@ package TestUtils;
 use warnings;
 use strict;
 use POSIX ":sys_wait_h";
+require File::Temp;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(start_child reap_children wait_for_type make_config);
+our $VERSION = '0.01';
 
 $SIG{CHLD} = \&REAPER;
 

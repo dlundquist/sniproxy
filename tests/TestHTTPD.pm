@@ -4,11 +4,11 @@ use warnings;
 use strict;
 require IO::Socket::INET;
 require Socket;
-require List::Util;
 require Exporter;
 require Time::HiRes;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(new);
+our $VERSION = '0.01';
 
 # This represents the sizes of chunks of our responses
 my $responses = [
@@ -34,6 +34,7 @@ sub httpd {
 
     while(my $client = $server->accept()) {
         $count ++;
+
         my $pid = fork();
         next if $pid; # Parent
         die "fork: $!" unless defined $pid;
@@ -51,6 +52,7 @@ sub httpd {
         # Assume a GET request
 
         print $client "HTTP/1.1 200 OK\r\n";
+        print $client "Server: TestHTTPD/$VERSION\r\n";
         print $client "Content-Type: text/plain\r\n";
         print $client "Content-Length: $content_length\r\n";
         print $client "Connection: close\r\n";
@@ -63,11 +65,11 @@ sub httpd {
             Time::HiRes::usleep(100) if @chunks;
         }
 
-        close($client);
-        exit;
+        $client->close();
+        exit 0;
     } continue {
         # close child sockets
-        close($client);
+        $client->close();
     }
     die "accept(): $!";
 }

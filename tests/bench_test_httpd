@@ -18,11 +18,6 @@ RESULT=$?
 
 # Cleanup TestHTTPD
 kill ${TEST_HTTPD_PID}
-echo -n "Wait for TestHTTPD to stop"
-while netstat -ltn | grep -q :${TEST_HTTPD_PORT}; do
-    echo -n .
-done
-
-echo ""
+wait ${TEST_HTTPD_PID}
 
 exit ${RESULT}

@@ -3,22 +3,14 @@
 SNI_PROXY_PORT=${SNI_PROXY_PORT:=8080}
 TEST_HTTPD_PORT=${TEST_HTTPD_PORT:=8081}
 
+# Start TestHTTPD
 perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
 TEST_HTTPD_PID=$!
 
-CONFIG_FILE=$(mktemp)
+# Create a test configuration file
+CONFIG_FILE=$(perl -MTestUtils -e "print TestUtils::make_config(${SNI_PROXY_PORT}, ${TEST_HTTPD_PORT});")
 
-echo "# Minimal test configuration
-
-listen ${SNI_PROXY_PORT} {
-    proto http
-}
-
-table {
-    localhost 127.0.0.1 ${TEST_HTTPD_PORT}
-}
-" > ${CONFIG_FILE}
-
+# Start sniproxy
 $@ ../src/sniproxy -f -c ${CONFIG_FILE} &
 SNI_PROXY_PID=$!
 
@@ -38,24 +30,16 @@ echo ""
 sleep 1;
 
 # Run apache bench
-ab -n 65536 -c 256 http://127.0.0.1:${SNI_PROXY_PORT}/
+ab -n 65536 -c 256 http://localhost:${SNI_PROXY_PORT}/
 RESULT=$?
 
 # Cleanup
 kill ${TEST_HTTPD_PID}
+wait ${TEST_HTTPD_PID}
+
 kill ${SNI_PROXY_PID}
+wait ${SNI_PROXY_PID}
+
 rm -f ${CONFIG_FILE}
-
-echo -n "Wait for sniproxy to stop"
-while netstat -ltn | grep -q :${SNI_PROXY_PORT}; do
-    echo -n .
-done
-echo ""
-
-echo -n "Wait for TestHTTPD to stop"
-while netstat -ltn | grep -q :${TEST_HTTPD_PORT}; do
-    echo -n .
-done
-echo ""
 
 exit ${RESULT}
