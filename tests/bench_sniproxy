@@ -1,11 +1,14 @@
 #!/bin/sh
 
 SNI_PROXY_PORT=${SNI_PROXY_PORT:=8080}
-TEST_HTTPD_PORT=${TEST_HTTPD_PORT:=8081}
-
-# Start TestHTTPD
-perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
-TEST_HTTPD_PID=$!
+if [ -n "${LOCAL_HTTPD_PORT}" ]; then
+    TEST_HTTPD_PORT=${LOCAL_HTTPD_PORT}
+else
+    TEST_HTTPD_PORT=${TEST_HTTPD_PORT:=8081}
+    # Start TestHTTPD
+    perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
+    TEST_HTTPD_PID=$!
+fi
 
 # Create a test configuration file
 CONFIG_FILE=$(perl -MTestUtils -e "print TestUtils::make_config(${SNI_PROXY_PORT}, ${TEST_HTTPD_PORT});")
@@ -13,7 +16,6 @@ CONFIG_FILE=$(perl -MTestUtils -e "print TestUtils::make_config(${SNI_PROXY_PORT
 # Start sniproxy
 $@ ../src/sniproxy -f -c ${CONFIG_FILE} &
 SNI_PROXY_PID=$!
-
 
 echo -n "Wait for TestHTTPD to start"
 until netstat -ltn | grep -q :${TEST_HTTPD_PORT}; do
@@ -34,8 +36,10 @@ ab -n 65536 -c 256 http://localhost:${SNI_PROXY_PORT}/
 RESULT=$?
 
 # Cleanup
-kill ${TEST_HTTPD_PID}
-wait ${TEST_HTTPD_PID}
+if [ -n "${TEST_HTTPD_PID}" ]; then
+    kill ${TEST_HTTPD_PID}
+    wait ${TEST_HTTPD_PID}
+fi
 
 kill ${SNI_PROXY_PID}
 wait ${SNI_PROXY_PID}
