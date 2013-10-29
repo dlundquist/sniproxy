@@ -2,8 +2,8 @@ SNI Proxy
 =========
 
 Proxies incoming HTTP and TLS connections based on the hostname contained in
-the initial request. This enables HTTPS name based virtual hosting to separate
-backend servers without the installing the private key on the proxy machine.
+the initial request. This enables HTTPS name-based virtual hosting to separate
+backend servers without installing the private key on the proxy machine.
 
 Features
 --------
@@ -57,7 +57,7 @@ This is the preferred installation method on recent Debian based distributions:
 **Note on Upgrading**
 
 The version of sniproxy is not automatically updated after each commit, so if
-you are upgrading to later version 10 version number of the sniproxy package
+you are upgrading to a later version, the version number of the sniproxy package
 may not have actually changed. This may cause issues with the upgrade process.
 It is recommended you uninstall `sudo apt-get remove sniproxy` then reinstall
 the new version.
