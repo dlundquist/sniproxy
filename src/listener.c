@@ -287,6 +287,10 @@ listener_lookup_server_address(const struct Listener *listener,
 
     if (address_is_wildcard(addr)) {
         new_addr = new_address(hostname);
+        if (new_addr == NULL) {
+            syslog(LOG_INFO, "Invalid hostname %s", hostname);
+            return NULL;
+        }
 
         if (port != 0)
             address_set_port(new_addr, port);
