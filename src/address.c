@@ -413,8 +413,7 @@ valid_hostname(const char *hostname) {
         if (len > 63 || len < 1)
             return 0;
 
-        if ((label[0] >= '0' && label[0] <= '9') ||
-                label[0] == '-' || label[len - 1] == '-')
+        if (label[0] == '-' || label[len - 1] == '-')
             return 0;
 
         if (strspn(label, valid_label_bytes) < len)

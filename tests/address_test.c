@@ -20,7 +20,7 @@ static const struct Test good[] = {
     {"www.example.com", "www.example.com", TYPE_HOSTNAME, 0},
     {"www.example.com:80", "www.example.com:80", TYPE_HOSTNAME, 80},
     {"hyphens-are-permited.example.com", "hyphens-are-permited.example.com", TYPE_HOSTNAME, 0},
-    {"79423.all-numeric-labels-are-permitted.com", "79423.all-numeric-labels-are-permitted.com", TYPE_HOSTNAME, 80},
+    {"79423.all-numeric-labels-are-permitted.com", "79423.all-numeric-labels-are-permitted.com", TYPE_HOSTNAME, 0},
     {"localhost", "localhost", TYPE_HOSTNAME, 0},
     {"192.0.2.10", "192.0.2.10", TYPE_SOCKADDR, 0},
     {"192.0.2.10:80", "192.0.2.10:80", TYPE_SOCKADDR, 80},
@@ -46,7 +46,6 @@ static const struct Test good[] = {
 static const char *bad[] = {
     NULL,
     "www..example.com",
-    "5www.example.com",
     "-www.example.com",
     "1n\\/l1|>|-|0$T|\\|4M"
 };
