@@ -22,7 +22,7 @@ backend servers without the installing the private key on the proxy machine.
 
 
 %build
-%configure
+%configure CFLAGS="-I/usr/include/libev"
 make %{?_smp_mflags}
 
 
