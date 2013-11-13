@@ -31,7 +31,6 @@
 #include <strings.h> /* strcasecmp() */
 #include <unistd.h>
 #include <errno.h>
-#include <syslog.h>
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -41,6 +40,7 @@
 #include "address.h"
 #include "listener.h"
 #include "connection.h"
+#include "logger.h"
 #include "tls.h"
 #include "http.h"
 
@@ -72,7 +72,7 @@ new_listener() {
 
     listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
-        perror("malloc");
+        err("allor");
         return NULL;
     }
 
@@ -230,7 +230,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
     sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        syslog(LOG_CRIT, "socket failed");
+        err("socket failed: %s", strerror(errno));
         return -2;
     }
 
@@ -239,13 +239,13 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
     if (bind(sockfd, address_sa(listener->address),
                 address_sa_len(listener->address)) < 0) {
-        syslog(LOG_CRIT, "bind failed");
+        err("bind failed: %s", strerror(errno));
         close(sockfd);
         return -3;
     }
 
     if (listen(sockfd, SOMAXCONN) < 0) {
-        syslog(LOG_CRIT, "listen failed");
+        err("listen failed: %s", strerror(errno));
         close(sockfd);
         return -4;
     }
@@ -262,7 +262,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
             listener->close_client_socket = close_http_socket;
             break;
         default:
-            syslog(LOG_CRIT, "invalid protocol");
+            err("invalid protocol");
             return -5;
     }
 
@@ -289,7 +289,7 @@ listener_lookup_server_address(const struct Listener *listener,
     if (address_is_wildcard(addr)) {
         new_addr = new_address(hostname);
         if (new_addr == NULL) {
-            syslog(LOG_INFO, "Invalid hostname %s", hostname);
+            warn("Invalid hostname %s", hostname);
             return NULL;
         }
 

@@ -27,11 +27,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h> /* tolower */
-#include <syslog.h>
 #include <sys/queue.h>
 #include <pcre.h>
 #include "backend.h"
 #include "address.h"
+#include "logger.h"
 
 
 static void free_backend(struct Backend *);
@@ -42,7 +42,7 @@ new_backend() {
 
     backend = calloc(1, sizeof(struct Backend));
     if (backend == NULL) {
-        perror("malloc");
+        err("malloc");
         return NULL;
     }
 
@@ -54,7 +54,7 @@ accept_backend_arg(struct Backend *backend, char *arg) {
     if (backend->hostname == NULL) {
         backend->hostname = strdup(arg);
         if (backend->hostname == NULL) {
-            fprintf(stderr, "strdup failed");
+            err("strdup failed");
             return -1;
         }
     } else if (backend->address == NULL) {
@@ -64,13 +64,13 @@ accept_backend_arg(struct Backend *backend, char *arg) {
 
         backend->address = new_address(arg);
         if (backend->address == NULL) {
-            fprintf(stderr, "invalid address: %s\n", arg);
+            err("invalid address: %s\n", arg);
             return -1;
         }
     } else if (address_port(backend->address) == 0 && is_numeric(arg)) {
         address_set_port(backend->address, atoi(arg));
     } else {
-        fprintf(stderr, "Unexpected table backend argument: %s\n", arg);
+        err("Unexpected table backend argument: %s\n", arg);
         return -1;
     }
 
@@ -92,12 +92,12 @@ init_backend(struct Backend *backend) {
         backend->hostname_re =
             pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
         if (backend->hostname_re == NULL) {
-            syslog(LOG_CRIT, "Regex compilation failed: %s, offset %d",
+            err("Regex compilation failed: %s, offset %d",
                     reerr, reerroffset);
             return 0;
         }
 
-        syslog(LOG_DEBUG, "Parsed %s %s",
+        debug("Parsed %s %s",
                 backend->hostname,
                 display_address(backend->address,
                     address_buf, sizeof(address_buf)));

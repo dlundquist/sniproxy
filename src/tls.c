@@ -32,8 +32,8 @@
 #include <string.h> /* strncpy() */
 #include <unistd.h> /* close() */
 #include <sys/socket.h>
-#include <syslog.h>
 #include "tls.h"
+#include "logger.h"
 
 #define SERVER_NAME_LEN 256
 #define TLS_HEADER_LEN 5
@@ -91,8 +91,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
 
     tls_content_type = data[0];
     if (tls_content_type != TLS_HANDSHAKE_CONTENT_TYPE) {
-        syslog(LOG_DEBUG,
-               "Request did not begin with TLS handshake.");
+        debug("Request did not begin with TLS handshake.");
         return -5;
     }
 
@@ -100,10 +99,9 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     tls_version_minor = data[2];
     if (tls_version_major < 3 ||
         (tls_version_major == 3 && tls_version_minor < 1)) {
-        syslog(LOG_DEBUG,
-               "Received SSL %d.%d handshake which does not support "
-               "Server Name Indication.",
-               tls_version_major, tls_version_minor);
+        debug("Received SSL %d.%d handshake which does not support "
+              "Server Name Indication.",
+              tls_version_major, tls_version_minor);
 
         return -2;
     }
@@ -124,8 +122,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
         return -5;
     }
     if (data[pos] != TLS_HANDSHAKE_TYPE_CLIENT_HELLO) {
-        syslog(LOG_DEBUG,
-               "Not a client hello");
+        debug("Not a client hello");
 
         return -5;
     }
@@ -213,7 +210,7 @@ parse_server_name_extension(const char *data, size_t data_len,
             case 0x00: /* host_name */
                 *hostname = malloc(len + 1);
                 if (*hostname == NULL) {
-                    syslog(LOG_ERR, "malloc() failure");
+                    err("malloc() failure");
                     return -4;
                 }
 
@@ -223,9 +220,8 @@ parse_server_name_extension(const char *data, size_t data_len,
 
                 return len;
             default:
-                syslog(LOG_DEBUG,
-                       "Unknown server name extension name type: %d",
-                       data[pos]);
+                debug("Unknown server name extension name type: %d",
+                      data[pos]);
         }
         pos += 3 + len;
     }

@@ -26,10 +26,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include "table.h"
 #include "backend.h"
 #include "address.h"
+#include "logger.h"
 
 
 static inline struct Backend *
@@ -127,7 +127,7 @@ table_lookup_server_address(const struct Table *table, const char *hostname) {
 
     b = table_lookup_backend(table, hostname);
     if (b == NULL) {
-        syslog(LOG_INFO, "No match found for %s", hostname);
+        info("No match found for %s", hostname);
         return NULL;
     }
 

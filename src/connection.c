@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/queue.h>
@@ -40,6 +39,7 @@
 #include <assert.h>
 #include "connection.h"
 #include "address.h"
+#include "logger.h"
 
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
@@ -82,7 +82,7 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
 
     c = new_connection();
     if (c == NULL) {
-        syslog(LOG_CRIT, "new_connection failed");
+        err("new_connection failed");
         return;
     }
 
@@ -90,7 +90,7 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
                     (struct sockaddr *)&c->client.addr,
                     &c->client.addr_len);
     if (sockfd < 0) {
-        syslog(LOG_NOTICE, "accept failed: %s", strerror(errno));
+        warn("accept failed: %s", strerror(errno));
         free_connection(c);
         return;
     }
@@ -129,13 +129,13 @@ print_connections() {
 
     fd = mkstemp(filename);
     if (fd < 0) {
-        syslog(LOG_INFO, "mkstemp failed: %s", strerror(errno));
+        warn("mkstemp failed: %s", strerror(errno));
         return;
     }
 
     temp = fdopen(fd, "w");
     if (temp == NULL) {
-        syslog(LOG_INFO, "fdopen failed: %s", strerror(errno));
+        warn("fdopen failed: %s", strerror(errno));
         return;
     }
 
@@ -145,9 +145,9 @@ print_connections() {
     }
 
     if (fclose(temp) < 0)
-        syslog(LOG_INFO, "fclose failed: %s", strerror(errno));
+        warn("fclose failed: %s", strerror(errno));
 
-    syslog(LOG_INFO, "Dumped connections to %s", filename);
+    notice("Dumped connections to %s", filename);
 }
 
 /*
@@ -200,7 +200,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ && buffer_room(input_buffer)) {
         bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-            syslog(LOG_INFO, "recv(): %s, closing connection",
+            warn("recv(): %s, closing connection",
                     strerror(errno));
 
             close_socket(con, loop);
@@ -215,7 +215,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         bytes_transmitted = buffer_send(output_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-            syslog(LOG_INFO, "send(): %s, closing connection",
+            warn("send(): %s, closing connection",
                     strerror(errno));
 
             close_socket(con, loop);
@@ -312,7 +312,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     if (parse_result == -1) {
         return;  /* incomplete request: try again */
     } else if (parse_result == -2) {
-        syslog(LOG_INFO, "Request from %s did not include a hostname",
+        warn("Request from %s did not include a hostname",
                 display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
 
         if (con->listener->fallback_address == NULL) {
@@ -320,9 +320,9 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
             return;
         }
     } else if (parse_result < -2) {
-        syslog(LOG_INFO, "Unable to parse request from %s",
+        warn("Unable to parse request from %s",
                 display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-        syslog(LOG_DEBUG, "parse() returned %d", parse_result);
+        debug("parse() returned %d", parse_result);
         /* TODO optionally dump request to file */
 
         if (con->listener->fallback_address == NULL) {
@@ -356,7 +356,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         error = getaddrinfo(address_hostname(server_address), portstr,
                 &hints, &results);
         if (error != 0) {
-            syslog(LOG_NOTICE, "Lookup error: %s", gai_strerror(error));
+            warn("Lookup error: %s", gai_strerror(error));
             close_client_socket(con, loop);
             free(server_address);
             return;
@@ -400,7 +400,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     }
 
     if (sockfd < 0) {
-        syslog(LOG_NOTICE, "Server connection failed to %s", hostname);
+        warn("Server connection failed to %s", hostname);
         close_client_socket(con, loop);
         return;
     }
@@ -425,7 +425,7 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
     ev_io_stop(loop, &con->client.watcher);
 
     if (close(con->client.watcher.fd) < 0)
-        syslog(LOG_INFO, "close failed: %s", strerror(errno));
+        warn("close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
     if (con->state == SERVER_CLOSED || con->state == ACCEPTED)
@@ -445,7 +445,7 @@ close_server_socket(struct Connection *con, struct ev_loop *loop) {
     ev_io_stop(loop, &con->server.watcher);
 
     if (close(con->server.watcher.fd) < 0)
-        syslog(LOG_INFO, "close failed: %s", strerror(errno));
+        warn("close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
     if (con->state == CLIENT_CLOSED)

@@ -26,9 +26,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <syslog.h>
 #include "cfg_parser.h"
 #include "config.h"
+#include "logger.h"
 
 
 static int accept_username(struct Config *, char *);
@@ -163,7 +163,7 @@ reload_config(struct Config *config) {
      * to, so we can't simply load a new configuration and discard the old
      * one.
      */
-    syslog(LOG_INFO, "reload of %s not supported, see TODO", config->filename);
+    info("reload of %s not supported, see TODO", config->filename);
 
     return 0;
 }
