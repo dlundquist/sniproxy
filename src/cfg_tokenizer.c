@@ -54,11 +54,11 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
             case '\n':
                 /* fall through */
             case '\r':
-                return EOL;
+                return TOKEN_EOL;
             case '{':
-                return OBRACE;
+                return TOKEN_OBRACE;
             case '}':
-                return CBRACE;
+                return TOKEN_CBRACE;
             default:
                 /* Rewind one byte, so next_word() can fetch from
                  * the beginning of the word */
@@ -66,12 +66,12 @@ next_token(FILE *config, char *buffer, size_t buffer_len) {
 
                 token_len = next_word(config, buffer, buffer_len);
                 if (token_len <= 0)
-                    return ERROR;
+                    return TOKEN_ERROR;
 
-                return WORD;
+                return TOKEN_WORD;
         }
     }
-    return END;
+    return TOKEN_END;
 }
 
 static void

@@ -39,12 +39,12 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
     void *sub_context = NULL;
     int result;
 
-    while ((token = next_token(cfg, buffer, sizeof(buffer))) != END) {
+    while ((token = next_token(cfg, buffer, sizeof(buffer))) != TOKEN_END) {
         switch (token) {
-            case ERROR:
+            case TOKEN_ERROR:
                 fprintf(stderr, "tokenizer error\n");
                 return -1;
-            case WORD:
+            case TOKEN_WORD:
                 if (keyword && sub_context && keyword->parse_arg) {
                     result = keyword->parse_arg(sub_context, buffer);
                     if (result <= 0)
@@ -73,7 +73,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                     return -1;
                 }
                 break;
-            case OBRACE:
+            case TOKEN_OBRACE:
                 if (keyword && sub_context && keyword->block_grammar) {
                     result = parse_config(sub_context, cfg,
                             keyword->block_grammar);
@@ -84,7 +84,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                     return -1;
                 }
                 break;
-            case EOL:
+            case TOKEN_EOL:
                 if (keyword && sub_context && keyword->finalize) {
                     result = keyword->finalize(context, sub_context);
                     if (result <= 0)
@@ -94,7 +94,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 keyword = NULL;
                 sub_context = NULL;
                 break;
-            case CBRACE:
+            case TOKEN_CBRACE:
                 /* Finalize the current subcontext before returning */
                 if (keyword && sub_context && keyword->finalize) {
                     result = keyword->finalize(context, sub_context);
@@ -103,7 +103,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 }
 
                 /* fall through */
-            case END:
+            case TOKEN_END:
                 return 1;
         }
     }

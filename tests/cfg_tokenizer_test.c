@@ -22,18 +22,18 @@ static char config1[] = "# Comment\n"
                  "   three\n"
                  "}";
 static struct Result results1[] = {
-    { EOL, NULL },
-    { WORD, "numbers" },
-    { OBRACE, NULL },
-    { EOL, NULL },
-    { WORD, "one" },
-    { EOL, NULL },
-    { WORD, "two" },
-    { EOL, NULL },
-    { WORD, "three" },
-    { EOL, NULL },
-    { CBRACE, NULL },
-    { END, NULL },
+    { TOKEN_EOL, NULL },
+    { TOKEN_WORD, "numbers" },
+    { TOKEN_OBRACE, NULL },
+    { TOKEN_EOL, NULL },
+    { TOKEN_WORD, "one" },
+    { TOKEN_EOL, NULL },
+    { TOKEN_WORD, "two" },
+    { TOKEN_EOL, NULL },
+    { TOKEN_WORD, "three" },
+    { TOKEN_EOL, NULL },
+    { TOKEN_CBRACE, NULL },
+    { TOKEN_END, NULL },
 };
 
 static struct Test tests[] = {

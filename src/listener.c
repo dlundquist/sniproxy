@@ -79,7 +79,7 @@ new_listener() {
 
     listener->address = NULL;
     listener->fallback_address = NULL;
-    listener->protocol = TLS;
+    listener->protocol = PROTOCOL_TLS;
 
     return listener;
 }
@@ -126,12 +126,13 @@ accept_listener_table_name(struct Listener *listener, char *table_name) {
 int
 accept_listener_protocol(struct Listener *listener, char *protocol) {
     if (listener->protocol == 0 && strcasecmp(protocol, "http") == 0)
-        listener->protocol = HTTP;
+        listener->protocol = PROTOCOL_HTTP;
     else
-        listener->protocol = TLS;
+        listener->protocol = PROTOCOL_TLS;
 
     if (address_port(listener->address) == 0)
-        address_set_port(listener->address, TLS ? 443 : 80);
+        address_set_port(listener->address,
+            listener->protocol == PROTOCOL_TLS ? 443 : 80);
 
     return 1;
 }
@@ -201,7 +202,7 @@ valid_listener(const struct Listener *listener) {
             return 0;
     }
 
-    if (listener->protocol != TLS && listener->protocol != HTTP) {
+    if (listener->protocol != PROTOCOL_TLS && listener->protocol != PROTOCOL_HTTP) {
         fprintf(stderr, "Invalid protocol\n");
         return 0;
     }
@@ -257,11 +258,11 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     ev_io_init(&listener->rx_watcher, accept_cb, sockfd, EV_READ);
     listener->rx_watcher.data = listener;
     switch (listener->protocol) {
-        case TLS:
+        case PROTOCOL_TLS:
             listener->parse_packet = parse_tls_header;
             listener->close_client_socket = close_tls_socket;
             break;
-        case HTTP:
+        case PROTOCOL_HTTP:
             listener->parse_packet = parse_http_header;
             listener->close_client_socket = close_http_socket;
             break;
@@ -321,7 +322,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     fprintf(file, "listener %s {\n",
             display_address(listener->address, address, sizeof(address)));
 
-    if (listener->protocol == TLS)
+    if (listener->protocol == PROTOCOL_TLS)
         fprintf(file, "\tprotocol tls\n");
     else
         fprintf(file, "\tprotocol http\n");

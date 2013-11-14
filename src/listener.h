@@ -37,8 +37,8 @@ struct Listener {
     /* Configuration fields */
     struct Address *address, *fallback_address;
     enum Protocol {
-        TLS,
-        HTTP
+        PROTOCOL_TLS,
+        PROTOCOL_HTTP
     } protocol;
     char *table_name;
 
