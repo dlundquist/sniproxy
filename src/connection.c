@@ -318,8 +318,8 @@ static void
 parse_client_request(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
-    char *hostname;
 
+    char *hostname;
     int result = con->listener->parse_packet(buffer, len, &hostname);
     if (result == -1) {
         return;  /* incomplete request: try again */
@@ -342,6 +342,7 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
             return;
         }
     }
+
     con->hostname = hostname;
     con->state = PARSED;
 }
@@ -350,7 +351,6 @@ static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     struct Address *server_address =
         listener_lookup_server_address(con->listener, con->hostname);
-    assert(!address_is_wildcard(server_address));
 
     if (address_is_hostname(server_address)) {
         syslog(LOG_ERR, "DNS lookups not supported at this time");
@@ -358,6 +358,7 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
+    assert(address_is_sockaddr(server_address));
     con->server.addr_len = address_sa_len(server_address);
     assert(con->server.addr_len <= sizeof(con->server.addr));
     memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
@@ -387,10 +388,10 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
-    con->state = CONNECTING;
-    ev_io_init(&con->server.watcher,
-        connection_cb, sockfd, EV_WRITE);
+    ev_io_init(&con->server.watcher, connection_cb, sockfd, EV_WRITE);
     con->server.watcher.data = con;
+    con->state = CONNECTING;
+
     ev_io_start(loop, &con->server.watcher);
 }
 
