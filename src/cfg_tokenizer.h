@@ -29,12 +29,12 @@
 #include <stdio.h>
 
 enum Token {
-    ERROR,
-    EOL,
-    OBRACE,
-    CBRACE,
-    WORD,
-    END,
+    TOKEN_ERROR,
+    TOKEN_EOL,
+    TOKEN_OBRACE,
+    TOKEN_CBRACE,
+    TOKEN_WORD,
+    TOKEN_END,
 };
 
 enum Token next_token(FILE *, char *, size_t);
