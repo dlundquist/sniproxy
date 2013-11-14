@@ -358,9 +358,11 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
-    con->server.addr_len = address_len(server_address);
+    con->server.addr_len = address_sa_len(server_address);
     assert(con->server.addr_len <= sizeof(con->server.addr));
     memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
+
+    free(server_address);
 
     con->state = RESOLVED;
 }
