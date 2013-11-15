@@ -4,8 +4,6 @@
 * Allow source address for connection to backend to be specified
 * Reimplement configuration reloading
 * Optionally dump invalid requests to file
-* Fallback hostname/backend server
-* Refactor logging so unit tests do not log to syslog
 * Per connection access logging including hostname, bytes rx/tx, src/dst ip/port, timestamp and duration
 * Improved table backend lookup, currently this is a linear search
 ** Considering splitting hostname at label boundaries and search backwards from TLD

@@ -26,7 +26,6 @@
 #ifndef SNIPROXY_H
 #define SNIPROXY_H
 
-#define SYSLOG_IDENT "sniproxy"
 #define DEFAULT_USERNAME "daemon"
 
 #endif
