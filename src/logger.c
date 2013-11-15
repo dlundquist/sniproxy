@@ -39,29 +39,6 @@ struct Logger {
     const char *ident;
 };
 
-static const struct SyslogFacility {
-    const char *name;
-    int number;
-} syslog_facilities[] = {
-    { "auth",   LOG_AUTH },
-    { "cron",   LOG_CRON },
-    { "daemon", LOG_DAEMON },
-    { "ftp",    LOG_FTP },
-    { "local0", LOG_LOCAL0 },
-    { "local1", LOG_LOCAL1 },
-    { "local2", LOG_LOCAL2 },
-    { "local3", LOG_LOCAL3 },
-    { "local4", LOG_LOCAL4 },
-    { "local5", LOG_LOCAL5 },
-    { "local6", LOG_LOCAL6 },
-    { "local7", LOG_LOCAL7 },
-    { "mail",   LOG_MAIL },
-    { "news",   LOG_NEWS },
-    { "user",   LOG_USER },
-    { "uucp",   LOG_UUCP },
-    { NULL,     LOG_USER },
-};
-
 static struct Logger *default_logger = NULL;
 
 
@@ -100,13 +77,6 @@ new_file_logger(const char *filepath) {
         free(logger);
         return NULL;
     }
-    char *buffer = malloc(1024);
-    if (buffer == NULL) {
-        free(logger->fd);
-        free(logger);
-        return NULL;
-    }
-    setvbuf(logger->fd, buffer, _IOLBF, 1024);
     logger->priority = LOG_DEBUG;
     logger->facility = 0;
     logger->ident = NULL;
@@ -130,10 +100,14 @@ set_logger_priority(struct Logger *logger, int priority) {
 
 void
 free_logger(struct Logger *logger) {
-    if (logger = NULL)
+    if (logger == NULL)
         return;
 
-    /* TODO close file or syslog */
+    if (logger->fd) {
+        fclose(logger->fd);
+        logger->fd = NULL;
+    }
+
     free(logger);
 }
 
@@ -243,13 +217,36 @@ init_default_logger() {
 static void
 free_at_exit() {
     free_logger(default_logger);
+    default_logger = NULL;
 }
 
 static int
 lookup_syslog_facility(const char *facility) {
-    for (const struct SyslogFacility *i = syslog_facilities; i->name != NULL; i++)
-        if(strncasecmp(i->name, facility, strlen(facility)) == 0)
-            return i->number;
+    const struct {
+        const char *name;
+        int number;
+    } facilities[] = {
+        { "auth",   LOG_AUTH },
+        { "cron",   LOG_CRON },
+        { "daemon", LOG_DAEMON },
+        { "ftp",    LOG_FTP },
+        { "local0", LOG_LOCAL0 },
+        { "local1", LOG_LOCAL1 },
+        { "local2", LOG_LOCAL2 },
+        { "local3", LOG_LOCAL3 },
+        { "local4", LOG_LOCAL4 },
+        { "local5", LOG_LOCAL5 },
+        { "local6", LOG_LOCAL6 },
+        { "local7", LOG_LOCAL7 },
+        { "mail",   LOG_MAIL },
+        { "news",   LOG_NEWS },
+        { "user",   LOG_USER },
+        { "uucp",   LOG_UUCP },
+    };
+
+    for (int i = 0; i < sizeof(facilities) / sizeof(facilities[0]); i++)
+        if(strncasecmp(facilities[i].name, facility, strlen(facility)) == 0)
+            return facilities[i].number;
 
     return LOG_USER;
 }

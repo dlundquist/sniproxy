@@ -31,11 +31,22 @@
 #include "logger.h"
 
 
+struct LoggerBuilder {
+    const char *filename;
+    const char *syslog_facility;
+    int priority;
+};
+
 static int accept_username(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
+static struct LoggerBuilder *new_logger_builder();
+static int accept_logger_filename(struct LoggerBuilder *, char *);
+static int accept_logger_syslog_facility(struct LoggerBuilder *, char *);
+static int accept_logger_priority(struct LoggerBuilder *, char *);
+static int end_error_logger_stanza(struct Config *, struct LoggerBuilder *);
 
 
 struct Keyword listener_stanza_grammar[] = {
@@ -65,6 +76,25 @@ static struct Keyword table_stanza_grammar[] = {
             (int(*)(void *, void *))end_backend},
 };
 
+static struct Keyword logger_stanza_grammar[] = {
+    { "filename",
+            NULL,
+            (int(*)(void *, char *))accept_logger_filename,
+            NULL,
+            NULL},
+    { "syslog",
+            NULL,
+            (int(*)(void *, char *))accept_logger_syslog_facility,
+            NULL,
+            NULL},
+    { "priority",
+            NULL,
+            (int(*)(void *, char *))accept_logger_priority,
+            NULL,
+            NULL},
+    { NULL, NULL, NULL, NULL, NULL },
+};
+
 static struct Keyword global_grammar[] = {
     { "username",
             NULL,
@@ -76,6 +106,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_pidfile,
             NULL,
             NULL},
+    { "error_log",
+            (void *(*)())new_logger_builder,
+            NULL,
+            logger_stanza_grammar,
+            (int(*)(void *, void *))end_error_logger_stanza},
     { "listener",
             (void *(*)())new_listener,
             (int(*)(void *, char *))accept_listener_arg,
@@ -244,3 +279,92 @@ end_backend(struct Table *table, struct Backend *backend) {
     return 1;
 }
 
+static struct LoggerBuilder *
+new_logger_builder() {
+    struct LoggerBuilder *lb = malloc(sizeof(struct LoggerBuilder));
+    if (lb == NULL) {
+        err("malloc");
+        return NULL;
+    }
+
+    lb->filename = NULL;
+    lb->syslog_facility = NULL;
+    lb->priority = LOG_NOTICE;
+
+    return lb;
+}
+
+static int
+accept_logger_filename(struct LoggerBuilder *lb, char *filename) {
+    lb->filename = strdup(filename);
+    if (lb->filename == NULL) {
+        err("strdup");
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
+accept_logger_syslog_facility(struct LoggerBuilder *lb, char *facility) {
+    lb->syslog_facility = strdup(facility);
+    if (lb->syslog_facility == NULL) {
+        err("strdup");
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
+accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
+    const struct {
+        const char *name;
+        int priority;
+    } priorities[] = {
+        { "emergency",  LOG_EMERG },
+        { "alert",      LOG_ALERT },
+        { "critical",   LOG_CRIT },
+        { "error",      LOG_ERR },
+        { "warning",    LOG_WARNING },
+        { "notice",     LOG_NOTICE },
+        { "info",       LOG_INFO },
+        { "debug",      LOG_DEBUG },
+    };
+
+    for (int i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
+        if(strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
+            lb->priority = priorities[i].priority;
+            return 1;
+        }
+
+    return -1;
+}
+
+static int
+end_error_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
+    struct Logger *logger = NULL;
+
+    if (lb->filename != NULL && lb->syslog_facility == NULL)
+        logger = new_file_logger(lb->filename);
+    else if (lb->syslog_facility != NULL && lb->filename == NULL)
+        logger = new_syslog_logger("sniproxy", lb->syslog_facility);
+    else
+        err("Logger can not be both file logger and syslog logger");
+
+    if (logger == NULL) {
+        free((char *)lb->filename);
+        free((char *)lb->syslog_facility);
+        free(lb);
+        return -1;
+    }
+
+
+    set_logger_priority(logger, lb->priority);
+    set_default_logger(logger);
+
+    free((char *)lb->filename);
+    free((char *)lb->syslog_facility);
+    free(lb);
+    return 1;
+}

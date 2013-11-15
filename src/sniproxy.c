@@ -73,12 +73,8 @@ main(int argc, char **argv) {
 
     init_server(config);
 
-    if (background_flag) {
+    if (background_flag)
         daemonize(config->user ? config->user : DEFAULT_USERNAME);
-
-        set_default_logger(new_syslog_logger(SYSLOG_IDENT, "daemon"));
-    }
-
 
     if (background_flag && config->pidfile != NULL)
         write_pidfile(config->pidfile);
