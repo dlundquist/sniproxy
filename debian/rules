@@ -7,5 +7,5 @@ include /usr/share/cdbs/1/rules/autoreconf.mk
 CDBS_BUILD_DEPENDS += , dh-autoreconf
 
 install/sniproxy::
-	install -D -m 644 sniproxy.conf debian/sniproxy/etc/sniproxy.conf
+	install -D -m 644 debian/sniproxy.conf debian/sniproxy/etc/sniproxy.conf
 

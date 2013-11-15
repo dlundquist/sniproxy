@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
-#include <syslog.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -37,6 +36,7 @@
 #include "sniproxy.h"
 #include "config.h"
 #include "server.h"
+#include "logger.h"
 
 
 static void usage();
@@ -75,8 +75,6 @@ main(int argc, char **argv) {
 
     if (background_flag)
         daemonize(config->user ? config->user : DEFAULT_USERNAME);
-
-    openlog(SYSLOG_IDENT, LOG_NDELAY, SYSLOG_FACILITY);
 
     if (background_flag && config->pidfile != NULL)
         write_pidfile(config->pidfile);
