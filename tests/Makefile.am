@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/src -g
 TESTS = http_test \
                 tls_test \
                 buffer_test \
-				address_test \
+                address_test \
                 cfg_tokenizer_test \
                 config_test \
                 functional_test \
@@ -14,14 +14,15 @@ check_PROGRAMS = http_test \
                  tls_test \
                  buffer_test \
                  cfg_tokenizer_test \
-				 address_test \
+                 address_test \
                  config_test
 
 http_test_SOURCES = http_test.c \
                     ../src/http.c
 
 tls_test_SOURCES = tls_test.c \
-                   ../src/tls.c
+                   ../src/tls.c \
+                   ../src/logger.c
 
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
@@ -42,6 +43,7 @@ config_test_SOURCES = config_test.c \
                       ../src/listener.c \
                       ../src/connection.c \
                       ../src/buffer.c \
+                      ../src/logger.c \
                       ../src/tls.c \
                       ../src/http.c
 
