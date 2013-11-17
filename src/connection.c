@@ -373,6 +373,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
                 display_sockaddr(&con->server.addr, server, sizeof(server)),
                 strerror(errno));
 
+        con->state = SERVER_CLOSED;
         return;
     }
 
