@@ -199,7 +199,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
-        ssize_t bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
+        ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("recv(): %s, closing connection",
                     strerror(errno));
@@ -232,7 +232,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
-        ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, MSG_DONTWAIT);
+        ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, 0);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(): %s, closing connection",
                     strerror(errno));
