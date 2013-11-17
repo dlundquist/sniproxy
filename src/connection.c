@@ -160,10 +160,8 @@ client_socket_open(const struct Connection *con) {
     return con->state == ACCEPTED ||
         con->state == PARSED ||
         con->state == RESOLVED ||
-        con->state == CONNECTING ||
         con->state == CONNECTED ||
         con->state == SERVER_CLOSED;
-    /* TODO CONNECTING??? */
 }
 
 /*
@@ -212,24 +210,6 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         }
     }
 
-    /* Pending connect(): check result */
-    if (revents & EV_WRITE && !is_client && con->state == CONNECTING) {
-        int error = 0;
-        socklen_t error_len = sizeof(error);
-
-        int res = getsockopt(w->fd, SOL_SOCKET, SO_ERROR, &error, &error_len);
-        if (res != 0 || error != 0) {
-            char server[INET6_ADDRSTRLEN + 8];
-            warn("Failed to open connection to %s: %s",
-                display_sockaddr(&con->server.addr, server, sizeof(server)),
-                strerror(res != 0 ? errno : error));
-
-            close_socket(con, loop);
-            revents = 0;
-        }
-        con->state = CONNECTED;
-    }
-
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, 0);
@@ -276,8 +256,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Neither watcher is active when the corresponding socket is closed */
     assert(client_socket_open(con) || !ev_is_active(client_watcher));
-    assert(server_socket_open(con) || !ev_is_active(server_watcher)
-            || con->state == CONNECTING);
+    assert(server_socket_open(con) || !ev_is_active(server_watcher));
 
     /* At least one watcher is still active for this connection */
     assert((ev_is_active(client_watcher) && con->client.watcher.events) ||
@@ -400,7 +379,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     struct ev_io *server_watcher = &con->server.watcher;
     ev_io_init(server_watcher, connection_cb, sockfd, EV_WRITE);
     con->server.watcher.data = con;
-    con->state = CONNECTING;
+    con->state = CONNECTED;
 
     ev_io_start(loop, server_watcher);
 }
@@ -539,13 +518,6 @@ print_connection(FILE *file, const struct Connection *con) {
             fprintf(file, "RESOLVED      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size);
-            break;
-        case CONNECTING:
-            fprintf(file, "CONNECTING    %s %zu/%zu\t%s %zu/%zu\n",
-                    display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size,
-                    display_sockaddr(&con->server.addr, server, sizeof(server)),
-                    con->server.buffer->len, con->server.buffer->size);
             break;
         case CONNECTED:
             fprintf(file, "CONNECTED     %s %zu/%zu\t%s %zu/%zu\n",
