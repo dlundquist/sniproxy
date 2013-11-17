@@ -163,6 +163,7 @@ client_socket_open(const struct Connection *con) {
         con->state == CONNECTING ||
         con->state == CONNECTED ||
         con->state == SERVER_CLOSED;
+    /* TODO CONNECTING??? */
 }
 
 /*
@@ -196,19 +197,6 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     void (*close_socket)(struct Connection *, struct ev_loop *) =
         is_client ? close_client_socket : close_server_socket;
 
-    /* Handle server half open connecting state */
-    if (revents & EV_WRITE && !is_client && con->state == CONNECTING) {
-        int error = 0;
-        socklen_t error_len = sizeof(error);
-
-        int result = getsockopt(w->fd, SOL_SOCKET, SO_ERROR, &error, &error_len);
-        if (result != 0 || error != 0) {
-            close_socket(con, loop);
-            revents = 0;
-        }
-        con->state = CONNECTED;
-    }
-
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
@@ -222,6 +210,24 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             close_socket(con, loop);
             revents = 0;
         }
+    }
+
+    /* Pending connect(): check result */
+    if (revents & EV_WRITE && !is_client && con->state == CONNECTING) {
+        int error = 0;
+        socklen_t error_len = sizeof(error);
+
+        int res = getsockopt(w->fd, SOL_SOCKET, SO_ERROR, &error, &error_len);
+        if (res != 0 || error != 0) {
+            char server[INET6_ADDRSTRLEN + 8];
+            warn("Failed to open connection to %s: %s",
+                display_sockaddr(&con->server.addr, server, sizeof(server)),
+                strerror(res != 0 ? errno : error));
+
+            close_socket(con, loop);
+            revents = 0;
+        }
+        con->state = CONNECTED;
     }
 
     /* Transmit */
@@ -258,7 +264,6 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     struct ev_io *client_watcher = &con->client.watcher;
     struct ev_io *server_watcher = &con->server.watcher;
-
 
     /* Reactivate watchers */
     if (client_socket_open(con))
@@ -316,21 +321,23 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
-    char *hostname;
+    char *hostname = NULL;
     int result = con->listener->parse_packet(buffer, len, &hostname);
     if (result == -1) {
         return;  /* incomplete request: try again */
     } else if (result == -2) {
+        char client[INET6_ADDRSTRLEN + 8];
         info("Request from %s did not include a hostname",
-                display_sockaddr(&con->client.addr, buffer, sizeof(buffer)));
+                display_sockaddr(&con->client.addr, client, sizeof(client)));
 
         if (con->listener->fallback_address == NULL) {
             close_client_socket(con, loop);
             return;
         }
     } else if (result < -2) {
+        char client[INET6_ADDRSTRLEN + 8];
         warn("Unable to parse request from %s",
-                display_sockaddr(&con->client.addr, buffer, sizeof(buffer)));
+                display_sockaddr(&con->client.addr, client, sizeof(client)));
         debug("parse() returned %d", result);
         /* TODO optionally dump request to file */
 
@@ -346,11 +353,12 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
 
 static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
+    /* TODO avoid extra malloc in listener_lookup_server_address() */
     struct Address *server_address =
         listener_lookup_server_address(con->listener, con->hostname);
 
     if (address_is_hostname(server_address)) {
-        syslog(LOG_ERR, "DNS lookups not supported at this time");
+        warn("DNS lookups not supported at this time");
         close_client_socket(con, loop);
         return;
     }
@@ -381,15 +389,20 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             con->server.addr_len);
     if (result < 0 && errno != EINPROGRESS) {
         close(sockfd);
-        syslog(LOG_CRIT, "connect_failed");
+        char server[INET6_ADDRSTRLEN + 8];
+        warn("Failed to open connection to %s: %s",
+                display_sockaddr(&con->server.addr, server, sizeof(server)),
+                strerror(errno));
+
         return;
     }
 
-    ev_io_init(&con->server.watcher, connection_cb, sockfd, EV_WRITE);
+    struct ev_io *server_watcher = &con->server.watcher;
+    ev_io_init(server_watcher, connection_cb, sockfd, EV_WRITE);
     con->server.watcher.data = con;
     con->state = CONNECTING;
 
-    ev_io_start(loop, &con->server.watcher);
+    ev_io_start(loop, server_watcher);
 }
 
 /* Close client socket.
@@ -397,8 +410,8 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
  */
 static void
 close_client_socket(struct Connection *con, struct ev_loop *loop) {
-    assert(con->state != CLOSED);
-    assert(con->state != CLIENT_CLOSED);
+    assert(con->state != CLOSED
+            && con->state != CLIENT_CLOSED);
 
     ev_io_stop(loop, &con->client.watcher);
 
@@ -406,7 +419,10 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
         warn("close failed: %s", strerror(errno));
 
     /* next state depends on previous state */
-    if (con->state == SERVER_CLOSED || con->state == ACCEPTED)
+    if (con->state == SERVER_CLOSED
+            || con->state == ACCEPTED
+            || con->state == PARSED
+            || con->state == RESOLVED)
         con->state = CLOSED;
     else
         con->state = CLIENT_CLOSED;
@@ -417,8 +433,8 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
  */
 static void
 close_server_socket(struct Connection *con, struct ev_loop *loop) {
-    assert(con->state != CLOSED);
-    assert(con->state != SERVER_CLOSED);
+    assert(con->state != CLOSED
+            && con->state != SERVER_CLOSED);
 
     ev_io_stop(loop, &con->server.watcher);
 
@@ -436,12 +452,20 @@ static void
 close_connection(struct Connection *con, struct ev_loop *loop) {
     assert(con->state != NEW); /* only used during initialization */
 
-    if (con->state == CONNECTED || con->state == CLIENT_CLOSED)
+    if (con->state == CONNECTED
+            || con->state == CLIENT_CLOSED)
         close_server_socket(con, loop);
 
-    /* State is now: ACCEPTED, SERVER_CLOSED or CLOSED */
+    assert(con->state == ACCEPTED
+            || con->state == PARSED
+            || con->state == RESOLVED
+            || con->state == SERVER_CLOSED
+            || con->state == CLOSED);
 
-    if (con->state == ACCEPTED || con->state == SERVER_CLOSED)
+    if (con->state == ACCEPTED
+            || con->state == PARSED
+            || con->state == RESOLVED
+            || con->state == SERVER_CLOSED)
         close_client_socket(con, loop);
 
     assert(con->state == CLOSED);
@@ -505,6 +529,23 @@ print_connection(FILE *file, const struct Connection *con) {
             fprintf(file, "ACCEPTED      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size);
+            break;
+        case PARSED:
+            fprintf(file, "PARSED        %s %zu/%zu\t-\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    con->client.buffer->len, con->client.buffer->size);
+            break;
+        case RESOLVED:
+            fprintf(file, "RESOLVED      %s %zu/%zu\t-\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    con->client.buffer->len, con->client.buffer->size);
+            break;
+        case CONNECTING:
+            fprintf(file, "CONNECTING    %s %zu/%zu\t%s %zu/%zu\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    con->client.buffer->len, con->client.buffer->size,
+                    display_sockaddr(&con->server.addr, server, sizeof(server)),
+                    con->server.buffer->len, con->server.buffer->size);
             break;
         case CONNECTED:
             fprintf(file, "CONNECTED     %s %zu/%zu\t%s %zu/%zu\n",

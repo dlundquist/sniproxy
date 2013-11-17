@@ -38,7 +38,7 @@ struct Connection {
         ACCEPTED,       /* Newly accepted client connection */
         PARSED,         /* Parsed initial request and extracted hostname */
         RESOLVED,       /* Server socket address resolved */
-        CONNECTING,     /* Connecting to server */
+        CONNECTING,     /* Connecting to server: client socket opened, server socket pending connect */
         CONNECTED,      /* Connected to server */
         SERVER_CLOSED,  /* Client closed socket */
         CLIENT_CLOSED,  /* Server closed socket */
