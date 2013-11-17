@@ -250,8 +250,9 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         return -4;
     }
 
-    ev_io_init(&listener->rx_watcher, accept_cb, sockfd, EV_READ);
-    listener->rx_watcher.data = listener;
+    struct ev_io *listener_watcher = &listener->watcher;
+    ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
+    listener->watcher.data = listener;
     switch (listener->protocol) {
         case PROTOCOL_TLS:
             listener->parse_packet = parse_tls_header;
@@ -266,7 +267,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
             return -5;
     }
 
-    ev_io_start(EV_DEFAULT, &listener->rx_watcher);
+    ev_io_start(EV_DEFAULT, listener_watcher);
 
     return sockfd;
 }
@@ -335,8 +336,8 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 
 static void
 close_listener(struct ev_loop *loop, struct Listener * listener) {
-    ev_io_stop(loop, &listener->rx_watcher);
-    close(listener->rx_watcher.fd);
+    ev_io_stop(loop, &listener->watcher);
+    close(listener->watcher.fd);
 }
 
 void

@@ -43,7 +43,7 @@ struct Listener {
     char *table_name;
 
     /* Runtime fields */
-    struct ev_io rx_watcher;
+    struct ev_io watcher;
     int (*parse_packet)(const char*, size_t, char **);
     void (*close_client_socket)(int);
     struct Table *table;
