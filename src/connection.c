@@ -79,35 +79,34 @@ init_connections() {
  */
 void
 accept_connection(const struct Listener *listener, struct ev_loop *loop) {
-    struct Connection *c;
-    int sockfd;
-
-    c = new_connection();
-    if (c == NULL) {
+    struct Connection *con = new_connection();
+    if (con == NULL) {
         err("new_connection failed");
         return;
     }
 
-    sockfd = accept(listener->rx_watcher.fd,
-                    (struct sockaddr *)&c->client.addr,
-                    &c->client.addr_len);
+    int sockfd = accept(listener->watcher.fd,
+                    (struct sockaddr *)&con->client.addr,
+                    &con->client.addr_len);
     if (sockfd < 0) {
         warn("accept failed: %s", strerror(errno));
-        free_connection(c);
+        free_connection(con);
         return;
     }
 
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
-    ev_io_init(&c->client.watcher, connection_cb, sockfd, EV_READ);
-    c->client.watcher.data = c;
-    c->state = ACCEPTED;
-    c->listener = listener;
+    /* Avoiding type-punned pointer warning */
+    struct ev_io *client_watcher = &con->client.watcher;
+    ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
+    con->client.watcher.data = con;
+    con->state = ACCEPTED;
+    con->listener = listener;
 
-    TAILQ_INSERT_HEAD(&connections, c, entries);
+    TAILQ_INSERT_HEAD(&connections, con, entries);
 
-    ev_io_start(loop, &c->client.watcher);
+    ev_io_start(loop, client_watcher);
 }
 
 /*
@@ -116,7 +115,6 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
 void
 free_connections(struct ev_loop *loop) {
     struct Connection *iter;
-
     while ((iter = TAILQ_FIRST(&connections)) != NULL) {
         TAILQ_REMOVE(&connections, iter, entries);
         close_connection(iter, loop);
@@ -127,27 +125,24 @@ free_connections(struct ev_loop *loop) {
 /* dumps a list of all connections for debugging */
 void
 print_connections() {
-    struct Connection *iter;
     char filename[] = "/tmp/sniproxy-connections-XXXXXX";
-    int fd;
-    FILE *temp;
 
-    fd = mkstemp(filename);
+    int fd = mkstemp(filename);
     if (fd < 0) {
         warn("mkstemp failed: %s", strerror(errno));
         return;
     }
 
-    temp = fdopen(fd, "w");
+    FILE *temp = fdopen(fd, "w");
     if (temp == NULL) {
         warn("fdopen failed: %s", strerror(errno));
         return;
     }
 
     fprintf(temp, "Running connections:\n");
-    TAILQ_FOREACH(iter, &connections, entries) {
+    struct Connection *iter;
+    TAILQ_FOREACH(iter, &connections, entries)
         print_connection(temp, iter);
-    }
 
     if (fclose(temp) < 0)
         warn("fclose failed: %s", strerror(errno));
@@ -163,11 +158,11 @@ print_connections() {
 static inline int
 client_socket_open(const struct Connection *con) {
     return con->state == ACCEPTED ||
-           con->state == PARSED ||
-           con->state == RESOLVED ||
-           con->state == CONNECTING ||
-           con->state == CONNECTED ||
-           con->state == SERVER_CLOSED;
+        con->state == PARSED ||
+        con->state == RESOLVED ||
+        con->state == CONNECTING ||
+        con->state == CONNECTED ||
+        con->state == SERVER_CLOSED;
 }
 
 /*
@@ -178,7 +173,7 @@ client_socket_open(const struct Connection *con) {
 static inline int
 server_socket_open(const struct Connection *con) {
     return con->state == CONNECTED ||
-           con->state == CLIENT_CLOSED;
+        con->state == CLIENT_CLOSED;
 }
 
 /*
@@ -214,12 +209,9 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         con->state = CONNECTED;
     }
 
-    ssize_t bytes_received;
-    ssize_t bytes_transmitted;
-
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
-        bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
+        ssize_t bytes_received = buffer_recv(input_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("recv(): %s, closing connection",
                     strerror(errno));
@@ -234,7 +226,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
-        bytes_transmitted = buffer_send(output_buffer, w->fd, MSG_DONTWAIT);
+        ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, MSG_DONTWAIT);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(): %s, closing connection",
                     strerror(errno));
@@ -259,27 +251,32 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     if (con->state == CLOSED) {
         TAILQ_REMOVE(&connections, con, entries);
+        /* TODO log connection */
         free_connection(con);
         return;
     }
 
+    struct ev_io *client_watcher = &con->client.watcher;
+    struct ev_io *server_watcher = &con->server.watcher;
+
+
     /* Reactivate watchers */
     if (client_socket_open(con))
-        reactivate_watcher(loop, &con->client.watcher,
+        reactivate_watcher(loop, client_watcher,
                 con->client.buffer, con->server.buffer);
 
     if (server_socket_open(con))
-        reactivate_watcher(loop, &con->server.watcher,
+        reactivate_watcher(loop, server_watcher,
                 con->server.buffer, con->client.buffer);
 
     /* Neither watcher is active when the corresponding socket is closed */
-    assert(client_socket_open(con) || !ev_is_active(&con->client.watcher));
-    assert(server_socket_open(con) || !ev_is_active(&con->server.watcher) ||
-            con->state == CONNECTING);
+    assert(client_socket_open(con) || !ev_is_active(client_watcher));
+    assert(server_socket_open(con) || !ev_is_active(server_watcher)
+            || con->state == CONNECTING);
 
     /* At least one watcher is still active for this connection */
-    assert((ev_is_active(&con->client.watcher) && con->client.watcher.events) ||
-           (ev_is_active(&con->server.watcher) && con->server.watcher.events));
+    assert((ev_is_active(client_watcher) && con->client.watcher.events) ||
+           (ev_is_active(server_watcher) && con->server.watcher.events));
 
     ev_verify(loop);
 
@@ -455,30 +452,28 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
  */
 static struct Connection *
 new_connection() {
-    struct Connection *c;
-
-    c = calloc(1, sizeof(struct Connection));
-    if (c == NULL)
+    struct Connection *con = calloc(1, sizeof(struct Connection));
+    if (con == NULL)
         return NULL;
 
-    c->state = NEW;
-    c->client.addr_len = sizeof(c->client.addr);
-    c->server.addr_len = sizeof(c->server.addr);
-    c->hostname = NULL;
+    con->state = NEW;
+    con->client.addr_len = sizeof(con->client.addr);
+    con->server.addr_len = sizeof(con->server.addr);
+    con->hostname = NULL;
 
-    c->client.buffer = new_buffer();
-    if (c->client.buffer == NULL) {
-        free_connection(c);
+    con->client.buffer = new_buffer();
+    if (con->client.buffer == NULL) {
+        free_connection(con);
         return NULL;
     }
 
-    c->server.buffer = new_buffer();
-    if (c->server.buffer == NULL) {
-        free_connection(c);
+    con->server.buffer = new_buffer();
+    if (con->server.buffer == NULL) {
+        free_connection(con);
         return NULL;
     }
 
-    return c;
+    return con;
 }
 
 /*

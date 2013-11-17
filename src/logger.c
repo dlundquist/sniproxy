@@ -114,6 +114,10 @@ free_logger(struct Logger *logger) {
 void
 log_msg(struct Logger *logger, int priority, const char *format, ...) {
     va_list args;
+
+    va_start(args, format);
+    vlog_msg(logger, priority, format, args);
+    va_end(args);
 }
 
 void
