@@ -1,6 +1,9 @@
 a.out
 *.o
 .deps
+*.swp
+*.swo
+.vimrc
 depcomp
 core
 autoscan.log
