@@ -4,7 +4,7 @@
 AC_PREREQ([2.60])
 AC_INIT([sniproxy], [0.1])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([subdir-objects])
 
 # Checks for programs.
 AC_PROG_CC_C99
