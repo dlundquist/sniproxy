@@ -28,8 +28,9 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
-#include <unistd.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <grp.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -40,15 +41,15 @@
 
 
 static void usage();
-static void daemonize(const char *);
-static void write_pidfile(const char *);
-
+static pid_t daemonize(const char *username);
+static void write_pidfile(const char *, pid_t);
 
 int
 main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
+    pid_t pid;
     int opt;
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
@@ -73,11 +74,16 @@ main(int argc, char **argv) {
 
     init_server(config);
 
-    if (background_flag)
-        daemonize(config->user ? config->user : DEFAULT_USERNAME);
+    if (background_flag) {
+        pid = daemonize(config->user ? config->user : DEFAULT_USERNAME);
 
-    if (background_flag && config->pidfile != NULL)
-        write_pidfile(config->pidfile);
+        if (pid != 0 && config->pidfile != NULL) {
+            /* parent */
+            write_pidfile(config->pidfile, pid);
+            free_config(config);
+            return 0;
+        }
+    }
 
     run_server();
 
@@ -86,7 +92,7 @@ main(int argc, char **argv) {
     return 0;
 }
 
-static void
+static pid_t
 daemonize(const char *username) {
     pid_t pid;
     struct passwd *user;
@@ -94,60 +100,59 @@ daemonize(const char *username) {
     user = getpwnam(username);
     if (user == NULL) {
         perror("getpwnam()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
-    umask(0);
+    umask(022);
 
     if ((pid = fork()) < 0) {
         perror("fork()");
-        exit(1);
+        exit(EXIT_FAILURE);
     } else if (pid != 0) {
-        exit(0);
+        return pid;
     }
 
     if (chdir("/") < 0) {
         perror("chdir()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (setsid() < 0) {
         perror("setsid()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (freopen("/dev/null", "r", stdin) == NULL) {
         perror("freopen(stdin)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (freopen("/dev/null", "a", stdout) == NULL) {
         perror("freopen(stdout)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (freopen("/dev/null", "a", stderr) == NULL) {
         perror("freopen(stderr)");
-        exit(1);
+        exit(EXIT_FAILURE);
+    }
+
+    if (setgroups(1, &user->pw_gid) < 0) {
+        perror("setgroups()");
+        exit(EXIT_FAILURE);
     }
 
     if (setgid(user->pw_gid) < 0) {
         perror("setgid()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (setuid(user->pw_uid) < 0) {
         perror("setuid()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
-    pid = fork();
-    if (pid < 0) {
-        perror("fork()");
-        exit(1);
-    } else if (pid > 0) {
-        exit(0);
-    }
+    return 0;
 }
 
 static void
@@ -156,14 +161,14 @@ usage() {
 }
 
 static void
-write_pidfile(const char *path) {
+write_pidfile(const char *path, pid_t pid) {
     FILE *fp = fopen(path, "w");
     if (fp == NULL) {
         perror("fopen");
         return;
     }
 
-    fprintf(fp, "%d\n", getpid());
+    fprintf(fp, "%d\n", pid);
 
     fclose(fp);
 }

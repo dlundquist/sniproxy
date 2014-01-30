@@ -18,7 +18,7 @@ DESC="HTTPS SNI proxy"     # Introduce a short description here
 NAME=sniproxy              # Introduce the short server's name here
 DAEMON=/usr/sbin/sniproxy  # Introduce the server's location here
 DAEMON_ARGS=""             # Arguments to run the daemon with
-PIDFILE="/var/run/sniproxy/sniproxy.pid"
+PIDFILE="/var/run/sniproxy.pid"
 SCRIPTNAME=/etc/init.d/$NAME
 ENABLED=1
 
