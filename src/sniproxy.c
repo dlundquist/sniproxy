@@ -103,7 +103,7 @@ daemonize(const char *username) {
         exit(EXIT_FAILURE);
     }
 
-    umask(066);
+    umask(022);
 
     if ((pid = fork()) < 0) {
         perror("fork()");
