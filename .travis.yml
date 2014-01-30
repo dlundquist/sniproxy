@@ -22,8 +22,8 @@ script:
   - echo "Testing Debian package installation, configuration, and usage"
   - sudo dpkg -i ../sniproxy_*_`dpkg --print-architecture`.deb
   - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
-  - echo -e "user daemon\n\npidfile /var/run/sniproxy/sniproxy.pid\n\nerror_log {\nsyslog daemon\npriority notice\n}\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost 192.0.2.10\n}" | sudo tee /etc/sniproxy.conf
+  - echo -e "user daemon\n\npidfile /var/run/sniproxy.pid\n\nerror_log {\n  syslog daemon\n  priority notice\n}\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost 192.0.2.10\n}" | sudo tee /etc/sniproxy.conf
   - sudo service sniproxy start
-  - sleep 1; test -e /var/run/sniproxy/sniproxy.pid && ps -up `cat /var/run/sniproxy/sniproxy.pid`
+  - sleep 1; test -e /var/run/sniproxy.pid && ps -up `cat /var/run/sniproxy.pid`
   - sudo service sniproxy stop
   - sudo apt-get remove sniproxy

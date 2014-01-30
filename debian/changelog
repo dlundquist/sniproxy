@@ -1,3 +1,9 @@
+sniproxy (0.2) unstable; urgency=low
+
+  * Moving pidfile
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Thu, 30 Jan 2014 13:51:02 -0800
+
 sniproxy (0.1-1) unstable; urgency=low
 
   * Initial release
