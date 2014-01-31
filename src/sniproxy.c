@@ -41,7 +41,8 @@
 
 
 static void usage();
-static pid_t daemonize(const char *username);
+static void perror_exit(const char *);
+static pid_t daemonize(const char *);
 static void write_pidfile(const char *, pid_t);
 
 int
@@ -92,65 +93,84 @@ main(int argc, char **argv) {
     return 0;
 }
 
+static void
+perror_exit(const char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
 static pid_t
 daemonize(const char *username) {
     pid_t pid;
     struct passwd *user;
+    int pid_pipefd[2];
 
     user = getpwnam(username);
-    if (user == NULL) {
-        perror("getpwnam()");
-        exit(EXIT_FAILURE);
-    }
+    if (user == NULL)
+        perror_exit("getpwnam()");
 
     umask(022);
 
-    if ((pid = fork()) < 0) {
-        perror("fork()");
-        exit(EXIT_FAILURE);
-    } else if (pid != 0) {
+    /* Systemd expects the PID file to be written before the parent exits, and
+     * we want to fork() twice to so sniproxy is not associated with a
+     * controlling terminal or a session leader. To accomplish this we use a
+     * pipe and send our PID back to our grandparent.
+     */
+    if (pipe(pid_pipefd) == -1)
+        perror_exit("pipe()");
+
+    pid = fork();
+    if (pid < 0)
+        perror_exit("fork()");
+    else if (pid != 0) {
+        /* (grand) parent: read grandchild's PID via pipe */
+        close(pid_pipefd[1]); /* input end of pipe */
+        if (read(pid_pipefd[0], &pid, sizeof(pid)) != sizeof(pid))
+            perror_exit("read(pid_pipe)");
+        close(pid_pipefd[0]);
+
         return pid;
     }
 
-    if (chdir("/") < 0) {
-        perror("chdir()");
-        exit(EXIT_FAILURE);
-    }
+    close(pid_pipefd[0]); /* output end of pipe */
 
-    if (setsid() < 0) {
-        perror("setsid()");
-        exit(EXIT_FAILURE);
-    }
+    if (setsid() < 0)
+        perror_exit("setsid()");
 
-    if (freopen("/dev/null", "r", stdin) == NULL) {
-        perror("freopen(stdin)");
-        exit(EXIT_FAILURE);
-    }
+    if (chdir("/") < 0)
+        perror_exit("chdir()");
 
-    if (freopen("/dev/null", "a", stdout) == NULL) {
-        perror("freopen(stdout)");
-        exit(EXIT_FAILURE);
-    }
+    if (freopen("/dev/null", "r", stdin) == NULL)
+        perror_exit("freopen(stdin)");
 
-    if (freopen("/dev/null", "a", stderr) == NULL) {
-        perror("freopen(stderr)");
-        exit(EXIT_FAILURE);
-    }
+    if (freopen("/dev/null", "a", stdout) == NULL)
+        perror_exit("freopen(stdout)");
 
-    if (setgroups(1, &user->pw_gid) < 0) {
-        perror("setgroups()");
-        exit(EXIT_FAILURE);
-    }
+    if (freopen("/dev/null", "a", stderr) == NULL)
+        perror_exit("freopen(stderr)");
 
-    if (setgid(user->pw_gid) < 0) {
-        perror("setgid()");
-        exit(EXIT_FAILURE);
-    }
+    /* drop any supplementary groups */
+    if (setgroups(1, &user->pw_gid) < 0)
+        perror_exit("setgroups()");
 
-    if (setuid(user->pw_uid) < 0) {
-        perror("setuid()");
-        exit(EXIT_FAILURE);
-    }
+    if (setgid(user->pw_gid) < 0)
+        perror_exit("setgid()");
+
+    if (setuid(user->pw_uid) < 0)
+        perror_exit("setuid()");
+
+    signal(SIGHUP, SIG_IGN);
+
+    pid = fork();
+    if (pid < 0)
+        perror_exit("fork()");
+    else if (pid != 0)
+        exit(EXIT_SUCCESS);
+
+    pid = getpid();
+    if (write(pid_pipefd[1], &pid, sizeof(pid)) != sizeof(pid))
+        perror_exit("write(pid_pipe)");
+    close(pid_pipefd[1]);
 
     return 0;
 }
