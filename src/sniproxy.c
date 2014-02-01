@@ -104,6 +104,10 @@ perror_exit(const char *msg) {
 
 static void
 daemonize(void) {
+#ifdef HAVE_DAEMON
+    if (daemon(0,0) < 0)
+        perror_exit("daemon()");
+#else
     pid_t pid;
 
     /* daemon(0,0) part */
@@ -134,6 +138,7 @@ daemonize(void) {
         perror_exit("fork()");
     else if (pid != 0)
         exit(EXIT_SUCCESS);
+#endif
 
     /* local part */
     umask(022);
