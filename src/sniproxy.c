@@ -77,6 +77,9 @@ main(int argc, char **argv) {
     init_server(config);
 
     if (background_flag) {
+        if (config->pidfile != NULL)
+            remove(config->pidfile);
+
         daemonize();
 
         if (config->pidfile != NULL) {
