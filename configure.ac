@@ -4,14 +4,34 @@
 AC_PREREQ([2.60])
 AC_INIT([sniproxy], [0.1])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
 
 # Checks for programs.
 AC_PROG_CC_C99
 
 # Checks for libraries.
-AC_SEARCH_LIBS([ev_run], [ev],,AC_MSG_ERROR([libev4 not found]))
-AC_SEARCH_LIBS([pcre_exec], [pcre],,AC_MSG_ERROR([libpcre not found]))
+PKG_CHECK_MODULES([LIBEV], [libev],,
+[AC_LIB_HAVE_LINKFLAGS(ev,, [#include <ev.h>], [ev_run(0,0);])
+ if test x$ac_cv_libev = xyes; then
+  AC_SUBST([LIBEV_LIBS], [$LIBEV])
+ else
+  AC_MSG_ERROR([[***
+*** libev4 was not found.
+***]])
+ fi
+])
+
+PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
+[AC_LIB_HAVE_LINKFLAGS(pcre,, [#include <pcre.h>], [pcre_exec(0,0,0,0,0,0,0,0);])
+ if test x$ac_cv_libpcre = xyes; then
+  AC_SUBST([LIBPCRE_LIBS], [$LIBPCRE])
+ else
+  AC_MSG_ERROR([[***
+*** libpcre was not found.
+***]])
+ fi
+])
 
 # Checks for header files.
 AC_FUNC_ALLOCA
