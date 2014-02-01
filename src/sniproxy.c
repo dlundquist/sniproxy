@@ -42,7 +42,8 @@
 
 static void usage();
 static void perror_exit(const char *);
-static pid_t daemonize(const char *);
+static void daemonize(void);
+static void drop_perms(const char* username);
 static void write_pidfile(const char *, pid_t);
 
 int
@@ -51,7 +52,7 @@ main(int argc, char **argv) {
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
     pid_t pid;
-    int opt;
+    int opt, err;
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
         switch (opt) {
@@ -76,14 +77,16 @@ main(int argc, char **argv) {
     init_server(config);
 
     if (background_flag) {
-        pid = daemonize(config->user ? config->user : DEFAULT_USERNAME);
+        daemonize();
 
-        if (pid != 0 && config->pidfile != NULL) {
-            /* parent */
-            write_pidfile(config->pidfile, pid);
-            free_config(config);
-            return 0;
+        if (config->pidfile != NULL) {
+            write_pidfile(config->pidfile, getpid());
         }
+    }
+
+    /* Drop permissions only when we can */
+    if (getuid() == 0) {
+        drop_perms(config->user ? config->user : DEFAULT_USERNAME);
     }
 
     run_server();
@@ -99,40 +102,17 @@ perror_exit(const char *msg) {
     exit(EXIT_FAILURE);
 }
 
-static pid_t
-daemonize(const char *username) {
+static void
+daemonize(void) {
     pid_t pid;
-    struct passwd *user;
-    int pid_pipefd[2];
 
-    user = getpwnam(username);
-    if (user == NULL)
-        perror_exit("getpwnam()");
-
-    umask(022);
-
-    /* Systemd expects the PID file to be written before the parent exits, and
-     * we want to fork() twice to so sniproxy is not associated with a
-     * controlling terminal or a session leader. To accomplish this we use a
-     * pipe and send our PID back to our grandparent.
-     */
-    if (pipe(pid_pipefd) == -1)
-        perror_exit("pipe()");
-
+    /* daemon(0,0) part */
     pid = fork();
     if (pid < 0)
         perror_exit("fork()");
     else if (pid != 0) {
-        /* (grand) parent: read grandchild's PID via pipe */
-        close(pid_pipefd[1]); /* input end of pipe */
-        if (read(pid_pipefd[0], &pid, sizeof(pid)) != sizeof(pid))
-            perror_exit("read(pid_pipe)");
-        close(pid_pipefd[0]);
-
-        return pid;
+        exit(EXIT_SUCCESS);
     }
-
-    close(pid_pipefd[0]); /* output end of pipe */
 
     if (setsid() < 0)
         perror_exit("setsid()");
@@ -149,6 +129,27 @@ daemonize(const char *username) {
     if (freopen("/dev/null", "a", stderr) == NULL)
         perror_exit("freopen(stderr)");
 
+    pid = fork();
+    if (pid < 0)
+        perror_exit("fork()");
+    else if (pid != 0)
+        exit(EXIT_SUCCESS);
+
+    /* local part */
+    umask(022);
+    signal(SIGHUP, SIG_IGN);
+
+    return;
+}
+
+static void
+drop_perms(const char *username) {
+    struct passwd *user;
+
+    user = getpwnam(username);
+    if (user == NULL)
+        perror_exit("getpwnam()");
+
     /* drop any supplementary groups */
     if (setgroups(1, &user->pw_gid) < 0)
         perror_exit("setgroups()");
@@ -159,20 +160,7 @@ daemonize(const char *username) {
     if (setuid(user->pw_uid) < 0)
         perror_exit("setuid()");
 
-    signal(SIGHUP, SIG_IGN);
-
-    pid = fork();
-    if (pid < 0)
-        perror_exit("fork()");
-    else if (pid != 0)
-        exit(EXIT_SUCCESS);
-
-    pid = getpid();
-    if (write(pid_pipefd[1], &pid, sizeof(pid)) != sizeof(pid))
-        perror_exit("write(pid_pipe)");
-    close(pid_pipefd[1]);
-
-    return 0;
+    return;
 }
 
 static void
