@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2013, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,9 +23,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef SNIPROXY_H
-#define SNIPROXY_H
+#ifndef LOGGER_H
+#define LOGGER_H
 
-#define DEFAULT_USERNAME "daemon"
+struct Logger;
+
+#define LOG_EMERG   0
+#define LOG_ALERT   1
+#define LOG_CRIT    2
+#define LOG_ERR     3
+#define LOG_WARNING 4
+#define LOG_NOTICE  5
+#define LOG_INFO    6
+#define LOG_DEBUG   7
+
+struct Logger *new_syslog_logger(const char *indent, const char *facility);
+struct Logger *new_file_logger(const char *filepath);
+void set_default_logger(struct Logger *);
+void set_logger_priority(struct Logger *, int);
+void free_logger(struct Logger *);
+
+/* Shorthand to log to global error log */
+void fatal(const char *, ...);
+void err(const char *, ...);
+void warn(const char *, ...);
+void notice(const char *, ...);
+void info(const char *, ...);
+void debug(const char *, ...);
+
+void log_msg(struct Logger *, int, const char *, ...);
 
 #endif

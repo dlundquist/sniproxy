@@ -31,7 +31,6 @@
 #include <strings.h> /* strcasecmp() */
 #include <unistd.h>
 #include <errno.h>
-#include <syslog.h>
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -41,6 +40,7 @@
 #include "address.h"
 #include "listener.h"
 #include "connection.h"
+#include "logger.h"
 #include "tls.h"
 #include "http.h"
 
@@ -72,7 +72,7 @@ new_listener() {
 
     listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
-        perror("malloc");
+        err("allor");
         return NULL;
     }
 
@@ -230,7 +230,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
     sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        syslog(LOG_CRIT, "socket failed");
+        err("socket failed: %s", strerror(errno));
         return -2;
     }
 
@@ -239,19 +239,20 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
     if (bind(sockfd, address_sa(listener->address),
                 address_sa_len(listener->address)) < 0) {
-        syslog(LOG_CRIT, "bind failed");
+        err("bind failed: %s", strerror(errno));
         close(sockfd);
         return -3;
     }
 
     if (listen(sockfd, SOMAXCONN) < 0) {
-        syslog(LOG_CRIT, "listen failed");
+        err("listen failed: %s", strerror(errno));
         close(sockfd);
         return -4;
     }
 
-    ev_io_init(&listener->rx_watcher, accept_cb, sockfd, EV_READ);
-    listener->rx_watcher.data = listener;
+    struct ev_io *listener_watcher = &listener->watcher;
+    ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
+    listener->watcher.data = listener;
     switch (listener->protocol) {
         case PROTOCOL_TLS:
             listener->parse_packet = parse_tls_header;
@@ -262,11 +263,11 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
             listener->close_client_socket = close_http_socket;
             break;
         default:
-            syslog(LOG_CRIT, "invalid protocol");
+            err("invalid protocol");
             return -5;
     }
 
-    ev_io_start(EV_DEFAULT, &listener->rx_watcher);
+    ev_io_start(EV_DEFAULT, listener_watcher);
 
     return sockfd;
 }
@@ -289,7 +290,7 @@ listener_lookup_server_address(const struct Listener *listener,
     if (address_is_wildcard(addr)) {
         new_addr = new_address(hostname);
         if (new_addr == NULL) {
-            syslog(LOG_INFO, "Invalid hostname %s", hostname);
+            warn("Invalid hostname %s", hostname);
             return NULL;
         }
 
@@ -335,8 +336,8 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 
 static void
 close_listener(struct ev_loop *loop, struct Listener * listener) {
-    ev_io_stop(loop, &listener->rx_watcher);
-    close(listener->rx_watcher.fd);
+    ev_io_stop(loop, &listener->watcher);
+    close(listener->watcher.fd);
 }
 
 void

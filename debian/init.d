@@ -18,6 +18,7 @@ DESC="HTTPS SNI proxy"     # Introduce a short description here
 NAME=sniproxy              # Introduce the short server's name here
 DAEMON=/usr/sbin/sniproxy  # Introduce the server's location here
 DAEMON_ARGS=""             # Arguments to run the daemon with
+PIDFILE="/var/run/sniproxy.pid"
 SCRIPTNAME=/etc/init.d/$NAME
 ENABLED=1
 
@@ -44,9 +45,11 @@ do_start()
 	#   1 if daemon was already running
 	#   2 if daemon could not be started
 	start-stop-daemon --start --quiet \
+        --pidfile $PIDFILE \
         --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet \
+        --pidfile $PIDFILE \
         --exec $DAEMON -- $DAEMON_ARGS \
 		|| return 2
 	# Add code here, if necessary, that waits for the process to be ready
@@ -64,7 +67,9 @@ do_stop()
 	#   1 if daemon was already stopped
 	#   2 if daemon could not be stopped
 	#   other if a failure occurred
-	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --name "$(basename $DAEMON)"
+	start-stop-daemon --stop --quiet \
+        --pidfile $PIDFILE \
+        --retry=TERM/30/KILL/5 --name "$(basename $DAEMON)"
 	RETVAL="$?"
 	[ "$RETVAL" = 2 ] && return 2
 	# Wait for children to finish too if this is a daemon that forks
@@ -73,7 +78,9 @@ do_stop()
 	# that waits for the process to drop all resources that could be
 	# needed by services started subsequently.  A last resort is to
 	# sleep for some time.
-	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
+	start-stop-daemon --stop --quiet --oknodo \
+        --pidfile $PIDFILE \
+        --retry=0/30/KILL/5 --exec $DAEMON
 	[ "$?" = 2 ] && return 2
 	return "$RETVAL"
 }

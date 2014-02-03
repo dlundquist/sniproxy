@@ -28,27 +28,29 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
-#include <syslog.h>
-#include <unistd.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <grp.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "sniproxy.h"
 #include "config.h"
 #include "server.h"
+#include "logger.h"
 
 
 static void usage();
-static void daemonize(const char *);
-static void write_pidfile(const char *);
-
+static void perror_exit(const char *);
+static pid_t daemonize(const char *);
+static void write_pidfile(const char *, pid_t);
 
 int
 main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
+    pid_t pid;
     int opt;
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
@@ -73,13 +75,16 @@ main(int argc, char **argv) {
 
     init_server(config);
 
-    if (background_flag)
-        daemonize(config->user ? config->user : DEFAULT_USERNAME);
+    if (background_flag) {
+        pid = daemonize(config->user ? config->user : DEFAULT_USERNAME);
 
-    openlog(SYSLOG_IDENT, LOG_NDELAY, SYSLOG_FACILITY);
-
-    if (background_flag && config->pidfile != NULL)
-        write_pidfile(config->pidfile);
+        if (pid != 0 && config->pidfile != NULL) {
+            /* parent */
+            write_pidfile(config->pidfile, pid);
+            free_config(config);
+            return 0;
+        }
+    }
 
     run_server();
 
@@ -89,67 +94,85 @@ main(int argc, char **argv) {
 }
 
 static void
+perror_exit(const char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
+
+static pid_t
 daemonize(const char *username) {
     pid_t pid;
     struct passwd *user;
+    int pid_pipefd[2];
 
     user = getpwnam(username);
-    if (user == NULL) {
-        perror("getpwnam()");
-        exit(1);
-    }
+    if (user == NULL)
+        perror_exit("getpwnam()");
 
-    umask(0);
+    umask(022);
 
-    if ((pid = fork()) < 0) {
-        perror("fork()");
-        exit(1);
-    } else if (pid != 0) {
-        exit(0);
-    }
-
-    if (chdir("/") < 0) {
-        perror("chdir()");
-        exit(1);
-    }
-
-    if (setsid() < 0) {
-        perror("setsid()");
-        exit(1);
-    }
-
-    if (freopen("/dev/null", "r", stdin) == NULL) {
-        perror("freopen(stdin)");
-        exit(1);
-    }
-
-    if (freopen("/dev/null", "a", stdout) == NULL) {
-        perror("freopen(stdout)");
-        exit(1);
-    }
-
-    if (freopen("/dev/null", "a", stderr) == NULL) {
-        perror("freopen(stderr)");
-        exit(1);
-    }
-
-    if (setgid(user->pw_gid) < 0) {
-        perror("setgid()");
-        exit(1);
-    }
-
-    if (setuid(user->pw_uid) < 0) {
-        perror("setuid()");
-        exit(1);
-    }
+    /* Systemd expects the PID file to be written before the parent exits, and
+     * we want to fork() twice to so sniproxy is not associated with a
+     * controlling terminal or a session leader. To accomplish this we use a
+     * pipe and send our PID back to our grandparent.
+     */
+    if (pipe(pid_pipefd) == -1)
+        perror_exit("pipe()");
 
     pid = fork();
-    if (pid < 0) {
-        perror("fork()");
-        exit(1);
-    } else if (pid > 0) {
-        exit(0);
+    if (pid < 0)
+        perror_exit("fork()");
+    else if (pid != 0) {
+        /* (grand) parent: read grandchild's PID via pipe */
+        close(pid_pipefd[1]); /* input end of pipe */
+        if (read(pid_pipefd[0], &pid, sizeof(pid)) != sizeof(pid))
+            perror_exit("read(pid_pipe)");
+        close(pid_pipefd[0]);
+
+        return pid;
     }
+
+    close(pid_pipefd[0]); /* output end of pipe */
+
+    if (setsid() < 0)
+        perror_exit("setsid()");
+
+    if (chdir("/") < 0)
+        perror_exit("chdir()");
+
+    if (freopen("/dev/null", "r", stdin) == NULL)
+        perror_exit("freopen(stdin)");
+
+    if (freopen("/dev/null", "a", stdout) == NULL)
+        perror_exit("freopen(stdout)");
+
+    if (freopen("/dev/null", "a", stderr) == NULL)
+        perror_exit("freopen(stderr)");
+
+    /* drop any supplementary groups */
+    if (setgroups(1, &user->pw_gid) < 0)
+        perror_exit("setgroups()");
+
+    if (setgid(user->pw_gid) < 0)
+        perror_exit("setgid()");
+
+    if (setuid(user->pw_uid) < 0)
+        perror_exit("setuid()");
+
+    signal(SIGHUP, SIG_IGN);
+
+    pid = fork();
+    if (pid < 0)
+        perror_exit("fork()");
+    else if (pid != 0)
+        exit(EXIT_SUCCESS);
+
+    pid = getpid();
+    if (write(pid_pipefd[1], &pid, sizeof(pid)) != sizeof(pid))
+        perror_exit("write(pid_pipe)");
+    close(pid_pipefd[1]);
+
+    return 0;
 }
 
 static void
@@ -158,14 +181,14 @@ usage() {
 }
 
 static void
-write_pidfile(const char *path) {
+write_pidfile(const char *path, pid_t pid) {
     FILE *fp = fopen(path, "w");
     if (fp == NULL) {
         perror("fopen");
         return;
     }
 
-    fprintf(fp, "%d\n", getpid());
+    fprintf(fp, "%d\n", pid);
 
     fclose(fp);
 }

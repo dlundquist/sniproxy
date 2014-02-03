@@ -393,31 +393,31 @@ valid_hostname(const char *hostname) {
     if (hostname == NULL)
         return 0;
 
-    size_t len = strlen(hostname);
-    if (len < 1 || len > 255)
+    size_t hostname_len = strlen(hostname);
+    if (hostname_len < 1 || hostname_len > 255)
         return 0;
 
     if (hostname[0] == '.')
         return 0;
 
-    for (const char *label = hostname;
-            label - 1 != NULL && label[0] != '\0';
-            label = strchr(label, '.') + 1) {
-        char *next_label = strchr(label, '.');
+    const char *label = hostname;
+    while (label < hostname + hostname_len) {
+        char *next_dot = strchr(label, '.');
+        size_t label_len = (next_dot == NULL)
+                         ? hostname_len - (label - hostname)
+                         : next_dot - label;
+        assert(label + label_len <= hostname + hostname_len);
 
-        if (next_label)
-            len = next_label - label;
-        else
-            len = strlen(label);
-
-        if (len > 63 || len < 1)
+        if (label_len > 63 || label_len < 1)
             return 0;
 
-        if (label[0] == '-' || label[len - 1] == '-')
+        if (label[0] == '-' || label[label_len - 1] == '-')
             return 0;
 
-        if (strspn(label, valid_label_bytes) < len)
+        if (strspn(label, valid_label_bytes) < label_len)
             return 0;
+
+        label += label_len + 1;
     }
 
     return 1;
