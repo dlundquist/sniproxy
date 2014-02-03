@@ -88,7 +88,10 @@ main(int argc, char **argv) {
         }
     }
 
-    drop_perms(config->user ? config->user : DEFAULT_USERNAME);
+    /* Drop permissions only when we can */
+    if (getuid() == 0) {
+        drop_perms(config->user ? config->user : DEFAULT_USERNAME);
+    }
 
     run_server();
 
