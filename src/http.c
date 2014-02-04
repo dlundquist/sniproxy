@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <sys/socket.h> /* send() */
 #include "http.h"
+#include "protocol.h"
 
 #define SERVER_NAME_LEN 256
 
@@ -41,10 +42,18 @@ static const char http_503[] =
     "Connection: close\r\n\r\n"
     "Backend not available";
 
-
+static int parse_http_header(const char *, size_t, char **);
 static int get_header(const char *, const char *, int, char **);
 static int next_header(const char **, int *);
 
+static const struct Protocol http_protocol_st = {
+    .name = "http",
+    .default_port = 80,
+    .parse_packet = &parse_http_header,
+    .abort_message = http_503,
+    .abort_message_len = sizeof(http_503)
+};
+const struct Protocol *http_protocol = &http_protocol_st;
 
 /*
  * Parses a HTTP request for the Host: header
@@ -59,7 +68,7 @@ static int next_header(const char **, int *);
  *  < -4 - Invalid HTTP request
  *
  */
-int
+static int
 parse_http_header(const char* data, size_t data_len, char **hostname) {
     int result, i;
 
@@ -83,12 +92,6 @@ parse_http_header(const char* data, size_t data_len, char **hostname) {
         }
 
     return result;
-}
-
-void
-close_http_socket(int sockfd) {
-    send(sockfd, http_503, sizeof(http_503), 0);
-    close(sockfd);
 }
 
 static int

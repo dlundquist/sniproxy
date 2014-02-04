@@ -36,16 +36,11 @@ SLIST_HEAD(Listener_head, Listener);
 struct Listener {
     /* Configuration fields */
     struct Address *address, *fallback_address;
-    enum Protocol {
-        PROTOCOL_TLS,
-        PROTOCOL_HTTP
-    } protocol;
+    const struct Protocol *protocol;
     char *table_name;
 
     /* Runtime fields */
     struct ev_io watcher;
-    int (*parse_packet)(const char*, size_t, char **);
-    void (*close_client_socket)(int);
     struct Table *table;
     SLIST_ENTRY(Listener) entries;
 };

@@ -1,4 +1,3 @@
-
 AM_CPPFLAGS = -I$(top_srcdir)/src -g
 
 TESTS = http_test \
@@ -8,6 +7,7 @@ TESTS = http_test \
                 cfg_tokenizer_test \
                 config_test \
                 functional_test \
+                bad_request_test \
                 connection_reset_test
 
 check_PROGRAMS = http_test \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,11 +23,15 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef TLS_H
-#define TLS_H
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
-#include "protocol.h"
-
-const struct Protocol *tls_protocol;
+struct Protocol {
+    const char *name;
+    int default_port;
+    int (*parse_packet)(const char*, size_t, char **);
+    const char *abort_message;
+    size_t abort_message_len;
+};
 
 #endif

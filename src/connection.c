@@ -39,6 +39,7 @@
 #include <assert.h>
 #include "connection.h"
 #include "address.h"
+#include "protocol.h"
 #include "logger.h"
 
 
@@ -305,25 +306,26 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
-    parse_result = con->listener->parse_packet(buffer, len, &hostname);
+    parse_result = con->listener->protocol->parse_packet(buffer, len, &hostname);
     if (parse_result == -1) {
         return;  /* incomplete request: try again */
-    } else if (parse_result == -2) {
-        warn("Request from %s did not include a hostname",
-                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-
-        if (con->listener->fallback_address == NULL) {
-            close_client_socket(con, loop);
-            return;
+    } else if (parse_result < -1) {
+        if (parse_result == -2) {
+            warn("Request from %s did not include a hostname",
+                    display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+        } else {
+            warn("Unable to parse request from %s",
+                    display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+            debug("parse() returned %d", parse_result);
+            /* TODO optionally dump request to file */
         }
-    } else if (parse_result < -2) {
-        warn("Unable to parse request from %s",
-                display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-        debug("parse() returned %d", parse_result);
-        /* TODO optionally dump request to file */
 
         if (con->listener->fallback_address == NULL) {
-            close_client_socket(con, loop);
+            buffer_push(con->server.buffer,
+                    con->listener->protocol->abort_message,
+                    con->listener->protocol->abort_message_len);
+
+            con->state = SERVER_CLOSED;
             return;
         }
     }
