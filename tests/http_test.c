@@ -48,7 +48,7 @@ int main() {
     for (i = 0; i < sizeof(good) / sizeof(const char *); i++) {
         hostname = NULL;
 
-        result = parse_http_header(good[i], strlen(good[i]), &hostname);
+        result = http_protocol->parse_packet(good[i], strlen(good[i]), &hostname);
 
         assert(result == 9);
 
@@ -62,7 +62,7 @@ int main() {
     for (i = 0; i < sizeof(bad) / sizeof(const char *); i++) {
         hostname = NULL;
 
-        result = parse_http_header(bad[i], strlen(bad[i]), &hostname);
+        result = http_protocol->parse_packet(bad[i], strlen(bad[i]), &hostname);
 
         assert(result < 0);
 

@@ -27,8 +27,8 @@
 #define HTTP_H
 
 #include <stdio.h>
+#include "protocol.h"
 
-int parse_http_header(const char *, size_t, char **);
-void close_http_socket(int);
+const struct Protocol *http_protocol;
 
 #endif

@@ -75,7 +75,7 @@ int main() {
     for (i = 0; i < sizeof(good) / sizeof(struct test_packet); i++) {
         hostname = NULL;
 
-        result = parse_tls_header(good[i].packet, good[i].len, &hostname);
+        result = tls_protocol->parse_packet(good[i].packet, good[i].len, &hostname);
 
         assert(result == 9);
 
@@ -89,7 +89,7 @@ int main() {
     for (i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
         hostname = NULL;
 
-        result = parse_tls_header(bad[i].packet, bad[i].len, &hostname);
+        result = tls_protocol->parse_packet(bad[i].packet, bad[i].len, &hostname);
 
         // parse failure or not "localhost"
         assert(result < 0 ||
