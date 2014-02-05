@@ -97,10 +97,8 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
 
     tls_version_major = data[1];
     tls_version_minor = data[2];
-    if (tls_version_major < 3 ||
-        (tls_version_major == 3 && tls_version_minor < 1)) {
-        debug("Received SSL %d.%d handshake which does not support "
-              "Server Name Indication.",
+    if (tls_version_major < 3) {
+        debug("Received SSL %d.%d handshake which cannot be parsed.",
               tls_version_major, tls_version_minor);
 
         return -2;
