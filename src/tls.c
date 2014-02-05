@@ -24,8 +24,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /*
- * This is a minimal TLS implementation intended only to parse the server name extension.
- * This was created based primarily on Wireshark dissection of a TLS handshake and RFC4366.
+ * This is a minimal TLS implementation intended only to parse the server name
+ * extension.  This was created based primarily on Wireshark dissection of a
+ * TLS handshake and RFC4366.
  */
 #include <stdio.h>
 #include <stdlib.h> /* malloc() */
@@ -33,6 +34,7 @@
 #include <unistd.h> /* close() */
 #include <sys/socket.h>
 #include "tls.h"
+#include "protocol.h"
 #include "logger.h"
 
 #define SERVER_NAME_LEN 256
@@ -51,19 +53,23 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
+static int parse_tls_header(const char *, size_t, char **);
 static int parse_extensions(const char *, size_t, char **);
 static int parse_server_name_extension(const char *, size_t, char **);
 
+static const struct Protocol tls_protocol_st = {
+    .name = "tls",
+    .default_port = 443,
+    .parse_packet = &parse_tls_header,
+    .abort_message = tls_alert,
+    .abort_message_len = sizeof(tls_alert)
+};
+const struct Protocol *tls_protocol = &tls_protocol_st;
 
-/* Send a TLS handshake failure alert and close a socket */
-void
-close_tls_socket(int sockfd) {
-    send(sockfd, tls_alert, sizeof(tls_alert), 0);
-    close(sockfd);
-}
 
-/* Parse a TLS packet for the Server Name Indication extension in the client hello
- * handshake, returning the first servername found (pointer to static array)
+/* Parse a TLS packet for the Server Name Indication extension in the client
+ * hello handshake, returning the first servername found (pointer to static
+ * array)
  *
  * Returns:
  *  >=0  - length of the hostname and updates *hostname
@@ -74,7 +80,7 @@ close_tls_socket(int sockfd) {
  *  -4   - malloc failure
  *  < -4 - Invalid TLS client hello
  */
-int
+static int
 parse_tls_header(const char *data, size_t data_len, char **hostname) {
     char tls_content_type;
     char tls_version_major;

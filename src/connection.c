@@ -40,6 +40,7 @@
 #include <assert.h>
 #include "connection.h"
 #include "address.h"
+#include "protocol.h"
 #include "logger.h"
 
 
@@ -299,29 +300,29 @@ static void
 parse_client_request(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
-
     char *hostname = NULL;
-    int result = con->listener->parse_packet(buffer, len, &hostname);
+
+    int result = con->listener->protocol->parse_packet(buffer, len, &hostname);
     if (result == -1) {
         return;  /* incomplete request: try again */
-    } else if (result == -2) {
+    } else if (result < -1) {
         char client[INET6_ADDRSTRLEN + 8];
-        info("Request from %s did not include a hostname",
-                display_sockaddr(&con->client.addr, client, sizeof(client)));
-
-        if (con->listener->fallback_address == NULL) {
-            close_client_socket(con, loop);
-            return;
+        if (result == -2) {
+            warn("Request from %s did not include a hostname",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+        } else {
+            warn("Unable to parse request from %s",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+            debug("parse() returned %d", result);
+            /* TODO optionally dump request to file */
         }
-    } else if (result < -2) {
-        char client[INET6_ADDRSTRLEN + 8];
-        warn("Unable to parse request from %s",
-                display_sockaddr(&con->client.addr, client, sizeof(client)));
-        debug("parse() returned %d", result);
-        /* TODO optionally dump request to file */
 
         if (con->listener->fallback_address == NULL) {
-            close_client_socket(con, loop);
+            buffer_push(con->server.buffer,
+                    con->listener->protocol->abort_message,
+                    con->listener->protocol->abort_message_len);
+
+            con->state = SERVER_CLOSED;
             return;
         }
     }

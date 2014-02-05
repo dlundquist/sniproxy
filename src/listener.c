@@ -42,6 +42,7 @@
 #include "listener.h"
 #include "connection.h"
 #include "logger.h"
+#include "protocol.h"
 #include "tls.h"
 #include "http.h"
 
@@ -73,13 +74,13 @@ new_listener() {
 
     listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
-        err("allor");
+        err("calloc");
         return NULL;
     }
 
     listener->address = NULL;
     listener->fallback_address = NULL;
-    listener->protocol = PROTOCOL_TLS;
+    listener->protocol = tls_protocol;
 
     return listener;
 }
@@ -125,14 +126,13 @@ accept_listener_table_name(struct Listener *listener, char *table_name) {
 
 int
 accept_listener_protocol(struct Listener *listener, char *protocol) {
-    if (listener->protocol == 0 && strcasecmp(protocol, "http") == 0)
-        listener->protocol = PROTOCOL_HTTP;
+    if (strncasecmp(protocol, http_protocol->name, strlen(protocol)) == 0)
+        listener->protocol = http_protocol;
     else
-        listener->protocol = PROTOCOL_TLS;
+        listener->protocol = tls_protocol;
 
     if (address_port(listener->address) == 0)
-        address_set_port(listener->address,
-            listener->protocol == PROTOCOL_TLS ? 443 : 80);
+        address_set_port(listener->address, listener->protocol->default_port);
 
     return 1;
 }
@@ -202,7 +202,7 @@ valid_listener(const struct Listener *listener) {
             return 0;
     }
 
-    if (listener->protocol != PROTOCOL_TLS && listener->protocol != PROTOCOL_HTTP) {
+    if (listener->protocol != tls_protocol && listener->protocol != http_protocol) {
         fprintf(stderr, "Invalid protocol\n");
         return 0;
     }
@@ -258,19 +258,6 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     struct ev_io *listener_watcher = &listener->watcher;
     ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
-    switch (listener->protocol) {
-        case PROTOCOL_TLS:
-            listener->parse_packet = parse_tls_header;
-            listener->close_client_socket = close_tls_socket;
-            break;
-        case PROTOCOL_HTTP:
-            listener->parse_packet = parse_http_header;
-            listener->close_client_socket = close_http_socket;
-            break;
-        default:
-            err("invalid protocol");
-            return -5;
-    }
 
     ev_io_start(EV_DEFAULT, listener_watcher);
 
@@ -323,10 +310,7 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     fprintf(file, "listener %s {\n",
             display_address(listener->address, address, sizeof(address)));
 
-    if (listener->protocol == PROTOCOL_TLS)
-        fprintf(file, "\tprotocol tls\n");
-    else
-        fprintf(file, "\tprotocol http\n");
+    fprintf(file, "\tprotocol %s\n", listener->protocol->name);
 
     if (listener->table_name)
         fprintf(file, "\ttable %s\n", listener->table_name);
