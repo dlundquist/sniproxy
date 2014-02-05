@@ -21,6 +21,7 @@ sniproxy_SOURCES = address.c \
                    listener.h \
                    logger.c \
                    logger.h \
+				   protocol.h \
                    server.c \
                    server.h \
                    sniproxy.c \
