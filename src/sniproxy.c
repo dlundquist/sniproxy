@@ -70,6 +70,7 @@ main(int argc, char **argv) {
     config = init_config(config_file);
     if (config == NULL) {
         fprintf(stderr, "Unable to load %s\n", config_file);
+        usage();
         return 1;
     }
 
