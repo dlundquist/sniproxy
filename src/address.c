@@ -113,6 +113,7 @@ new_address(const char *hostname_or_ip) {
         struct Address *addr = malloc(sizeof(struct Address));
         if (addr != NULL)
             addr->type = WILDCARD;
+        address_set_port(addr, 0);
         return addr;
     }
 
