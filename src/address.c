@@ -111,8 +111,10 @@ new_address(const char *hostname_or_ip) {
     /* Wildcard */
     if (strcmp("*", hostname_or_ip) == 0) {
         struct Address *addr = malloc(sizeof(struct Address));
-        if (addr != NULL)
+        if (addr != NULL) {
             addr->type = WILDCARD;
+            address_set_port(addr, 0);
+        }
         return addr;
     }
 
