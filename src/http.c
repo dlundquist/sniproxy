@@ -42,7 +42,7 @@ static const char http_503[] =
     "Connection: close\r\n\r\n"
     "Backend not available";
 
-static int parse_http_header(const char *, size_t, char **);
+static int parse_http_header(const struct Listener *, const char*, size_t, struct ProtocolRes*);
 static int get_header(const char *, const char *, int, char **);
 static int next_header(const char **, int *);
 
@@ -69,13 +69,15 @@ const struct Protocol *http_protocol = &http_protocol_st;
  *
  */
 static int
-parse_http_header(const char* data, size_t data_len, char **hostname) {
+parse_http_header(const struct Listener * t, const char* data, size_t data_len,
+                  struct ProtocolRes* pres) {
     int result, i;
+    char* hostname;
 
-    if (hostname == NULL)
+    if (pres == NULL)
         return -3;
 
-    result = get_header("Host:", data, data_len, hostname);
+    result = get_header("Host:", data, data_len, &hostname);
     if (result < 0)
         return result;
 
@@ -85,11 +87,16 @@ parse_http_header(const char* data, size_t data_len, char **hostname) {
      *  so we trim off port portion
      */
     for (i = result - 1; i >= 0; i--)
-        if ((*hostname)[i] == ':') {
-            (*hostname)[i] = '\0';
+        if (hostname[i] == ':') {
+            hostname[i] = '\0';
             result = i;
+
             break;
         }
+
+    pres->name = hostname;
+    pres->name_size = result;
+    pres->name_type = NTYPE_HOST;
 
     return result;
 }

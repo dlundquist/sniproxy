@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g
+AM_CPPFLAGS = -I$(top_srcdir)/src -g -DSELF_CONTAINED
 
 TESTS = http_test \
                 tls_test \

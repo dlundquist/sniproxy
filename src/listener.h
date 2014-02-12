@@ -38,10 +38,13 @@ struct Listener {
     struct Address *address, *fallback_address;
     const struct Protocol *protocol;
     char *table_name;
+    char *alpn_table_name;
+    unsigned prefer_alpn;
 
     /* Runtime fields */
     struct ev_io watcher;
     struct Table *table;
+    struct Table *alpn_table;
     SLIST_ENTRY(Listener) entries;
 };
 
@@ -49,18 +52,20 @@ struct Listener {
 struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
+int accept_listener_alpn_table_name(struct Listener *, char *);
+int prefer_in_listener(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
-void init_listeners(struct Listener_head *, const struct Table_head *);
+void init_listeners(struct Listener_head *, const struct Table_head *, const struct Table_head *);
 void remove_listener(struct Listener_head *, struct Listener *);
 void free_listeners(struct Listener_head *);
 
 int valid_listener(const struct Listener *);
-int init_listener(struct Listener *, const struct Table_head *);
+int init_listener(struct Listener *, const struct Table_head *, const struct Table_head *);
 struct Address *listener_lookup_server_address(const struct Listener *,
-        const char *);
+        const char *, unsigned, unsigned ntype);
 void print_listener_config(FILE *, const struct Listener *);
 void free_listener(struct Listener *);
 

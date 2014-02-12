@@ -55,11 +55,11 @@ static void accept_cb(struct ev_loop *, struct ev_io *, int);
  */
 void
 init_listeners(struct Listener_head *listeners,
-        const struct Table_head *tables) {
+        const struct Table_head *tables, const struct Table_head *alpn_tables) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        if (init_listener(iter, tables) < 0) {
+        if (init_listener(iter, tables, alpn_tables) < 0) {
             fprintf(stderr, "Failed to initialize listener\n");
             print_listener_config(stderr, iter);
             exit(1);
@@ -114,11 +114,32 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 }
 
 int
+prefer_in_listener(struct Listener *listener, char *arg) {
+    if (strcasecmp(arg, "alpn") == 0) {
+        listener->prefer_alpn = 1;
+    } else {
+        listener->prefer_alpn = 0;
+    }
+
+    return 1;
+}
+
+int
 accept_listener_table_name(struct Listener *listener, char *table_name) {
     if (listener->table_name == NULL)
         listener->table_name = strdup(table_name);
     else
-        fprintf(stderr, "Duplicate table_name: %s\n", table_name);
+        fprintf(stderr, "Duplicate table name: %s\n", table_name);
+
+    return 1;
+}
+
+int
+accept_listener_alpn_table_name(struct Listener *listener, char *table_name) {
+    if (listener->alpn_table_name == NULL)
+        listener->alpn_table_name = strdup(table_name);
+    else
+        fprintf(stderr, "Duplicate ALPNtable name: %s\n", table_name);
 
     return 1;
 }
@@ -210,16 +231,35 @@ valid_listener(const struct Listener *listener) {
 }
 
 int
-init_listener(struct Listener *listener, const struct Table_head *tables) {
+init_listener(struct Listener *listener, const struct Table_head *tables,
+              const struct Table_head *alpn_tables) {
     int sockfd;
     int on = 1;
 
-    listener->table = table_lookup(tables, listener->table_name);
-    if (listener->table == NULL) {
-        fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
-        return -1;
+    listener->table = NULL;
+    listener->alpn_table = NULL;
+
+    if (listener->table_name != NULL) {
+        listener->table = table_lookup(tables, listener->table_name);
+        if (listener->table == NULL) {
+            fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
+            return -1;
+        }
+        init_table(listener->table);
     }
-    init_table(listener->table);
+
+    if (listener->alpn_table_name != NULL) {
+        listener->alpn_table = table_lookup(alpn_tables, listener->alpn_table_name);
+        if (listener->alpn_table == NULL) {
+            fprintf(stderr, "ALPNTable \"%s\" not defined\n", listener->alpn_table_name);
+            return -1;
+        }
+        init_table(listener->alpn_table);
+    }
+
+    /* Here listener->table and listener->alpn_table may both be null.
+     * In that case the default SNI table will be used.
+     */
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
@@ -261,10 +301,15 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
 struct Address *
 listener_lookup_server_address(const struct Listener *listener,
-        const char *hostname) {
+        const char *name, unsigned name_size, unsigned ntype) {
     struct Address *new_addr = NULL;
-    const struct Address *addr =
-        table_lookup_server_address(listener->table, hostname);
+    const struct Address *addr = NULL;
+
+    if (ntype == NTYPE_ALPN && listener->alpn_table) {
+        addr = table_lookup_server_address(listener->alpn_table, name, name_size);
+    } else if (ntype == NTYPE_HOST && listener->table) {
+        addr = table_lookup_server_address(listener->table, name, name_size);
+    }
 
     if (addr == NULL)
         addr = listener->fallback_address;
@@ -275,9 +320,9 @@ listener_lookup_server_address(const struct Listener *listener,
     int port = address_port(addr);
 
     if (address_is_wildcard(addr)) {
-        new_addr = new_address(hostname);
+        new_addr = new_address(name);
         if (new_addr == NULL) {
-            warn("Invalid hostname %s", hostname);
+            warn("Invalid name %s", name);
             return NULL;
         }
 

@@ -53,9 +53,12 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
-static int parse_tls_header(const char *, size_t, char **);
-static int parse_extensions(const char *, size_t, char **);
-static int parse_server_name_extension(const char *, size_t, char **);
+static int parse_tls_header(const struct Listener *, const char*, size_t, struct ProtocolRes*);
+static int parse_extensions(const struct Listener *, const char *, size_t, struct ProtocolRes*);
+static int parse_server_name_extension(const struct Listener *, const char *, size_t, struct ProtocolRes*);
+static int
+parse_alpn_extension(const struct Listener * t, const char *data, size_t data_len,
+                     struct ProtocolRes* pres);
 
 static const struct Protocol tls_protocol_st = {
     .name = "tls",
@@ -81,14 +84,16 @@ const struct Protocol *tls_protocol = &tls_protocol_st;
  *  < -4 - Invalid TLS client hello
  */
 static int
-parse_tls_header(const char *data, size_t data_len, char **hostname) {
+parse_tls_header(const struct Listener * t, const char* data, size_t data_len,
+                 struct ProtocolRes* pres)
+{
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;
     size_t pos = TLS_HEADER_LEN;
     size_t len;
 
-    if (hostname == NULL)
+    if (pres == NULL)
         return -3;
 
     /* Check that our TCP payload is at least large enough for a TLS header */
@@ -166,13 +171,19 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
 
     if (pos + len > data_len)
         return -5;
-    return parse_extensions(data + pos, len, hostname);
+    return parse_extensions(t, data + pos, len, pres);
 }
 
 static int
-parse_extensions(const char *data, size_t data_len, char **hostname) {
+parse_extensions(const struct Listener * l, const char *data, size_t data_len,
+                 struct ProtocolRes* pres) {
     size_t pos = 0;
-    size_t len;
+    size_t sn_pos, alpn_pos;
+    size_t len, alpn_len, sn_len;
+    int ret;
+
+    sn_pos = alpn_pos = 0;
+    alpn_len = sn_len = 0;
 
     /* Parse each 4 bytes for the extension header */
     while (pos + 4 < data_len) {
@@ -181,27 +192,50 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
             (unsigned char)data[pos + 3];
 
         /* Check if it's a server name extension */
-        if (data[pos] == 0x00 && data[pos + 1] == 0x00) {
-            /* There can be only one extension of each type, so we break
-               our state and move p to beinnging of the extension here */
-            if (pos + 4 + len > data_len)
-                return -5;
-            return parse_server_name_extension(data + pos + 4, len, hostname);
+        if (data[pos] == 0x00) {
+            if (data[pos + 1] == 0x00) { /* server name */
+                /* There can be only one extension of each type, so we break
+                   our state and move p to beinnging of the extension here */
+                if (pos + 4 + len > data_len)
+                    return -5;
+
+                sn_pos = pos + 4;
+                sn_len = len;
+            } else if (data[pos + 1] == 0x10) { /* ALPN */
+                if (pos + 4 + len > data_len)
+                    return -5;
+
+                alpn_pos = pos + 4;
+                alpn_len = len;
+            }
         }
         pos += 4 + len; /* Advance to the next extension header */
     }
+
     /* Check we ended where we expected to */
     if (pos != data_len)
         return -5;
+
+    if ((l->prefer_alpn && alpn_pos != 0) || (sn_pos == 0 && alpn_pos != 0)) {
+        ret = parse_alpn_extension(l, data + alpn_pos, alpn_len, pres);
+	/* if we fail allow fall back to SNI */
+	if (ret >= 0)
+		return ret;
+    }
+
+    if (sn_pos != 0) {
+        return parse_server_name_extension(l, data + sn_pos, sn_len, pres);
+    }
 
     return -2;
 }
 
 static int
-parse_server_name_extension(const char *data, size_t data_len,
-        char **hostname) {
+parse_server_name_extension(const struct Listener * l, const char *data, size_t data_len,
+                            struct ProtocolRes* pres) {
     size_t pos = 2; /* skip server name list length */
     size_t len;
+    char* hostname;
 
     while (pos + 3 < data_len) {
         len = ((unsigned char)data[pos + 1] << 8) +
@@ -212,15 +246,19 @@ parse_server_name_extension(const char *data, size_t data_len,
 
         switch (data[pos]) { /* name type */
             case 0x00: /* host_name */
-                *hostname = malloc(len + 1);
-                if (*hostname == NULL) {
+                hostname = malloc(len + 1);
+                if (hostname == NULL) {
                     err("malloc() failure");
                     return -4;
                 }
 
-                strncpy(*hostname, data + pos + 3, len);
+                strncpy(hostname, data + pos + 3, len);
 
-                (*hostname)[len] = '\0';
+                hostname[len] = '\0';
+
+                pres->name = hostname;
+                pres->name_size = len;
+                pres->name_type = NTYPE_HOST;
 
                 return len;
             default:
@@ -228,6 +266,57 @@ parse_server_name_extension(const char *data, size_t data_len,
                       data[pos]);
         }
         pos += 3 + len;
+    }
+    /* Check we ended where we expected to */
+    if (pos != data_len)
+        return -5;
+
+    return -2;
+}
+
+static int is_alpn_proto_known(const struct Listener * l, const char* name, unsigned name_size)
+{
+#ifdef SELF_CONTAINED
+	return 1;
+#else
+	if (table_lookup_backend(l->alpn_table, name, name_size) != NULL)
+		return 1;
+	return 0;
+#endif
+}
+
+static int
+parse_alpn_extension(const struct Listener * l, const char *data, size_t data_len,
+                     struct ProtocolRes* pres) {
+    size_t pos = 2;
+    size_t len;
+    char* hostname;
+
+    while (pos + 1 < data_len) {
+        len = (unsigned char)data[pos];
+
+        if (pos + 1 + len > data_len)
+            return -5;
+
+        if (len > 0 && is_alpn_proto_known(l, data + pos + 1, len)) {
+	    hostname = malloc(len + 1);
+            if (hostname == NULL) {
+                err("malloc() failure");
+                return -4;
+            }
+
+            memcpy(hostname, data + pos + 1, len);
+            hostname[len] = '\0';
+
+            pres->name = hostname;
+            pres->name_size = len;
+            pres->name_type = NTYPE_ALPN;
+
+	    return len;
+	} else if (len > 0) {
+            debug("Unknown ALPN name: %.*s", (int)len, data + pos + 2);
+        }
+        pos += 1 + len;
     }
     /* Check we ended where we expected to */
     if (pos != data_len)
