@@ -26,10 +26,24 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include "listener.h"
+
+enum NameType {
+	NTYPE_NONE = 0,
+	NTYPE_HOST = 1,
+	NTYPE_ALPN = 2,
+};
+
+struct ProtocolRes {
+	char* name;
+	unsigned name_size;
+	unsigned name_type;
+};
+
 struct Protocol {
     const char *name;
     int default_port;
-    int (*parse_packet)(const char*, size_t, char **);
+    int (*parse_packet)(const struct Listener *, const char*, size_t, struct ProtocolRes*);
     const char *abort_message;
     size_t abort_message_len;
 };

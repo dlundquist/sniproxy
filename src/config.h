@@ -36,6 +36,7 @@ struct Config {
     char *pidfile;
     struct Listener_head listeners;
     struct Table_head tables;
+    struct Table_head alpn_tables;
 };
 
 struct Config *init_config(const char *);

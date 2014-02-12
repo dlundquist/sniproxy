@@ -299,14 +299,15 @@ static void
 handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
     ssize_t len;
-    char *hostname = NULL;
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
     int sockfd = -1;
+    struct ProtocolRes pres;
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
-    parse_result = con->listener->protocol->parse_packet(buffer, len, &hostname);
+    parse_result = con->listener->protocol->parse_packet(con->listener, buffer, len, 
+                                                         &pres);
     if (parse_result == -1) {
         return;  /* incomplete request: try again */
     } else if (parse_result < -1) {
@@ -329,12 +330,19 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
             return;
         }
     }
-    con->hostname = hostname;
+    con->hostname = pres.name;
+
+    if (pres.name == NULL) {
+       warn("name returned from parse_packet is null");
+       return;
+    }
+
     /* TODO break the remainder out into other states */
 
-    /* lookup server for hostname and connect */
+    /* lookup server for name and connect */
     struct Address *server_address =
-        listener_lookup_server_address(con->listener, hostname);
+        listener_lookup_server_address(con->listener, pres.name, pres.name_size, pres.name_type);
+
     if (server_address == NULL) {
         close_client_socket(con, loop);
         return;
@@ -399,7 +407,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     }
 
     if (sockfd < 0) {
-        warn("Server connection failed to %s", hostname);
+        warn("Server connection failed to %.*s", pres.name_size, pres.name);
         close_client_socket(con, loop);
         return;
     }
