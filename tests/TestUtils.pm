@@ -95,7 +95,7 @@ sub make_config($$) {
     print $fh <<END;
 # Minimal test configuration
 
-listen $proxy_port {
+listen 127.0.0.1 $proxy_port {
     proto http
 }
 
