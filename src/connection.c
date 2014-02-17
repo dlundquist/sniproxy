@@ -303,6 +303,8 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
     int sockfd = -1;
+    int on = 1;
+
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -404,6 +406,9 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
+    if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0)
+        syslog(LOG_CRIT, "setsockopt(): %s", strerror(errno));
+
     assert(con->state == ACCEPTED);
     con->state = CONNECTED;
 
@@ -482,13 +487,13 @@ new_connection() {
     con->server.addr_len = sizeof(con->server.addr);
     con->hostname = NULL;
 
-    con->client.buffer = new_buffer();
+    con->client.buffer = new_buffer(4096);
     if (con->client.buffer == NULL) {
         free_connection(con);
         return NULL;
     }
 
-    con->server.buffer = new_buffer();
+    con->server.buffer = new_buffer(4096);
     if (con->server.buffer == NULL) {
         free_connection(con);
         return NULL;
