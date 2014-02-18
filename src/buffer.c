@@ -29,13 +29,14 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <sys/time.h>
+#include <errno.h>
 #include <unistd.h>
 #include "buffer.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
-static void parse_ancillary_data(struct msghdr *, struct timeval *);
 static size_t setup_write_iov(const struct Buffer *, struct iovec *, size_t);
 static size_t setup_read_iov(const struct Buffer *, struct iovec *, size_t);
 static inline void advance_write_position(struct Buffer *, size_t);
@@ -56,6 +57,8 @@ new_buffer(int size) {
     buf->head = 0;
     buf->tx_bytes = 0;
     buf->rx_bytes = 0;
+    timerclear(&buf->last_recv);
+    timerclear(&buf->last_send);
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
@@ -103,21 +106,19 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     ssize_t bytes;
     struct iovec iov[2];
     struct msghdr msg;
-    char control_buf[64];
-
-    memset(control_buf, 0, sizeof(control_buf));
 
     msg.msg_name = NULL;
     msg.msg_namelen = 0;
     msg.msg_iov = iov;
     msg.msg_iovlen = setup_write_iov(buffer, iov, 0);
-    msg.msg_control = (void *)control_buf;
-    msg.msg_controllen = sizeof(control_buf);
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
     msg.msg_flags = 0;
 
     bytes = recvmsg(sockfd, &msg, flags);
 
-    parse_ancillary_data(&msg, &buffer->last_recv);
+    if (gettimeofday(&buffer->last_recv, NULL) < 0)
+        err("gettimeofday() failed: %s", strerror(errno));
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
@@ -129,22 +130,20 @@ ssize_t
 buffer_send(struct Buffer *buffer, int sockfd, int flags) {
     ssize_t bytes;
     struct iovec iov[2];
-    char control_buf[64];
     struct msghdr msg;
-
-    memset(control_buf, 0, sizeof(control_buf));
 
     msg.msg_name = NULL;
     msg.msg_namelen = 0;
     msg.msg_iov = iov;
     msg.msg_iovlen = setup_read_iov(buffer, iov, 0);
-    msg.msg_control = (void *)control_buf;
-    msg.msg_controllen = sizeof(control_buf);
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
     msg.msg_flags = 0;
 
     bytes = sendmsg(sockfd, &msg, flags);
 
-    parse_ancillary_data(&msg, &buffer->last_send);
+    if (gettimeofday(&buffer->last_recv, NULL) < 0)
+        err("gettimeofday() failed: %s", strerror(errno));
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);
@@ -235,15 +234,6 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
         advance_write_position(dst, bytes_appended);
 
     return bytes_appended;
-}
-
-static void
-parse_ancillary_data(struct msghdr *m, struct timeval *tv) {
-    struct cmsghdr *cmsg;
-
-    for (cmsg = CMSG_FIRSTHDR(m); cmsg != NULL; cmsg = CMSG_NXTHDR(m, cmsg))
-        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SO_TIMESTAMP)
-            memcpy(tv, CMSG_DATA(cmsg), sizeof(struct timeval));
 }
 
 /*

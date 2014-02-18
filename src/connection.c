@@ -31,6 +31,7 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
@@ -64,6 +65,7 @@ static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
+static void log_connection(struct Connection *);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 
@@ -99,6 +101,8 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     con->client.watcher.data = con;
     con->state = ACCEPTED;
     con->listener = listener;
+    if (gettimeofday(&con->established_timestamp, NULL) < 0)
+        err("gettimeofday() failed: %s", strerror(errno));
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
@@ -227,7 +231,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     if (con->state == CLOSED) {
         TAILQ_REMOVE(&connections, con, entries);
-        /* TODO log connection */
+        log_connection(con);
         free_connection(con);
         return;
     }
@@ -303,7 +307,6 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
     int sockfd = -1;
-    int on = 1;
 
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
@@ -406,9 +409,6 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0)
-        syslog(LOG_CRIT, "setsockopt(): %s", strerror(errno));
-
     assert(con->state == ACCEPTED);
     con->state = CONNECTED;
 
@@ -500,6 +500,38 @@ new_connection() {
     }
 
     return con;
+}
+
+static void
+log_connection(struct Connection *con) {
+    struct timeval duration;
+    char client_address[256];
+    char listener_address[256];
+    char server_address[256];
+
+    if (timercmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
+        timersub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
+    else
+        timersub(&con->server.buffer->last_recv, &con->established_timestamp, &duration);
+
+    display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
+    display_address(con->listener->address, listener_address, sizeof(listener_address));
+    if (con->server.addr.ss_family == AF_UNSPEC)
+        strcpy(server_address, "NONE");
+    else
+        display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
+
+    notice("%s -> %s -> %s [%s] %d/%d bytes rx %d/%d bytes tx %d.%06d seconds",
+           client_address,
+           listener_address,
+           server_address,
+           con->hostname,
+           con->server.buffer->tx_bytes,
+           con->server.buffer->rx_bytes,
+           con->client.buffer->tx_bytes,
+           con->client.buffer->rx_bytes,
+           duration.tv_sec,
+           duration.tv_usec);
 }
 
 /*
