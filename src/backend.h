@@ -34,7 +34,7 @@
 STAILQ_HEAD(Backend_head, Backend);
 
 struct Backend {
-    char *hostname;
+    char *hostname; /* name actually */
     struct Address *address;
 
     /* Runtime fields */
@@ -44,7 +44,7 @@ struct Backend {
 
 void add_backend(struct Backend_head *, struct Backend *);
 int init_backend(struct Backend *);
-struct Backend *lookup_backend(const struct Backend_head *, const char *);
+struct Backend *lookup_backend(const struct Backend_head *, const char *, size_t);
 int open_backend_socket(struct Backend *, const char *);
 void print_backend_config(FILE *, const struct Backend *);
 void remove_backend(struct Backend_head *, struct Backend *);

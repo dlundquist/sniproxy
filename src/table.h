@@ -39,6 +39,8 @@ struct Table {
     char *name;
 
     /* Runtime fields */
+    unsigned prefer_alpn;
+
     struct Backend_head backends;
     SLIST_ENTRY(Table) entries;
 };
@@ -48,11 +50,17 @@ int accept_table_arg(struct Table *, char *);
 void add_table(struct Table_head *, struct Table *);
 struct Table *table_lookup(const struct Table_head *, const char *);
 const struct Address *table_lookup_server_address(const struct Table *,
-        const char *);
+        const char *, unsigned);
 void print_table_config(FILE *, struct Table *);
 int valid_table(struct Table *);
 void free_table(struct Table *);
 void init_table(struct Table *);
+
+static inline struct Backend *
+table_lookup_backend(const struct Table *table, const char *name, unsigned name_size)
+{
+    return lookup_backend(&table->backends, name, name_size);
+}
 
 void free_tables(struct Table_head *);
 

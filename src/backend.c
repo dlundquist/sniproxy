@@ -107,15 +107,17 @@ init_backend(struct Backend *backend) {
 }
 
 struct Backend *
-lookup_backend(const struct Backend_head *head, const char *hostname) {
+lookup_backend(const struct Backend_head *head, const char *name, size_t name_size) {
     struct Backend *iter;
 
-    if (hostname == NULL)
-        hostname = "";
+    if (name == NULL) {
+        name = "";
+        name_size = 0;
+    }
 
     STAILQ_FOREACH(iter, head, entries)
         if (pcre_exec(iter->hostname_re, NULL,
-                    hostname, strlen(hostname), 0, 0, NULL, 0) >= 0)
+                    name, name_size, 0, 0, NULL, 0) >= 0)
             return iter;
 
     return NULL;

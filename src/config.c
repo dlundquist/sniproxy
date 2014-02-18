@@ -41,6 +41,7 @@ static int accept_username(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
+static int end_alpn_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
 static struct LoggerBuilder *new_logger_builder();
 static int accept_logger_filename(struct LoggerBuilder *, char *);
@@ -55,9 +56,19 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_protocol,
             NULL,
             NULL},
+    { "prefer",
+            NULL,
+            (int(*)(void *, char *))prefer_in_listener,
+            NULL,
+            NULL},
     { "table",
             NULL,
             (int(*)(void *, char *))accept_listener_table_name,
+            NULL,
+            NULL},
+    { "ALPNtable",
+            NULL,
+            (int(*)(void *, char *))accept_listener_alpn_table_name,
             NULL,
             NULL},
     { "fallback",
@@ -69,6 +80,14 @@ struct Keyword listener_stanza_grammar[] = {
 };
 
 static struct Keyword table_stanza_grammar[] = {
+    { NULL,
+            (void *(*)())new_backend,
+            (int(*)(void *, char *))accept_backend_arg,
+            NULL,
+            (int(*)(void *, void *))end_backend},
+};
+
+static struct Keyword alpn_table_stanza_grammar[] = {
     { NULL,
             (void *(*)())new_backend,
             (int(*)(void *, char *))accept_backend_arg,
@@ -121,6 +140,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_table_arg,
             table_stanza_grammar,
             (int(*)(void *, void *))end_table_stanza},
+    { "ALPNtable",
+            (void *(*)())new_table,
+            (int(*)(void *, char *))accept_table_arg,
+            alpn_table_stanza_grammar,
+            (int(*)(void *, void *))end_alpn_table_stanza},
     { NULL, NULL, NULL, NULL, NULL }
 };
 
@@ -142,6 +166,7 @@ init_config(const char *filename) {
     config->pidfile = NULL;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
+    SLIST_INIT(&config->alpn_tables);
 
     config->filename = strdup(filename);
     if (config->filename == NULL) {
@@ -186,6 +211,7 @@ free_config(struct Config *config) {
     free_listeners(&config->listeners);
 
     free_tables(&config->tables);
+    free_tables(&config->alpn_tables);
 
     free(config);
 }
@@ -222,6 +248,10 @@ print_config(FILE *file, struct Config *config) {
     }
 
     SLIST_FOREACH(table, &config->tables, entries) {
+        print_table_config(file, table);
+    }
+
+    SLIST_FOREACH(table, &config->alpn_tables, entries) {
         print_table_config(file, table);
     }
 }
@@ -267,6 +297,15 @@ end_table_stanza(struct Config *config, struct Table *table) {
     /* TODO check table */
 
     add_table(&config->tables, table);
+
+    return 1;
+}
+
+static int
+end_alpn_table_stanza(struct Config *config, struct Table *table) {
+    /* TODO check table */
+
+    add_table(&config->alpn_tables, table);
 
     return 1;
 }
