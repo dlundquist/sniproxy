@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g
+AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS)
 
 TESTS = http_test \
                 tls_test \
@@ -47,3 +47,4 @@ config_test_SOURCES = config_test.c \
                       ../src/tls.c \
                       ../src/http.c
 
+config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS)
