@@ -51,7 +51,7 @@ struct Connection {
     } client, server;
     const struct Listener *listener;
     const char *hostname; /* Requested hostname */
-    struct timeval established_timestamp;
+    struct timespec established_timestamp;
 
     TAILQ_ENTRY(Connection) entries;
 };

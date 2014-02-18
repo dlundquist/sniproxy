@@ -31,4 +31,4 @@ sniproxy_SOURCES = address.c \
                    tls.c \
                    tls.h
 
-sniproxy_LDADD = -lpcre -lev
+sniproxy_LDADD = -lpcre -lev -lrt

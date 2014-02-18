@@ -36,8 +36,8 @@ struct Buffer {
     size_t size;
     size_t head;
     size_t len;
-    struct timeval last_recv;
-    struct timeval last_send;
+    struct timespec last_recv;
+    struct timespec last_send;
     size_t tx_bytes;
     size_t rx_bytes;
 };

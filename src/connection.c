@@ -31,7 +31,7 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/time.h>
+#include <time.h>
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
@@ -101,8 +101,8 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     con->client.watcher.data = con;
     con->state = ACCEPTED;
     con->listener = listener;
-    if (gettimeofday(&con->established_timestamp, NULL) < 0)
-        err("gettimeofday() failed: %s", strerror(errno));
+    if (clock_gettime(CLOCK_MONOTONIC, &con->established_timestamp) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
@@ -502,17 +502,32 @@ new_connection() {
     return con;
 }
 
+# define timespeccmp(a, b, CMP)                      \
+  (((a)->tv_sec == (b)->tv_sec) ?                    \
+   ((a)->tv_nsec CMP (b)->tv_nsec) :                 \
+   ((a)->tv_sec CMP (b)->tv_sec))
+# define timespecsub(a, b, result)                   \
+  do {                                               \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;    \
+    (result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
+    if ((result)->tv_nsec < 0) {                     \
+      --(result)->tv_sec;                            \
+      (result)->tv_nsec += 1000000000;               \
+    }                                                \
+  } while (0)
+
 static void
 log_connection(struct Connection *con) {
-    struct timeval duration;
+    struct timespec duration;
     char client_address[256];
     char listener_address[256];
     char server_address[256];
 
-    if (timercmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
-        timersub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
+
+    if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
+        timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
     else
-        timersub(&con->server.buffer->last_recv, &con->established_timestamp, &duration);
+        timespecsub(&con->server.buffer->last_recv, &con->established_timestamp, &duration);
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
     display_address(con->listener->address, listener_address, sizeof(listener_address));
@@ -521,7 +536,7 @@ log_connection(struct Connection *con) {
     else
         display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
 
-    notice("%s -> %s -> %s [%s] %d/%d bytes rx %d/%d bytes tx %d.%06d seconds",
+    notice("%s -> %s -> %s [%s] %d/%d bytes rx %d/%d bytes tx %d.%03d seconds",
            client_address,
            listener_address,
            server_address,
@@ -531,7 +546,7 @@ log_connection(struct Connection *con) {
            con->client.buffer->tx_bytes,
            con->client.buffer->rx_bytes,
            duration.tv_sec,
-           duration.tv_usec);
+           duration.tv_nsec / 1000000);
 }
 
 /*

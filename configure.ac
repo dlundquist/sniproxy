@@ -28,7 +28,7 @@ AC_TYPE_SSIZE_T
 AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp],,
+AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp clock_gettime],,
     AC_MSG_ERROR([required functions(s) not found]))
 
 AC_CONFIG_FILES([Makefile
