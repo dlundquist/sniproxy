@@ -38,6 +38,7 @@ struct Listener {
     struct Address *address, *fallback_address;
     const struct Protocol *protocol;
     char *table_name;
+    struct Logger *access_log;
 
     /* Runtime fields */
     struct ev_io watcher;

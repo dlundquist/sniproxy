@@ -231,7 +231,10 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     if (con->state == CLOSED) {
         TAILQ_REMOVE(&connections, con, entries);
-        log_connection(con);
+
+        if (con->listener->access_log)
+            log_connection(con);
+
         free_connection(con);
         return;
     }
@@ -523,7 +526,6 @@ log_connection(struct Connection *con) {
     char listener_address[256];
     char server_address[256];
 
-
     if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
         timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
     else
@@ -536,7 +538,9 @@ log_connection(struct Connection *con) {
     else
         display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
 
-    notice("%s -> %s -> %s [%s] %d/%d bytes rx %d/%d bytes tx %d.%03d seconds",
+    log_msg(con->listener->access_log,
+           LOG_NOTICE,
+           "%s -> %s -> %s [%s] %d/%d bytes tx %d/%d bytes rx %d.%03d seconds",
            client_address,
            listener_address,
            server_address,
