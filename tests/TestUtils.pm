@@ -90,6 +90,7 @@ sub make_config($$) {
     my $httpd_port = shift;
 
     my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
 
     # Write out a test config file
     print $fh <<END;
@@ -97,6 +98,8 @@ sub make_config($$) {
 
 listen 127.0.0.1 $proxy_port {
     proto http
+
+    access_log $logfile
 }
 
 table {

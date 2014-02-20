@@ -34,6 +34,7 @@ struct Config {
     char *filename;
     char *user;
     char *pidfile;
+    struct Logger *access_log;
     struct Listener_head listeners;
     struct Table_head tables;
 };

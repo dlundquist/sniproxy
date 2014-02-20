@@ -31,6 +31,7 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
@@ -64,6 +65,7 @@ static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
+static void log_connection(struct Connection *);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 
@@ -99,6 +101,8 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     con->client.watcher.data = con;
     con->state = ACCEPTED;
     con->listener = listener;
+    if (clock_gettime(CLOCK_MONOTONIC, &con->established_timestamp) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
@@ -227,7 +231,10 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     if (con->state == CLOSED) {
         TAILQ_REMOVE(&connections, con, entries);
-        /* TODO log connection */
+
+        if (con->listener->access_log)
+            log_connection(con);
+
         free_connection(con);
         return;
     }
@@ -303,6 +310,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
     int sockfd = -1;
+
 
     len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
 
@@ -482,19 +490,67 @@ new_connection() {
     con->server.addr_len = sizeof(con->server.addr);
     con->hostname = NULL;
 
-    con->client.buffer = new_buffer();
+    con->client.buffer = new_buffer(4096);
     if (con->client.buffer == NULL) {
         free_connection(con);
         return NULL;
     }
 
-    con->server.buffer = new_buffer();
+    con->server.buffer = new_buffer(4096);
     if (con->server.buffer == NULL) {
         free_connection(con);
         return NULL;
     }
 
     return con;
+}
+
+# define timespeccmp(a, b, CMP)                      \
+  (((a)->tv_sec == (b)->tv_sec) ?                    \
+   ((a)->tv_nsec CMP (b)->tv_nsec) :                 \
+   ((a)->tv_sec CMP (b)->tv_sec))
+# define timespecsub(a, b, result)                   \
+  do {                                               \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;    \
+    (result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
+    if ((result)->tv_nsec < 0) {                     \
+      --(result)->tv_sec;                            \
+      (result)->tv_nsec += 1000000000;               \
+    }                                                \
+  } while (0)
+
+static void
+log_connection(struct Connection *con) {
+    struct timespec duration;
+    char client_address[256];
+    char listener_address[256];
+    char server_address[256];
+
+    if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
+        timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
+    else
+        timespecsub(&con->server.buffer->last_recv, &con->established_timestamp, &duration);
+
+    display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
+    display_address(con->listener->address, listener_address, sizeof(listener_address));
+    if (con->server.addr.ss_family == AF_UNSPEC)
+        strcpy(server_address, "NONE");
+    else
+        display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
+
+    log_msg(con->listener->access_log,
+           LOG_NOTICE,
+           "%s -> %s -> %s [%s] %d/%d bytes tx %d/%d bytes rx %d.%03d seconds",
+           client_address,
+           listener_address,
+           server_address,
+           con->hostname,
+           con->server.buffer->tx_bytes,
+           con->server.buffer->rx_bytes,
+           con->client.buffer->tx_bytes,
+           con->client.buffer->rx_bytes,
+           duration.tv_sec,
+           duration.tv_nsec / 1000000);
 }
 
 /*
