@@ -7,6 +7,9 @@ a.out
 .vimrc
 depcomp
 compile
+config.guess
+config.rpath
+config.sub
 core
 autoscan.log
 aclocal.m4
