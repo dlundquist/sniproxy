@@ -74,6 +74,7 @@ new_file_logger(const char *filepath) {
 
     logger->fd = fopen(filepath, "a");
     if (logger->fd == NULL) {
+        fprintf(stderr, "Failed to open new log file: %s\n", filepath);
         free(logger);
         return NULL;
     }

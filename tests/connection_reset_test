@@ -84,11 +84,6 @@ sub bad_client($) {
 }
 
 sub main {
-    unless ($^O eq 'linux') {
-        print STDERR "connection_reset_test only supported under Linux\n";
-        exit 0;
-    }
-
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
 

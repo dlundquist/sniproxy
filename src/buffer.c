@@ -29,10 +29,12 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <time.h>
+#include <errno.h>
 #include <unistd.h>
 #include "buffer.h"
+#include "logger.h"
 
-#define DEFAULT_SIZE 4096
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
@@ -43,7 +45,7 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 
 struct Buffer *
-new_buffer() {
+new_buffer(int size) {
     struct Buffer *buf;
 
     buf = malloc(sizeof(struct Buffer));
@@ -51,16 +53,44 @@ new_buffer() {
         return NULL;
     }
 
-    buf->size = DEFAULT_SIZE;
+    buf->size = size;
     buf->len = 0;
     buf->head = 0;
+    buf->tx_bytes = 0;
+    buf->rx_bytes = 0;
+    buf->last_recv = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+    buf->last_send = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
-        return NULL;
+        buf = NULL;
     }
 
     return buf;
+}
+
+ssize_t
+buffer_resize(struct Buffer *buf, size_t new_size) {
+    char *new_buffer;
+
+    if (new_size < buf->len)
+        return -1; /* new_size too small to hold existing data */
+
+    new_buffer = malloc(new_size);
+    if (new_buffer == NULL)
+        return -2;
+
+    if (buffer_peek(buf, new_buffer, new_size) != buf->len) {
+        /* failed to copy all that data to the new buffer */
+        free(new_buffer);
+        return -3;
+    }
+
+    free(buf->buffer);
+    buf->buffer = new_buffer;
+    buf->head = 0;
+
+    return buf->len;
 }
 
 void
@@ -88,6 +118,9 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = recvmsg(sockfd, &msg, flags);
 
+    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_recv) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
+
     if (bytes > 0)
         advance_write_position(buffer, bytes);
 
@@ -109,6 +142,9 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
     msg.msg_flags = 0;
 
     bytes = sendmsg(sockfd, &msg, flags);
+
+    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_send) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);
@@ -220,8 +256,8 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len)
         room = MIN(room, len);
 
-    start = (buffer->head + buffer->len) & (buffer->size - 1);
-    end = (start + room) & (buffer->size - 1);
+    start = (buffer->head + buffer->len) % buffer->size;
+    end = (start + room) % buffer->size;
 
     if (end > start) { /* simple case */
         iov[0].iov_base = &buffer->buffer[start];
@@ -250,7 +286,7 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len)
         end = MIN(end, buffer->head + len);
 
-    end = end & (buffer->size - 1);
+    end = end % buffer->size;
 
     if (end > buffer->head) {
         iov[0].iov_base = &buffer->buffer[buffer->head];
@@ -270,10 +306,12 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
 static inline void
 advance_write_position(struct Buffer *buffer, size_t offset) {
     buffer->len += offset;
+    buffer->rx_bytes += offset;
 }
 
 static inline void
 advance_read_position(struct Buffer *buffer, size_t offset) {
-    buffer->head = (buffer->head + offset) & (buffer->size - 1);
+    buffer->head = (buffer->head + offset) % buffer->size;
     buffer->len -= offset;
+    buffer->tx_bytes += offset;
 }

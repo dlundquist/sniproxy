@@ -7,7 +7,8 @@ static void test1() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer();
+    buffer = new_buffer(200);
+    assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
     assert(len == sizeof(input));
@@ -43,9 +44,10 @@ static void test2() {
     char output[sizeof(input)];
     int len, i = 0;
 
-    buffer = new_buffer();
+    buffer = new_buffer(200);
+    assert(buffer != NULL);
 
-    while (i < 4080) {
+    while (i < 180) {
         len = buffer_push(buffer, input, sizeof(input));
         assert(len  == sizeof(input));
 

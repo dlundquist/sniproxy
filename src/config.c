@@ -47,34 +47,9 @@ static int accept_logger_filename(struct LoggerBuilder *, char *);
 static int accept_logger_syslog_facility(struct LoggerBuilder *, char *);
 static int accept_logger_priority(struct LoggerBuilder *, char *);
 static int end_error_logger_stanza(struct Config *, struct LoggerBuilder *);
+static int end_global_access_logger_stanza(struct Config *, struct LoggerBuilder *);
+static int end_listener_access_logger_stanza(struct Listener *, struct LoggerBuilder *);
 
-
-struct Keyword listener_stanza_grammar[] = {
-    { "protocol",
-            NULL,
-            (int(*)(void *, char *))accept_listener_protocol,
-            NULL,
-            NULL},
-    { "table",
-            NULL,
-            (int(*)(void *, char *))accept_listener_table_name,
-            NULL,
-            NULL},
-    { "fallback",
-            NULL,
-            (int(*)(void *, char *))accept_listener_fallback_address,
-            NULL,
-            NULL},
-    { NULL, NULL, NULL, NULL, NULL }
-};
-
-static struct Keyword table_stanza_grammar[] = {
-    { NULL,
-            (void *(*)())new_backend,
-            (int(*)(void *, char *))accept_backend_arg,
-            NULL,
-            (int(*)(void *, void *))end_backend},
-};
 
 static struct Keyword logger_stanza_grammar[] = {
     { "filename",
@@ -95,6 +70,38 @@ static struct Keyword logger_stanza_grammar[] = {
     { NULL, NULL, NULL, NULL, NULL },
 };
 
+struct Keyword listener_stanza_grammar[] = {
+    { "protocol",
+            NULL,
+            (int(*)(void *, char *))accept_listener_protocol,
+            NULL,
+            NULL},
+    { "table",
+            NULL,
+            (int(*)(void *, char *))accept_listener_table_name,
+            NULL,
+            NULL},
+    { "fallback",
+            NULL,
+            (int(*)(void *, char *))accept_listener_fallback_address,
+            NULL,
+            NULL},
+    { "access_log",
+            (void *(*)())new_logger_builder,
+            (int(*)(void *, char *))accept_logger_filename,
+            logger_stanza_grammar,
+            (int(*)(void *, void *))end_listener_access_logger_stanza},
+    { NULL, NULL, NULL, NULL, NULL }
+};
+
+static struct Keyword table_stanza_grammar[] = {
+    { NULL,
+            (void *(*)())new_backend,
+            (int(*)(void *, char *))accept_backend_arg,
+            NULL,
+            (int(*)(void *, void *))end_backend},
+};
+
 static struct Keyword global_grammar[] = {
     { "username",
             NULL,
@@ -111,6 +118,13 @@ static struct Keyword global_grammar[] = {
             NULL,
             logger_stanza_grammar,
             (int(*)(void *, void *))end_error_logger_stanza},
+/*
+ * { "access_log",
+ *          (void *(*)())new_logger_builder,
+ *          NULL,
+ *          logger_stanza_grammar,
+ *          (int(*)(void *, void *))end_global_access_logger_stanza},
+ */
     { "listener",
             (void *(*)())new_listener,
             (int(*)(void *, char *))accept_listener_arg,
@@ -140,6 +154,7 @@ init_config(const char *filename) {
     config->filename = NULL;
     config->user = NULL;
     config->pidfile = NULL;
+    config->access_log = NULL;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -359,9 +374,62 @@ end_error_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
         return -1;
     }
 
-
     set_logger_priority(logger, lb->priority);
     set_default_logger(logger);
+
+    free((char *)lb->filename);
+    free((char *)lb->syslog_facility);
+    free(lb);
+    return 1;
+}
+
+static int
+end_global_accesss_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
+    struct Logger *logger = NULL;
+
+    if (lb->filename != NULL && lb->syslog_facility == NULL)
+        logger = new_file_logger(lb->filename);
+    else if (lb->syslog_facility != NULL && lb->filename == NULL)
+        logger = new_syslog_logger("sniproxy", lb->syslog_facility);
+    else
+        fprintf(stderr, "Logger can not be both file logger and syslog logger");
+
+    if (logger == NULL) {
+        free((char *)lb->filename);
+        free((char *)lb->syslog_facility);
+        free(lb);
+        return -1;
+    }
+
+    set_logger_priority(logger, lb->priority);
+    config->access_log = logger;
+
+    free((char *)lb->filename);
+    free((char *)lb->syslog_facility);
+    free(lb);
+    return 1;
+}
+
+static int
+end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilder *lb) {
+    struct Logger *logger = NULL;
+
+    if (lb->filename != NULL && lb->syslog_facility == NULL)
+        logger = new_file_logger(lb->filename);
+    else if (lb->syslog_facility != NULL && lb->filename == NULL)
+        logger = new_syslog_logger("sniproxy", lb->syslog_facility);
+    else
+        fprintf(stderr, "Logger can not be both file logger and syslog logger");
+
+    if (logger == NULL) {
+        free((char *)lb->filename);
+        free((char *)lb->syslog_facility);
+        free(lb);
+        return -1;
+    }
+
+    set_logger_priority(logger, lb->priority);
+    listener->access_log = logger;
 
     free((char *)lb->filename);
     free((char *)lb->syslog_facility);
