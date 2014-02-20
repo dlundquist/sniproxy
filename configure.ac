@@ -33,6 +33,17 @@ PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
  fi
 ])
 
+PKG_CHECK_MODULES([LIBRT], [librt],,
+[AC_LIB_HAVE_LINKFLAGS(rt,, [#include <time.h>], [clock_gettime(CLOCK_MONOTONIC, NULL);])
+ if test x$ac_cv_librt = xyes; then
+  AC_SUBST([LIBRT_LIBS], [$LIBRT])
+ else
+  AC_MSG_ERROR([[***
+*** librt was not found.
+***]])
+ fi
+])
+
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
