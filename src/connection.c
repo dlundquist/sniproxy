@@ -385,7 +385,7 @@ static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     /* TODO avoid extra malloc in listener_lookup_server_address() */
     struct Address *server_address =
-        listener_lookup_server_address(con->listener, con->hostname);
+        listener_lookup_server_address(con->listener, con->hostname, strlen(con->hostname));
 
     if (server_address == NULL) {
         abort_connection(con);

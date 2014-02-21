@@ -52,9 +52,9 @@ new_backend() {
 
 int
 accept_backend_arg(struct Backend *backend, char *arg) {
-    if (backend->hostname == NULL) {
-        backend->hostname = strdup(arg);
-        if (backend->hostname == NULL) {
+    if (backend->name == NULL) {
+        backend->name = strdup(arg);
+        if (backend->name == NULL) {
             err("strdup failed");
             return -1;
         }
@@ -95,17 +95,17 @@ init_backend(struct Backend *backend) {
     const char *reerr;
     int reerroffset;
 
-    if (backend->hostname_re == NULL) {
-        backend->hostname_re =
-            pcre_compile(backend->hostname, 0, &reerr, &reerroffset, NULL);
-        if (backend->hostname_re == NULL) {
+    if (backend->name_re == NULL) {
+        backend->name_re =
+            pcre_compile(backend->name, 0, &reerr, &reerroffset, NULL);
+        if (backend->name_re == NULL) {
             err("Regex compilation failed: %s, offset %d",
                     reerr, reerroffset);
             return 0;
         }
 
         debug("Parsed %s %s",
-                backend->hostname,
+                backend->name,
                 display_address(backend->address,
                     address_buf, sizeof(address_buf)));
     }
@@ -114,15 +114,17 @@ init_backend(struct Backend *backend) {
 }
 
 struct Backend *
-lookup_backend(const struct Backend_head *head, const char *hostname) {
+lookup_backend(const struct Backend_head *head, const char *name, size_t name_len) {
     struct Backend *iter;
 
-    if (hostname == NULL)
-        return NULL;
+    if (name == NULL) {
+        name = "";
+        name_len = 0;
+    }
 
     STAILQ_FOREACH(iter, head, entries)
-        if (pcre_exec(iter->hostname_re, NULL,
-                    hostname, strlen(hostname), 0, 0, NULL, 0) >= 0)
+        if (pcre_exec(iter->name_re, NULL,
+                    name, name_len, 0, 0, NULL, 0) >= 0)
             return iter;
 
     return NULL;
@@ -133,7 +135,7 @@ print_backend_config(FILE *file, const struct Backend *backend) {
     char address[256];
 
     fprintf(file, "\t%s %s\n",
-            backend->hostname,
+            backend->name,
             display_address(backend->address, address, sizeof(address)));
 }
 
@@ -148,9 +150,9 @@ free_backend(struct Backend *backend) {
     if (backend == NULL)
         return;
 
-    free(backend->hostname);
+    free(backend->name);
     free(backend->address);
-    if (backend->hostname_re != NULL)
-        pcre_free(backend->hostname_re);
+    if (backend->name_re != NULL)
+        pcre_free(backend->name_re);
     free(backend);
 }

@@ -33,8 +33,8 @@
 
 
 static inline struct Backend *
-table_lookup_backend(const struct Table *table, const char *hostname) {
-    return lookup_backend(&table->backends, hostname);
+table_lookup_backend(const struct Table *table, const char *name, size_t name_len) {
+    return lookup_backend(&table->backends, name, name_len);
 }
 
 static inline void __attribute__((unused))
@@ -122,12 +122,12 @@ remove_table(struct Table_head *tables, struct Table *table) {
 }
 
 const struct Address *
-table_lookup_server_address(const struct Table *table, const char *hostname) {
+table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
     struct Backend *b;
 
-    b = table_lookup_backend(table, hostname);
+    b = table_lookup_backend(table, name, name_len);
     if (b == NULL) {
-        info("No match found for %s", hostname);
+        info("No match found for %.*s", (int)name_len, name);
         return NULL;
     }
 

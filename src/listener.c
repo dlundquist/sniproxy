@@ -287,10 +287,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
 struct Address *
 listener_lookup_server_address(const struct Listener *listener,
-        const char *hostname) {
+        const char *name, size_t name_len) {
     struct Address *new_addr = NULL;
     const struct Address *addr =
-        table_lookup_server_address(listener->table, hostname);
+        table_lookup_server_address(listener->table, name, name_len);
 
     if (addr == NULL)
         addr = listener->fallback_address;
@@ -301,9 +301,9 @@ listener_lookup_server_address(const struct Listener *listener,
     int port = address_port(addr);
 
     if (address_is_wildcard(addr)) {
-        new_addr = new_address(hostname);
+        new_addr = new_address(name);
         if (new_addr == NULL) {
-            warn("Invalid hostname %s", hostname);
+            warn("Invalid hostname %.*s", (int)name_len, name);
 
             return listener->fallback_address;
         }
