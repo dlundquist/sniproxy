@@ -44,7 +44,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-    sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev
+    sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev pkg-config
 
 2. Build a Debian package
 
@@ -69,7 +69,7 @@ This is the preferred installation method for modern Fedora based distributions.
 
 1. Install required packages
 
-    sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl
+    sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl pkgconfig
 
 2. First build a distribution tarball:
 
