@@ -82,7 +82,7 @@ new_listener() {
     listener->address = NULL;
     listener->fallback_address = NULL;
     listener->source_address = NULL;
-    listener->protocol = tls_protocol;
+    listener->protocol = NULL;
     listener->protocol_data = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
@@ -131,15 +131,33 @@ accept_listener_table_name(struct Listener *listener, char *table_name) {
 
 int
 accept_listener_protocol(struct Listener *listener, char *protocol) {
-    if (strncasecmp(protocol, http_protocol->name, strlen(protocol)) == 0)
+    size_t protocol_len = strlen(protocol);
+
+    if (listener->protocol == NULL
+            && strncasecmp(protocol, http_protocol->name, protocol_len) == 0) {
         listener->protocol = http_protocol;
-    else
+
+        return 1;
+    }
+
+    if (listener->protocol == NULL
+            && strncasecmp(protocol, tls_protocol->name, protocol_len) == 0) {
         listener->protocol = tls_protocol;
+        listener->protocol_data = new_tls_data();
 
-    if (address_port(listener->address) == 0)
-        address_set_port(listener->address, listener->protocol->default_port);
+        return 1;
+    }
 
-    return 1;
+    if (listener->protocol == tls_protocol
+            && strncasecmp(protocol, "alpn", protocol_len) == 0) {
+        listener->protocol_data =
+            tls_data_use_alpn(listener->protocol_data, 1);
+
+        return 1;
+    }
+
+    fprintf(stderr, "unexpected additional argument on listener protocol: %s", protocol);
+    return -1;
 }
 
 int
@@ -262,8 +280,14 @@ valid_listener(const struct Listener *listener) {
 
 int
 init_listener(struct Listener *listener, const struct Table_head *tables) {
-    int sockfd;
-    int on = 1;
+    /* Default protocol to TLS if not set */
+    if (listener->protocol == NULL) {
+        listener->protocol = tls_protocol;
+        listener->protocol_data = new_tls_data();
+    }
+
+    if (address_port(listener->address) == 0)
+        address_set_port(listener->address, listener->protocol->default_port);
 
     listener->table = table_lookup(tables, listener->table_name);
     if (listener->table == NULL) {
@@ -272,6 +296,15 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     }
     init_table(listener->table);
 
+    if (listener->protocol == tls_protocol
+            && tls_data_alpn(listener->protocol_data)) {
+        struct Backend *iter;
+        STAILQ_FOREACH(iter, &listener->table->backends, entries) {
+            listener->protocol_data =
+                tls_data_append_alpn_protocol(listener->protocol_data, iter->name, strlen(iter->name));
+        }
+    }
+
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
     if (listener->fallback_address &&
@@ -279,13 +312,14 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
-    sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
         return -2;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
+    int on = 1;
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
     if (bind(sockfd, address_sa(listener->address),

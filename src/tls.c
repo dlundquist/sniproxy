@@ -45,6 +45,22 @@
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #endif
 
+
+struct TLSProtocol {
+    int use_alpn;
+    size_t alpn_protocol_count;
+    char alpn_protocols[];
+};
+
+
+static int parse_tls_header(struct TLSProtocol *, const char *, size_t, char **);
+static int parse_extensions(const struct TLSProtocol *, const char *, size_t, char **);
+static int parse_server_name_extension(const char *, size_t, char **);
+static int parse_alpn_extension(const struct TLSProtocol *, const char *, size_t , char **);
+static size_t tls_data_size(const struct TLSProtocol *);
+static int is_alpn_proto_known(const struct TLSProtocol *, const char *, size_t);
+
+
 static const char tls_alert[] = {
     0x15, /* TLS Alert */
     0x03, 0x01, /* TLS version  */
@@ -52,14 +68,10 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
-static int parse_tls_header(void *, const char *, size_t, char **);
-static int parse_extensions(const char *, size_t, char **);
-static int parse_server_name_extension(const char *, size_t, char **);
-
 static const struct Protocol tls_protocol_st = {
     .name = "tls",
     .default_port = 443,
-    .parse_packet = &parse_tls_header,
+    .parse_packet = (int (*)(void *, const char *, size_t, char **))&parse_tls_header,
     .abort_message = tls_alert,
     .abort_message_len = sizeof(tls_alert)
 };
@@ -80,8 +92,7 @@ const struct Protocol *const tls_protocol = &tls_protocol_st;
  *  < -4 - Invalid TLS client hello
  */
 static int
-parse_tls_header(void *unused, const char *data, size_t data_len, char **hostname) {
-
+parse_tls_header(struct TLSProtocol *tls_data, const char *data, size_t data_len, char **hostname) {
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;
@@ -171,13 +182,16 @@ parse_tls_header(void *unused, const char *data, size_t data_len, char **hostnam
 
     if (pos + len > data_len)
         return -5;
-    return parse_extensions(data + pos, len, hostname);
+    return parse_extensions(tls_data, data + pos, len, hostname);
 }
 
 static int
-parse_extensions(const char *data, size_t data_len, char **hostname) {
+parse_extensions(const struct TLSProtocol *tls_data, const char *data, size_t data_len, char **hostname) {
     size_t pos = 0;
     size_t len;
+
+    if (tls_data == NULL)
+        return -3;
 
     /* Parse each 4 bytes for the extension header */
     while (pos + 4 <= data_len) {
@@ -185,16 +199,25 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
         len = ((unsigned char)data[pos + 2] << 8) +
             (unsigned char)data[pos + 3];
 
+        if (pos + 4 + len > data_len)
+            return -5;
+
+        size_t extension_type = ((unsigned char)data[pos] << 8) +
+            (unsigned char)data[pos + 1];
+
+
         /* Check if it's a server name extension */
-        if (data[pos] == 0x00 && data[pos + 1] == 0x00) {
-            /* There can be only one extension of each type, so we break
-               our state and move p to beinnging of the extension here */
-            if (pos + 4 + len > data_len)
-                return -5;
+        /* There can be only one extension of each type, so we break
+           our state and move pos to beginning of the extension here */
+        if (extension_type == 0x00 && tls_data->use_alpn == 0) /* Server Name */
             return parse_server_name_extension(data + pos + 4, len, hostname);
-        }
+
+        if (extension_type == 0x10 && tls_data->use_alpn == 1) /* ALPN */
+            return parse_alpn_extension(tls_data, data + pos + 4, len, hostname);
+
         pos += 4 + len; /* Advance to the next extension header */
     }
+
     /* Check we ended where we expected to */
     if (pos != data_len)
         return -5;
@@ -207,6 +230,7 @@ parse_server_name_extension(const char *data, size_t data_len,
         char **hostname) {
     size_t pos = 2; /* skip server name list length */
     size_t len;
+    char *result = NULL;
 
     while (pos + 3 < data_len) {
         len = ((unsigned char)data[pos + 1] << 8) +
@@ -217,16 +241,17 @@ parse_server_name_extension(const char *data, size_t data_len,
 
         switch (data[pos]) { /* name type */
             case 0x00: /* host_name */
-                *hostname = malloc(len + 1);
-                if (*hostname == NULL) {
+                result = malloc(len + 1);
+                if (result == NULL) {
                     err("malloc() failure");
                     return -4;
                 }
 
-                strncpy(*hostname, data + pos + 3, len);
+                strncpy(result, data + pos + 3, len);
 
-                (*hostname)[len] = '\0';
+                result[len] = '\0';
 
+                *hostname = result;
                 return len;
             default:
                 debug("Unknown server name extension name type: %d",
@@ -239,4 +264,124 @@ parse_server_name_extension(const char *data, size_t data_len,
         return -5;
 
     return -2;
+}
+
+static int
+parse_alpn_extension(const struct TLSProtocol *tls_data, const char *data, size_t data_len, char **hostname) {
+    size_t pos = 2;
+    size_t len;
+    char *result = NULL;
+
+    while (pos + 1 < data_len) {
+        len = (unsigned char)data[pos];
+
+        if (pos + 1 + len > data_len)
+            return -5;
+
+        if (len > 0 && is_alpn_proto_known(tls_data, data + pos + 1, len)) {
+            result = malloc(len + 1);
+            if (result == NULL) {
+                err("malloc() failure");
+                return -4;
+            }
+
+            memcpy(result, data + pos + 1, len);
+            result[len] = '\0';
+
+            *hostname = result;
+            return len;
+        } else if (len > 0) {
+            debug("Unknown ALPN name: %.*s", (int)len, data + pos + 2);
+        }
+        pos += 1 + len;
+    }
+    /* Check we ended where we expected to */
+    if (pos != data_len)
+        return -5;
+
+    return -2;
+}
+
+static size_t
+tls_data_size(const struct TLSProtocol *tls_data) {
+    size_t size = 0;
+
+
+    for (size_t i = 0; i < tls_data->alpn_protocol_count; i++) {
+        size_t alpn_protocol_len = (unsigned char)tls_data->alpn_protocols[size++];
+        size += alpn_protocol_len;
+    }
+
+    return sizeof(struct TLSProtocol) + size;
+}
+
+struct TLSProtocol *
+new_tls_data() {
+    struct TLSProtocol *tls_data = malloc(sizeof(struct TLSProtocol));
+    if (tls_data != NULL) {
+        tls_data->use_alpn = 0;
+        tls_data->alpn_protocol_count = 0;
+    }
+
+    return tls_data;
+}
+
+struct TLSProtocol *
+tls_data_append_alpn_protocol(struct TLSProtocol *old_tls_data, const char *name, size_t name_len) {
+    if (name_len > 255) {
+        err("%s: ALPN protocol too long (%ld bytes), skipping", __func__, name_len);
+        return old_tls_data;
+    }
+
+    if (is_alpn_proto_known(old_tls_data, name, name_len)) {
+        warn("%s: duplicate ALPN protocol: %.*s", __func__, (int)name_len, name);
+        return old_tls_data;
+    }
+
+    size_t old_size = tls_data_size(old_tls_data);
+    size_t new_size = old_size + name_len + 1;
+
+    struct TLSProtocol *new_tls_data = realloc(old_tls_data, new_size);
+    if (new_tls_data == NULL) {
+        err("%s: malloc", __func__);
+        return old_tls_data;
+    }
+
+    size_t pos = 0;
+    for (size_t i = 0; i < new_tls_data->alpn_protocol_count; i++) {
+        size_t alpn_protocol_len = (unsigned char)new_tls_data->alpn_protocols[pos];
+        pos += alpn_protocol_len + 1;
+    }
+
+    new_tls_data->alpn_protocols[pos++] = name_len;
+    memcpy(new_tls_data->alpn_protocols + pos, name, name_len);
+    new_tls_data->alpn_protocol_count++;
+
+    return new_tls_data;
+}
+
+struct TLSProtocol *
+tls_data_use_alpn(struct TLSProtocol *tls_data, int use_alpn) {
+    tls_data->use_alpn = use_alpn;
+
+    return tls_data;
+}
+
+int
+tls_data_alpn(const struct TLSProtocol *tls_data) {
+    return tls_data->use_alpn;
+}
+
+static int
+is_alpn_proto_known(const struct TLSProtocol *tls_data, const char* name, size_t name_len) {
+    size_t pos = 0;
+    for (size_t i = 0; i < tls_data->alpn_protocol_count; i++) {
+        size_t alpn_protocol_len = (unsigned char)tls_data->alpn_protocols[pos++];
+        if (name_len == alpn_protocol_len
+                && strncmp(tls_data->alpn_protocols + pos, name, name_len))
+            return 1;
+
+        pos += alpn_protocol_len;
+    }
+    return 0;
 }
