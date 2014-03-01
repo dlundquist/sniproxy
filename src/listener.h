@@ -39,6 +39,7 @@ struct Listener {
     const struct Protocol *protocol;
     char *table_name;
     struct Logger *access_log;
+    int log_bad_requests;
 
     /* Runtime fields */
     struct ev_io watcher;

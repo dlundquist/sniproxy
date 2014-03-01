@@ -81,6 +81,7 @@ new_listener() {
     listener->fallback_address = NULL;
     listener->protocol = tls_protocol;
     listener->access_log = NULL;
+    listener->log_bad_requests = 0;
 
     return listener;
 }

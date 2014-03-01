@@ -326,7 +326,9 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         } else {
             warn("Unable to parse request from %s",
                     display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-            log_bad_request(con, buffer, len, parse_result);
+
+            if (con->listener->log_bad_requests)
+                log_bad_request(con, buffer, len, parse_result);
         }
 
         if (con->listener->fallback_address == NULL) {
@@ -556,7 +558,7 @@ log_connection(struct Connection *con) {
 
 static void
 log_bad_request(struct Connection *con, const unsigned char *req, size_t req_len, int parse_result) {
-    char *message = alloca(64 + 5 * req_len);
+    char *message = alloca(64 + 6 * req_len);
     char *message_pos = message;
 
     message_pos += sprintf(message_pos, "parse_packet({");
