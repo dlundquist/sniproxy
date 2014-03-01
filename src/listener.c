@@ -82,6 +82,7 @@ new_listener() {
     listener->fallback_address = NULL;
     listener->protocol = tls_protocol;
     listener->access_log = NULL;
+    listener->log_bad_requests = 0;
 
     return listener;
 }
@@ -158,6 +159,15 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
          * much sense to configure it as a wildcard. */
         fprintf(stderr, "Wildcard address prohibited as fallback address\n");
         return 0;
+    }
+
+    return 1;
+}
+
+int
+accept_listener_bad_request_action(struct Listener *listener, char *action) {
+    if (strncmp("log", action, strlen(action)) == 0) {
+        listener->log_bad_requests = 1;
     }
 
     return 1;
