@@ -3,7 +3,6 @@
 ** Allow nameservers to be specified in configuration file
 * Allow source address for connection to backend to be specified
 * Reimplement configuration reloading
-* Optionally dump invalid requests to file
 * Improved table backend lookup, currently this is a linear search
 ** Considering splitting hostname at label boundaries and search backwards from TLD
 * HTTP or DNS interface for backend servers to determine remote IP and port of connection

@@ -38,6 +38,7 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
+#include <alloca.h>
 #include "connection.h"
 #include "address.h"
 #include "protocol.h"
@@ -66,6 +67,7 @@ static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
 static void log_connection(struct Connection *);
+static void log_bad_request(struct Connection *, const unsigned char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 
@@ -305,7 +307,7 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 static void
 handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
-    ssize_t len;
+    size_t len;
     char *hostname = NULL;
     int parse_result;
     char peer_ip[INET6_ADDRSTRLEN + 8];
@@ -324,8 +326,9 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
         } else {
             warn("Unable to parse request from %s",
                     display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
-            debug("parse() returned %d", parse_result);
-            /* TODO optionally dump request to file */
+
+            if (con->listener->log_bad_requests)
+                log_bad_request(con, buffer, len, parse_result);
         }
 
         if (con->listener->fallback_address == NULL) {
@@ -551,6 +554,21 @@ log_connection(struct Connection *con) {
            con->client.buffer->rx_bytes,
            duration.tv_sec,
            duration.tv_nsec / 1000000);
+}
+
+static void
+log_bad_request(struct Connection *con, const unsigned char *req, size_t req_len, int parse_result) {
+    char *message = alloca(64 + 6 * req_len);
+    char *message_pos = message;
+
+    message_pos += sprintf(message_pos, "parse_packet({");
+
+    for (size_t i = 0; i < req_len; i++)
+        message_pos += sprintf(message_pos, "0x%02hhx, ", req[i]);
+
+    message_pos -= 2; // Delete the trailing ', '
+    message_pos += sprintf(message_pos, "}, %ld, ...) = %d", req_len, parse_result);
+    debug(message);
 }
 
 /*
