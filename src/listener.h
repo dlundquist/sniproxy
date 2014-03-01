@@ -53,6 +53,7 @@ int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
+int accept_listener_bad_request_action(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
 void init_listeners(struct Listener_head *, const struct Table_head *);

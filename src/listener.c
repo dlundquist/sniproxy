@@ -163,6 +163,15 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
     return 1;
 }
 
+int
+accept_listener_bad_request_action(struct Listener *listener, char *action) {
+    if (strncmp("log", action, strlen(action)) == 0) {
+        listener->log_bad_requests = 1;
+    }
+
+    return 1;
+}
+
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {
     SLIST_INSERT_HEAD(listeners, listener, entries);

@@ -64,6 +64,7 @@ sub make_tls_config($) {
 
 listen 127.0.0.1 $proxy_port {
     proto tls
+    bad_requests log
 }
 
 table {

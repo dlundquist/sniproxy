@@ -91,6 +91,11 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_logger_filename,
             logger_stanza_grammar,
             (int(*)(void *, void *))end_listener_access_logger_stanza},
+    { "bad_requests",
+            NULL,
+            (int(*)(void *, char *))accept_listener_bad_request_action,
+            NULL,
+            NULL},
     { NULL, NULL, NULL, NULL, NULL }
 };
 
