@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use TestUtils;
+use TestHTTPD;
+use File::Temp;
+use IO::Socket::INET;
+use Time::HiRes;
+
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sniproxy', '-f', '-c', $config);
+}
+
+sub slow_client($$) {
+    my $port = shift;
+    my $requests = shift;
+    my $request = "GET / HTTP/1.1\r\n" .
+        "UserAgent: slow_client/0.1\r\n" .
+        "Host: localhost:$port\r\n" .
+        "Accept: */*\r\n" .
+        "\r\n";
+
+    local $SIG{ALRM} = sub { die "alarm\n" };
+    alarm 10;
+
+    my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+            PeerPort => $port,
+            Proto => "tcp",
+            Type => SOCK_STREAM)
+        or die "couldn't connect $!";
+
+    $socket->send($request);
+    foreach (split("\r\n", $request)) {
+        $socket->send("$_\r\n");
+        sleep(1);
+    }
+
+    my $buffer;
+    $socket->recv($buffer, 4096);
+
+    $socket->close();
+
+    die("Unexpected response: $buffer") unless ($buffer =~ /\AHTTP\/1\.1 200 OK/);
+
+    exit(0);
+}
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
+    my $workers = $ENV{WORKERS} || 3;
+    my $iterations = $ENV{ITERATIONS} || 3;
+    my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
+
+    my $config = make_config($proxy_port, $local_httpd || $httpd_port);
+    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
+
+    # Wait for proxy to load and parse config
+    sleep 1;
+
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&slow_client, $proxy_port, $iterations);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # For troubleshooting connections stuck in CLOSE_WAIT state
+    #kill 10, $proxy_pid;
+    #system("netstat -ptn | grep $proxy_pid\/sniproxy");
+
+    # For troubleshooting 100% CPU usage
+    #system("top -n 1 -p $proxy_pid -b");
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    kill 15, $httpd_pid unless $local_httpd;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+}
+
+main();
