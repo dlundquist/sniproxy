@@ -32,6 +32,8 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include <alloca.h>
+#include <assert.h>
 #include "buffer.h"
 #include "logger.h"
 
@@ -108,6 +110,10 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     struct iovec iov[2];
     struct msghdr msg;
 
+    /* coalesce when writing to an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
+
     msg.msg_name = NULL;
     msg.msg_namelen = 0;
     msg.msg_iov = iov;
@@ -176,6 +182,10 @@ buffer_write(struct Buffer *buffer, int fd) {
     ssize_t bytes;
     struct iovec iov[2];
 
+    /* coalesce when writing to an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
+
     bytes = writev(fd, iov, setup_read_iov(buffer, iov, 0));
 
     if (bytes > 0)
@@ -185,15 +195,35 @@ buffer_write(struct Buffer *buffer, int fd) {
 }
 
 size_t
+buffer_coalesce(struct Buffer *buffer, const void **dst) {
+    if ((buffer->head + buffer->len) % buffer->size > buffer->head) {
+        *dst = &buffer->buffer[buffer->head];
+
+        return buffer->len;
+    } else {
+        size_t len = buffer->len;
+        char *temp = alloca(len);
+
+        buffer_pop(buffer, temp, len);
+        assert(buffer->len == 0);
+
+        buffer_push(buffer, temp, len);
+        assert(buffer->head == 0);
+        assert(buffer->len = len);
+
+        *dst = buffer->buffer;
+        return buffer->len;
+    }
+}
+
+size_t
 buffer_peek(const struct Buffer *src, void *dst, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_copied = 0;
 
-    iov_len = setup_read_iov(src, iov, len);
+    size_t iov_len = setup_read_iov(src, iov, len);
 
-    for (i = 0; i < iov_len; i ++) {
+    for (int i = 0; i < iov_len; i ++) {
         memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
 
         bytes_copied += iov[i].iov_len;
@@ -217,16 +247,18 @@ buffer_pop(struct Buffer *src, void *dst, size_t len) {
 size_t
 buffer_push(struct Buffer *dst, const void *src, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_appended = 0;
+
+    /* coalesce when writing to an empty buffer */
+    if (dst->len == 0)
+        dst->head = 0;
 
     if (dst->size - dst->len < len)
         return -1; /* insufficient room */
 
-    iov_len = setup_write_iov(dst, iov, len);
+    size_t iov_len = setup_write_iov(dst, iov, len);
 
-    for (i = 0; i < iov_len; i++) {
+    for (int i = 0; i < iov_len; i++) {
         memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
         bytes_appended += iov[i].iov_len;
     }
