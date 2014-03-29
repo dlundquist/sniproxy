@@ -306,7 +306,7 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
  */
 static void
 handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
-    char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
+    const char *payload;
     size_t len;
     char *hostname = NULL;
     int parse_result;
@@ -314,10 +314,15 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
     int sockfd = -1;
 
 
-    len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
+    len = buffer_coalesce(con->client.buffer, (const void **)&payload);
 
-    parse_result = con->listener->protocol->parse_packet(buffer, len, &hostname);
+    parse_result = con->listener->protocol->parse_packet(payload, len, &hostname);
     if (parse_result == -1) {
+        if (buffer_room(con->client.buffer) == 0) {
+            warn("Request from %s exceeded %ld byte buffer size",
+                    buffer_size(con->client.buffer),
+                    display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
+        }
         return;  /* incomplete request: try again */
     } else if (parse_result < -1) {
         if (parse_result == -2) {
@@ -328,7 +333,7 @@ handle_connection_client_hello(struct Connection *con, struct ev_loop *loop) {
                     display_sockaddr(&con->client.addr, peer_ip, sizeof(peer_ip)));
 
             if (con->listener->log_bad_requests)
-                log_bad_request(con, buffer, len, parse_result);
+                log_bad_request(con, payload, len, parse_result);
         }
 
         if (con->listener->fallback_address == NULL) {
