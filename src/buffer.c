@@ -83,7 +83,7 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
         return -2;
 
     if (buffer_peek(buf, new_buffer, new_size) != buf->len) {
-        /* failed to copy all that data to the new buffer */
+        err("failed to copy existing buffer contents into new buffer");
         free(new_buffer);
         return -3;
     }

@@ -4,6 +4,9 @@ a.out
 .dirstamp
 *.swp
 *.swo
+*.gcov
+*.gcda
+*.gcno
 .vimrc
 depcomp
 compile
