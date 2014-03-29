@@ -51,6 +51,7 @@ ssize_t buffer_read(struct Buffer *, int);
 ssize_t buffer_write(struct Buffer *, int);
 ssize_t buffer_resize(struct Buffer *, size_t);
 size_t buffer_peek(const struct Buffer *, void *, size_t);
+size_t buffer_coalesce(struct Buffer *, const void **);
 size_t buffer_pop(struct Buffer *, void *, size_t);
 size_t buffer_push(struct Buffer *, const void *, size_t);
 static inline size_t buffer_size(const struct Buffer *b) {

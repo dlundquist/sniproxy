@@ -9,6 +9,8 @@ AM_INIT_AUTOMAKE([subdir-objects])
 
 # Checks for programs.
 AC_PROG_CC_C99
+# Required by automake < 1.14
+AM_PROG_CC_C_O
 
 # Checks for libraries.
 PKG_CHECK_MODULES([LIBEV], [libev],,

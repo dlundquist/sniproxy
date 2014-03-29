@@ -1,0 +1,10 @@
+#!/bin/bash
+
+./configure CFLAGS="-fprofile-arcs -ftest-coverage" && \
+    make clean all check
+
+find . -name \*.gcda | while read FILE; do
+    pushd $( dirname ${FILE} )
+    gcov $( basename ${FILE} )
+    popd
+done

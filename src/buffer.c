@@ -32,6 +32,8 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include <alloca.h>
+#include <assert.h>
 #include "buffer.h"
 #include "logger.h"
 
@@ -49,9 +51,8 @@ new_buffer(int size) {
     struct Buffer *buf;
 
     buf = malloc(sizeof(struct Buffer));
-    if (buf == NULL) {
+    if (buf == NULL)
         return NULL;
-    }
 
     buf->size = size;
     buf->len = 0;
@@ -81,7 +82,7 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
         return -2;
 
     if (buffer_peek(buf, new_buffer, new_size) != buf->len) {
-        /* failed to copy all that data to the new buffer */
+        err("failed to copy existing buffer contents into new buffer");
         free(new_buffer);
         return -3;
     }
@@ -107,6 +108,10 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     ssize_t bytes;
     struct iovec iov[2];
     struct msghdr msg;
+
+    /* coalesce when reading into an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
 
     msg.msg_name = NULL;
     msg.msg_namelen = 0;
@@ -160,6 +165,10 @@ buffer_read(struct Buffer *buffer, int fd) {
     ssize_t bytes;
     struct iovec iov[2];
 
+    /* coalesce when reading into an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
+
     bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
 
     if (bytes > 0)
@@ -185,15 +194,37 @@ buffer_write(struct Buffer *buffer, int fd) {
 }
 
 size_t
+buffer_coalesce(struct Buffer *buffer, const void **dst) {
+    if ((buffer->head + buffer->len) % buffer->size > buffer->head) {
+        if (dst != NULL)
+            *dst = &buffer->buffer[buffer->head];
+
+        return buffer->len;
+    } else {
+        size_t len = buffer->len;
+        char *temp = alloca(len);
+
+        buffer_pop(buffer, temp, len);
+        assert(buffer->len == 0);
+
+        buffer_push(buffer, temp, len);
+        assert(buffer->head == 0);
+        assert(buffer->len = len);
+
+        if (dst != NULL)
+            *dst = buffer->buffer;
+        return buffer->len;
+    }
+}
+
+size_t
 buffer_peek(const struct Buffer *src, void *dst, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_copied = 0;
 
-    iov_len = setup_read_iov(src, iov, len);
+    size_t iov_len = setup_read_iov(src, iov, len);
 
-    for (i = 0; i < iov_len; i ++) {
+    for (int i = 0; i < iov_len; i++) {
         memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
 
         bytes_copied += iov[i].iov_len;
@@ -217,16 +248,18 @@ buffer_pop(struct Buffer *src, void *dst, size_t len) {
 size_t
 buffer_push(struct Buffer *dst, const void *src, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_appended = 0;
+
+    /* coalesce when reading into an empty buffer */
+    if (dst->len == 0)
+        dst->head = 0;
 
     if (dst->size - dst->len < len)
         return -1; /* insufficient room */
 
-    iov_len = setup_write_iov(dst, iov, len);
+    size_t iov_len = setup_write_iov(dst, iov, len);
 
-    for (i = 0; i < iov_len; i++) {
+    for (int i = 0; i < iov_len; i++) {
         memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
         bytes_appended += iov[i].iov_len;
     }

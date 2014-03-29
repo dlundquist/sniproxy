@@ -307,24 +307,31 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 
 static void
 parse_client_request(struct Connection *con, struct ev_loop *loop) {
-    char buffer[1460]; /* TCP MSS over standard Ethernet and IPv4 */
-    ssize_t len = buffer_peek(con->client.buffer, buffer, sizeof(buffer));
+    const char *payload;
+    ssize_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
 
-    int result = con->listener->protocol->parse_packet(buffer, len, &hostname);
-    if (result == -1) {
-        return;  /* incomplete request: try again */
-    } else if (result < -1) {
+    int result = con->listener->protocol->parse_packet(payload, payload_len, &hostname);
+    if (result < 0) {
         char client[INET6_ADDRSTRLEN + 8];
-        if (result == -2) {
+
+        if (result == -1) { /* incomplete request */
+            if (buffer_room(con->client.buffer) > 0)
+                return; /* give client a chance to send more data */
+
+            warn("Request from %s exceeded %ld byte buffer size",
+                    buffer_size(con->client.buffer),
+                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+        } else if (result == -2) {
             warn("Request from %s did not include a hostname",
                     display_sockaddr(&con->client.addr, client, sizeof(client)));
         } else {
-            warn("Unable to parse request from %s",
-                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+            warn("Unable to parse request from %s: parse_packet returned %d",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    result);
 
             if (con->listener->log_bad_requests)
-                log_bad_request(con, buffer, len, result);
+                log_bad_request(con, payload, payload_len, result);
         }
 
         if (con->listener->fallback_address == NULL) {

@@ -4,11 +4,13 @@ a.out
 .dirstamp
 *.swp
 *.swo
+*.gcov
+*.gcda
+*.gcno
 .vimrc
 depcomp
 compile
 config.guess
-config.rpath
 config.sub
 core
 autoscan.log
