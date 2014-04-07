@@ -152,13 +152,13 @@ new_address(const char *hostname_or_ip) {
 
     /* hostname */
     if (valid_hostname(hostname_or_ip)) {
-        len = strlen(hostname_or_ip) + 1;
+        len = strlen(hostname_or_ip);
         struct Address *addr = malloc(
-                offsetof(struct Address, data) + len);
+                offsetof(struct Address, data) + len + 1);
         if (addr != NULL) {
             addr->type = HOSTNAME;
             addr->port = 0;
-            addr->len = strlen(hostname_or_ip);
+            addr->len = len;
             memcpy(addr->data, hostname_or_ip, len);
             addr->data[addr->len] = '\0';
         }
@@ -187,11 +187,10 @@ size_t
 address_len(const struct Address *addr) {
     switch (addr->type) {
         case HOSTNAME:
-            return addr->len +
-                offsetof(struct Address, data);
+            /* include trailing null byte */
+            return offsetof(struct Address, data) + addr->len + 1;
         case SOCKADDR:
-            return addr->len +
-                offsetof(struct Address, data);
+            return offsetof(struct Address, data) + addr->len;
         case WILDCARD:
             return sizeof(struct Address);
         default:
