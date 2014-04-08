@@ -3,10 +3,11 @@ package TestUtils;
 use warnings;
 use strict;
 use POSIX ":sys_wait_h";
+use IO::Socket::INET;
 require File::Temp;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(start_child reap_children wait_for_type make_config);
+our @EXPORT = qw(start_child reap_children wait_for_type wait_for_port make_config);
 our $VERSION = '0.01';
 
 $SIG{CHLD} = \&REAPER;
@@ -83,6 +84,32 @@ sub wait_for_type($) {
     while (grep($children{$_}->{'running'} && $children{$_}->{'type'} eq $type, keys %children) > 0) {
         sleep 1;
     }
+}
+
+sub wait_for_port($) {
+    my $port = shift;
+
+    my $delay = 1;
+    while ($delay < 60) {
+        my $port_open = undef;
+        eval {
+            my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+                                            PeerPort => $port,
+                                            Proto => "tcp",
+                                            Type => SOCK_STREAM);
+            if ($socket && $socket->connected()) {
+                $socket->shutdown(2);
+                $port_open = 1;
+            }
+        };
+
+        return 1 if ($port_open);
+
+        sleep($delay);
+        $delay *= 2;
+    }
+
+    return undef;
 }
 
 sub make_config($$) {
