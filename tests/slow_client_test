@@ -60,7 +60,8 @@ sub main {
     my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
 
     # Wait for proxy to load and parse config
-    sleep 1;
+    wait_for_port($httpd_port);
+    wait_for_port($proxy_port);
 
     for (my $i = 0; $i < $workers; $i++) {
         start_child('worker', \&slow_client, $proxy_port, $iterations);
