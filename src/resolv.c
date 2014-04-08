@@ -2,16 +2,35 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <udns.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#ifdef HAVE_LIBUDNS
+#include <udns.h>
+#endif
 #include "resolv.h"
 #include "address.h"
 #include "logger.h"
 
 
+#ifndef HAVE_LIBUDNS
+
+int
+resolv_init(struct ev_loop *loop) {
+    return 0;
+}
+
+void
+resolv_shutdown(struct ev_loop *loop) {
+}
+
+void
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
+}
+
+#else
+
 struct cb_data {
-    int(*client_cb)(struct Address *, void *);
+    void (*client_cb)(struct Address *, void *);
     void *client_cb_data;
 };
 
@@ -59,7 +78,7 @@ resolv_shutdown(struct ev_loop * loop) {
 }
 
 void
-resolv_query(const char *hostname, int(*client_cb)(struct Address *, void *), void *client_cb_data) {
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
     struct cb_data *cb_data = malloc(sizeof(struct cb_data));
@@ -131,3 +150,4 @@ dns_timer_setup_cb(struct dns_ctx *ctx, int timeout, void *data) {
         ev_timer_start(loop, &resolv_timeout_watcher);
     }
 }
+#endif

@@ -31,6 +31,7 @@
 #include "server.h"
 #include "listener.h"
 #include "connection.h"
+#include "resolv.h"
 
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
 
@@ -61,11 +62,13 @@ init_server(struct Config *c) {
 
 void
 run_server() {
+    resolv_init(EV_DEFAULT);
     init_connections();
 
     ev_run(EV_DEFAULT, 0);
 
     free_connections(EV_DEFAULT);
+    resolv_shutdown(EV_DEFAULT);
 }
 
 static void

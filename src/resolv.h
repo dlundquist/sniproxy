@@ -30,7 +30,7 @@
 #include "address.h"
 
 int resolv_init(struct ev_loop *);
-void resolv_query(const char *, int(*cb)(struct Address *, void *), void *);
+void resolv_query(const char *, void(*cb)(struct Address *, void *), void *);
 void resolv_shutdown(struct ev_loop *);
 
 #endif

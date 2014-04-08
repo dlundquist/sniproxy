@@ -35,6 +35,13 @@ PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
  fi
 ])
 
+PKG_CHECK_MODULES([LIBUDNS], [libudns],,
+[AC_LIB_HAVE_LINKFLAGS(udns,, [#include <udns.h>], [dns_init(0, 0);])
+ if test x$ac_cv_libudns = xyes; then
+  AC_SUBST([LIBUDNS_LIBS], [$LIBUDNS])
+ fi
+])
+
 PKG_CHECK_MODULES([LIBRT], [librt],,
 [AC_LIB_HAVE_LINKFLAGS(rt,, [#include <time.h>], [clock_gettime(CLOCK_MONOTONIC, NULL);])
  if test x$ac_cv_librt = xyes; then

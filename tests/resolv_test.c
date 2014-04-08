@@ -7,7 +7,7 @@
 static int query_count = 0;
 
 
-static int query_cb(struct Address *result, void *data) {
+static void query_cb(struct Address *result, void *data) {
     int *query_count = (int *)data;
     char ip_buf[128];
 

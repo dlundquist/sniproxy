@@ -49,10 +49,12 @@ config_test_SOURCES = config_test.c \
                       ../src/connection.c \
                       ../src/buffer.c \
                       ../src/logger.c \
+                      ../src/resolv.c \
+                      ../src/resolv.h \
                       ../src/tls.c \
                       ../src/http.c
 
-config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS)
+config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS) -ludns
 
 resolv_test_SOURCES = resolv_test.c \
                       ../src/resolv.c \

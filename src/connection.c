@@ -41,6 +41,7 @@
 #include <assert.h>
 #include <alloca.h>
 #include "connection.h"
+#include "resolv.h"
 #include "address.h"
 #include "protocol.h"
 #include "logger.h"
@@ -49,6 +50,12 @@
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
                                       _errno == EWOULDBLOCK || \
                                       _errno == EINTR)
+
+
+struct resolv_cb_data {
+    struct Connection *connection;
+    struct ev_loop *loop;
+};
 
 
 static TAILQ_HEAD(ConnectionHead, Connection) connections;
@@ -61,6 +68,7 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
         const struct Buffer *, const struct Buffer *);
 
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
+static void resolv_cb(struct Address *, void *);
 static void parse_client_request(struct Connection *, struct ev_loop *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
@@ -69,7 +77,7 @@ static void close_client_socket(struct Connection *, struct ev_loop *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
 static void log_connection(struct Connection *);
-static void log_bad_request(struct Connection *, const unsigned char *, size_t, int);
+static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 
@@ -355,8 +363,23 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         listener_lookup_server_address(con->listener, con->hostname);
 
     if (address_is_hostname(server_address)) {
-        warn("DNS lookups not supported at this time");
+#ifndef HAVE_LIBUDNS
+        warn("DNS lookups not supported unless sniproxy compiled with libudns");
         close_client_socket(con, loop);
+#else
+        struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
+        if (cb_data == NULL) {
+            err("malloc");
+            close_client_socket(con, loop);
+
+            return;
+        }
+        cb_data->connection = con;
+        cb_data->loop = loop;
+
+        resolv_query(address_hostname(server_address), resolv_cb, cb_data);
+#endif
+
         return;
     }
 
@@ -368,6 +391,35 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     free(server_address);
 
     con->state = RESOLVED;
+}
+
+static void
+resolv_cb(struct Address *result, void *data) {
+    struct resolv_cb_data *cb_data = (struct resolv_cb_data *)data;
+    struct Connection *con = cb_data->connection;
+
+    if (con->state != PARSED) {
+        info("%s() called for connection not in PARSED state");
+        return;
+    }
+
+    if (result == NULL) {
+        notice("unable to resolve %s, closing connection", NULL);
+        close_client_socket(con, cb_data->loop);
+        return;
+    }
+
+    assert(address_is_sockaddr(result));
+
+    con->server.addr_len = address_sa_len(result);
+    assert(con->server.addr_len <= sizeof(con->server.addr));
+    memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
+
+    free(result);
+
+    con->state = RESOLVED;
+
+    initiate_server_connect(con, cb_data->loop);
 }
 
 static void
@@ -547,14 +599,14 @@ log_connection(struct Connection *con) {
 }
 
 static void
-log_bad_request(struct Connection *con, const unsigned char *req, size_t req_len, int parse_result) {
+log_bad_request(struct Connection *con, const char *req, size_t req_len, int parse_result) {
     char *message = alloca(64 + 6 * req_len);
     char *message_pos = message;
 
     message_pos += sprintf(message_pos, "parse_packet({");
 
     for (size_t i = 0; i < req_len; i++)
-        message_pos += sprintf(message_pos, "0x%02hhx, ", req[i]);
+        message_pos += sprintf(message_pos, "0x%02hhx, ", (unsigned char)req[i]);
 
     message_pos -= 2; // Delete the trailing ', '
     message_pos += sprintf(message_pos, "}, %ld, ...) = %d", req_len, parse_result);
