@@ -143,6 +143,8 @@ static void test4() {
         buffer_read(buffer, read_fd);
         buffer_write(buffer, write_fd);
     }
+
+    free_buffer(buffer);
 }
 
 int main() {

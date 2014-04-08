@@ -71,10 +71,14 @@ resolv_init(struct ev_loop *loop) {
 
 void
 resolv_shutdown(struct ev_loop * loop) {
+    struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
+
     ev_io_stop(loop, &resolv_io_watcher);
 
     if (ev_is_active(&resolv_timeout_watcher))
         ev_timer_stop(loop, &resolv_timeout_watcher);
+
+    dns_close(ctx);
 }
 
 void
@@ -128,6 +132,7 @@ dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
 
     cb_data->client_cb(address, cb_data->client_cb_data);
 
+    free(cb_data);
     free(address);
 }
 

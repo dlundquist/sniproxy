@@ -1,4 +1,4 @@
-AM_CPPFLAGS = $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_LIBS)
+AM_CPPFLAGS = $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_LIBS) $(LIBUDNS_LIBS)
 
 sbin_PROGRAMS = sniproxy
 
@@ -34,4 +34,4 @@ sniproxy_SOURCES = address.c \
                    tls.c \
                    tls.h
 
-sniproxy_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS) -ludns
+sniproxy_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS) $(LIBUDNS_LIBS)

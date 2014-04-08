@@ -54,6 +54,7 @@
 
 struct resolv_cb_data {
     struct Connection *connection;
+    struct Address *address;
     struct ev_loop *loop;
 };
 
@@ -375,6 +376,7 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
             return;
         }
         cb_data->connection = con;
+        cb_data->address = server_address;
         cb_data->loop = loop;
 
         resolv_query(address_hostname(server_address), resolv_cb, cb_data);
@@ -404,22 +406,27 @@ resolv_cb(struct Address *result, void *data) {
     }
 
     if (result == NULL) {
-        notice("unable to resolve %s, closing connection", NULL);
+        notice("unable to resolve %s, closing connection",
+                address_hostname(cb_data->address));
         close_client_socket(con, cb_data->loop);
         return;
     }
 
     assert(address_is_sockaddr(result));
 
+    /* copy port from server_address */
+    address_set_port(result, address_port(cb_data->address));
+
     con->server.addr_len = address_sa_len(result);
     assert(con->server.addr_len <= sizeof(con->server.addr));
     memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
 
-    free(result);
-
     con->state = RESOLVED;
 
     initiate_server_connect(con, cb_data->loop);
+
+    free(cb_data->address);
+    free(cb_data);
 }
 
 static void
