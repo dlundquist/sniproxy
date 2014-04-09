@@ -102,6 +102,9 @@ Configuration Syntax
     listener 127.0.0.1:443 {
         protocol tls
         table TableName
+
+        # Specify a server to use if the initial client request doesn't contain
+        # a hostname
         fallback 192.0.2.5:443
     }
 
