@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.1
+Version: 0.3
 Release: 1%{?dist}
 Summary: Transparent TLS proxy
 
@@ -9,7 +9,7 @@ URL: https://github.com/dlundquist/sniproxy
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl
+BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl, udns-devel
 
 %description
 Proxies incoming HTTP and TLS connections based on the hostname contained in

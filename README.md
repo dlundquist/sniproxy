@@ -30,7 +30,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 **Prerequisites**
 
 + Autotools (autoconf, automake and libtool)
-+ libev4 and libpcre development headers
++ libev4, libpcre and libudns development headers
 + Perl and cURL for test suite
 
 **Install**
@@ -44,7 +44,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-    sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev pkg-config
+    sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev libudns-dev pkg-config
 
 2. Build a Debian package
 
