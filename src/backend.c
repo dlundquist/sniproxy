@@ -36,6 +36,7 @@
 
 static void free_backend(struct Backend *);
 
+
 struct Backend *
 new_backend() {
     struct Backend *backend;
@@ -69,7 +70,7 @@ accept_backend_arg(struct Backend *backend, char *arg) {
         }
 #ifndef HAVE_LIBUDNS
         if (!address_is_sockaddr(backend->address)) {
-            fprintf(stderr, "Only socket address backends are permitted when compiled with libudns\n");
+            fprintf(stderr, "Only socket address backends are permitted when compiled without libudns\n");
             return -1;
         }
 #endif
