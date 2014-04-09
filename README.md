@@ -69,7 +69,7 @@ This is the preferred installation method for modern Fedora based distributions.
 
 1. Install required packages
 
-    sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl pkgconfig
+    sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl pkgconfig udns-devel
 
 2. First build a distribution tarball:
 
