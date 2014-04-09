@@ -59,7 +59,7 @@ accept_backend_arg(struct Backend *backend, char *arg) {
         }
     } else if (backend->address == NULL) {
         /* Store address in lower case */
-        for (char *c = arg; *c == '\0'; c++)
+        for (char *c = arg; *c != '\0'; c++)
             *c = tolower(*c);
 
         backend->address = new_address(arg);
