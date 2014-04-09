@@ -37,8 +37,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 
     ./autogen.sh && ./configure && make check && sudo make install
 
-Building Debian/Ubuntu package
-==============================
+**Building Debian/Ubuntu package**
 
 This is the preferred installation method on recent Debian based distributions:
 
@@ -54,7 +53,7 @@ This is the preferred installation method on recent Debian based distributions:
 
     sudo dpkg -i ../sniproxy_<version>_<arch>.deb
 
-**Note on Upgrading**
+***Note on Upgrading***
 
 The version of sniproxy is not automatically updated after each commit, so if
 you are upgrading to a later version, the version number of the sniproxy package
@@ -62,8 +61,7 @@ may not have actually changed. This may cause issues with the upgrade process.
 It is recommended you uninstall `sudo apt-get remove sniproxy` then reinstall
 the new version.
 
-Building Fedora/RedHat package
-==============================
+**Building Fedora/RedHat package**
 
 This is the preferred installation method for modern Fedora based distributions.
 
@@ -96,9 +94,15 @@ Configuration Syntax
 
     pidfile /tmp/sniproxy.pid
 
+    error_log {
+        syslog daemon
+        priority notice
+    }
+
     listener 127.0.0.1:443 {
         protocol tls
         table TableName
+        fallback 192.0.2.5:443
     }
 
     table TableName {
@@ -111,3 +115,29 @@ Configuration Syntax
         # client requested and proxy to it
         .*\\.edu    *:443
     }
+
+DNS Resolution
+--------------
+
+Using hostnames or wildcard entries in the configuration requires sniproxy to
+be built with [UDNS](http://www.corpit.ru/mjt/udns.html). SNIProxy will still
+build without UDNS, but these features will be unavailable.
+
+UDNS uses a single UDP socket for all queries, so it is recommended you use a
+local caching DNS resolver (with a single socket each DNS query is protected by
+spoofing by a single 16 bit query ID, which makes it relatively easy to spoof).
+
+UDNS is currently not available in Debian stable, but a package can be easily built from the Debian testing or Ubuntu source packages:
+
+    mkdir udns_packaging
+    cd udns_packaging
+    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4-1.dsc
+    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4.orig.tar.gz
+    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4-1.debian.tar.gz
+    tar xfz udns_0.4.orig.tar.gz
+    cd udns-0.4/
+    tar xfz ../udns_0.4-1.debian.tar.gz
+    dpkg-buildpackage
+    cd ..
+    sudo dpkg -i libudns-dev_0.4-1_amd64.deb libudns0_0.4-1_amd64.deb
+
