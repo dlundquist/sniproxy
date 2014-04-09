@@ -1,0 +1,102 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use TestUtils;
+use TestHTTPD;
+use File::Temp;
+
+sub make_wildcard_config($) {
+
+    my $proxy_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen 127.0.0.1 $proxy_port {
+    proto http
+}
+
+table {
+    .* example.com:80
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sniproxy', '-f', '-c', $config);
+}
+
+sub worker($$) {
+    my $port = shift;
+    my $requests = shift;
+
+    for (my $i = 0; $i < $requests; $i++) {
+
+        system('curl',
+                '-s', '-S',
+                '-o', '/dev/null',
+                "http://localhost:$port/");
+        if ($? == -1) {
+            die "failed to execute: $!\n";
+        } elsif ($? & 127) {
+            printf STDERR "child died with signal %d, %s coredump\n", ($? & 127), ($? & 128) ? 'with' : 'without';
+            exit 255;
+        } elsif ($? >> 8) {
+            exit $? >> 8;
+        }
+    }
+    # Success
+    exit 0;
+}
+
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $workers = $ENV{WORKERS} || 3;
+    my $iterations = $ENV{ITERATIONS} || 3;
+
+    my $config = make_wildcard_config($proxy_port);
+    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+
+    # Wait for proxy to load and parse config
+    wait_for_port($proxy_port);
+
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, $proxy_port, $iterations);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # For troubleshooting connections stuck in CLOSE_WAIT state
+    #kill 10, $proxy_pid;
+    #system("netstat -ptn | grep $proxy_pid\/sniproxy");
+
+    # For troubleshooting 100% CPU usage
+    #system("top -n 1 -p $proxy_pid -b");
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+}
+
+main();

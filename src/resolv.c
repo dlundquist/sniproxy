@@ -1,9 +1,35 @@
+/*
+ * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <ev.h>
 #ifdef HAVE_LIBUDNS
 #include <udns.h>
 #endif
@@ -85,6 +111,9 @@ void
 resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
+    /*
+     * Wrap udns's call back in our own
+     */
     struct cb_data *cb_data = malloc(sizeof(struct cb_data));
     if (cb_data == NULL) {
         err("Failed to allocate memory for DNS query callback data.");
@@ -103,6 +132,9 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
     }
 }
 
+/*
+ * DNS UDP socket activity callback
+ */
 static void
 resolv_sock_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct dns_ctx *ctx = (struct dns_ctx *)w->data;
@@ -111,6 +143,9 @@ resolv_sock_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         dns_ioevent(ctx, ev_now(loop));
 }
 
+/*
+ * Wrapper for client callback we provide to udns
+ */
 static void
 dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
     struct cb_data *cb_data = (struct cb_data *)data;
@@ -136,6 +171,9 @@ dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
     free(address);
 }
 
+/*
+ * DNS timeout callback
+ */
 static void
 resolv_timeout_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
     struct dns_ctx *ctx = (struct dns_ctx *)w->data;
@@ -143,6 +181,9 @@ resolv_timeout_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
     dns_timeouts(ctx, 30, ev_now(loop));
 }
 
+/*
+ * Callback to setup DNS timeout callback
+ */
 static void
 dns_timer_setup_cb(struct dns_ctx *ctx, int timeout, void *data) {
     struct ev_loop *loop = (struct ev_loop *)data;

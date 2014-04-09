@@ -26,7 +26,6 @@
 #ifndef RESOLV_H
 #define RESOLV_H
 
-#include <ev.h>
 #include "address.h"
 
 int resolv_init(struct ev_loop *);
