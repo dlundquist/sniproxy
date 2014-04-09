@@ -43,15 +43,15 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-    sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev libudns-dev pkg-config
+        sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev libudns-dev pkg-config
 
 2. Build a Debian package
 
-    dpkg-buildpackage
+        dpkg-buildpackage
 
 3. Install the resulting package
 
-    sudo dpkg -i ../sniproxy_<version>_<arch>.deb
+        sudo dpkg -i ../sniproxy_<version>_<arch>.deb
 
 ***Note on Upgrading***
 
@@ -67,19 +67,19 @@ This is the preferred installation method for modern Fedora based distributions.
 
 1. Install required packages
 
-    sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl pkgconfig udns-devel
+        sudo yum install rpmbuild autoconf automake curl libev-devel pcre-devel perl pkgconfig udns-devel
 
-2. First build a distribution tarball:
+2. Build a distribution tarball:
 
-    ./autogen && ./configure && make dist
+        ./autogen && ./configure && make dist
 
 3. Build a RPM package
 
-    rpmbuild --define "_sourcedir `pwd`" -ba redhat/sniproxy.spec
+        rpmbuild --define "_sourcedir `pwd`" -ba redhat/sniproxy.spec
 
 4. Install resulting RPM
 
-    sudo yum install ../sniproxy-<version>.<arch>.rpm
+        sudo yum install ../sniproxy-<version>.<arch>.rpm
 
 I've used Scientific Linux 6 a fair amount, but I prefer Debian based
 distributions. I do not test building RPMs frequently (SL6 doesn't have a
