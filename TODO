@@ -1,6 +1,4 @@
-* Non-blocking connect() to backend server
-* Non-blocking DNS resolution
-** Allow nameservers to be specified in configuration file
+* Allow nameservers to be specified in configuration file
 * Allow source address for connection to backend to be specified
 * Reimplement configuration reloading
 * Improved table backend lookup, currently this is a linear search

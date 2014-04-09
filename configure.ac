@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.60])
-AC_INIT([sniproxy], [0.1])
+AC_INIT([sniproxy], [0.3])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
@@ -32,6 +32,13 @@ PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
   AC_MSG_ERROR([[***
 *** libpcre was not found.
 ***]])
+ fi
+])
+
+PKG_CHECK_MODULES([LIBUDNS], [libudns],,
+[AC_LIB_HAVE_LINKFLAGS(udns,, [#include <udns.h>], [dns_init(0, 0);])
+ if test x$ac_cv_libudns = xyes; then
+  AC_SUBST([LIBUDNS_LIBS], [$LIBUDNS])
  fi
 ])
 

@@ -67,6 +67,12 @@ accept_backend_arg(struct Backend *backend, char *arg) {
             err("invalid address: %s\n", arg);
             return -1;
         }
+#ifndef HAVE_LIBUDNS
+        if (!address_is_sockaddr(backend->address)) {
+            fprintf(stderr, "Only socket address backends are permitted when compiled with libudns\n");
+            return -1;
+        }
+#endif
     } else if (address_port(backend->address) == 0 && is_numeric(arg)) {
         address_set_port(backend->address, atoi(arg));
     } else {
@@ -111,7 +117,7 @@ lookup_backend(const struct Backend_head *head, const char *hostname) {
     struct Backend *iter;
 
     if (hostname == NULL)
-        hostname = "";
+        return NULL;
 
     STAILQ_FOREACH(iter, head, entries)
         if (pcre_exec(iter->hostname_re, NULL,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,44 +23,14 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef CONNECTION_H
-#define CONNECTION_H
+#ifndef RESOLV_H
+#define RESOLV_H
 
-#include <sys/socket.h>
-#include <sys/queue.h>
-#include <sys/time.h> /* struct timeval */
 #include <ev.h>
-#include "listener.h"
-#include "buffer.h"
+#include "address.h"
 
-struct Connection {
-    enum State {
-        NEW,            /* Before successful accept */
-        ACCEPTED,       /* Newly accepted client connection */
-        PARSED,         /* Parsed initial request and extracted hostname */
-        RESOLVED,       /* Server socket address resolved */
-        CONNECTED,      /* Connected to server */
-        SERVER_CLOSED,  /* Client closed socket */
-        CLIENT_CLOSED,  /* Server closed socket */
-        CLOSED          /* Both sockets closed */
-    } state;
-
-    struct {
-        struct sockaddr_storage addr;
-        socklen_t addr_len;
-        struct ev_io watcher;
-        struct Buffer *buffer;
-    } client, server;
-    const struct Listener *listener;
-    const char *hostname; /* Requested hostname */
-    struct timespec established_timestamp;
-
-    TAILQ_ENTRY(Connection) entries;
-};
-
-void init_connections();
-void accept_connection(const struct Listener *, struct ev_loop *);
-void free_connections(struct ev_loop *);
-void print_connections();
+int resolv_init(struct ev_loop *);
+void resolv_query(const char *, void(*cb)(struct Address *, void *), void *);
+void resolv_shutdown(struct ev_loop *);
 
 #endif

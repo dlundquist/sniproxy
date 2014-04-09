@@ -30,6 +30,7 @@
 #include <stddef.h> /* offsetof */
 #include <strings.h> /* strcasecmp() */
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <sys/queue.h>
 #include <sys/types.h>
@@ -260,6 +261,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         close(sockfd);
         return -4;
     }
+
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
     struct ev_io *listener_watcher = &listener->watcher;
     ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
