@@ -10,7 +10,8 @@ TESTS = http_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-        connection_reset_test
+        connection_reset_test \
+        bad_dns_request_test
 
 check_PROGRAMS = http_test \
                  tls_test \
