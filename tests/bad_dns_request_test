@@ -8,10 +8,31 @@ use File::Temp;
 use IO::Socket::INET;
 
 my $bad_requests = [
-    "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", # Test bad name server
-    "GET / HTTP/1.1\r\nHost: ...........\r\n\r\n", # Invalid hostname
-    "PUT / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 65536\r\n\r\n" . 'x' x 65536, # Exceed buffer size
-    "GET / HTTP/1.1\r\nHost: \0example.com\r\n\r\n", # Invalid hostname
+    {
+        # Test bad name server
+        request => "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+        client => \&http_client,
+    },
+    {
+        # Invalid hostname
+        request => "GET / HTTP/1.1\r\nHost: ...........\r\n\r\n",
+        client => \&http_client,
+    },
+    {
+        # Exceed buffer size
+        request => "PUT / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 65536\r\n\r\n" . 'x' x 65536,
+        client => \&http_client,
+    },
+    {
+        # Invalid hostname
+        request => "GET / HTTP/1.1\r\nHost: \0example.com\r\n\r\n",
+        client => \&http_client,
+    },
+    {
+        # Test client aborting connection before DNS response received
+        request => "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+        client => \&http_client_abort,
+    },
 ];
 
 sub http_client($$) {
@@ -33,6 +54,25 @@ sub http_client($$) {
 
     return undef;
 }
+
+sub http_client_abort($$) {
+    my $port = shift;
+    my $request = shift;
+
+    my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+                                       PeerPort => $port,
+                                       Proto => "tcp",
+                                       Type => SOCK_STREAM)
+        or die "couldn't connect $!";
+
+    $socket->send($request);
+    sleep(1);
+
+    $socket->close();
+
+    return undef;
+}
+
 sub proxy {
     my $config = shift;
 
@@ -47,7 +87,8 @@ sub worker($$$) {
     my ($port, $requests, $offset) = @_;
 
     for (my $i = 0; $i < $requests; $i++) {
-        my $error = http_client($port, $bad_requests->[($i + $offset) % int(@$bad_requests)]);
+        my $test = $bad_requests->[($i + $offset) % int(@$bad_requests)];
+        my $error = $test->{client}($port, $test->{request});
 
         die($error) if defined $error;
     }
@@ -81,7 +122,7 @@ END
 sub main {
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $workers = $ENV{WORKERS} || 3;
-    my $iterations = $ENV{ITERATIONS} || 5;
+    my $iterations = $ENV{ITERATIONS} || int(@$bad_requests);
 
     my $config = make_wildcard_config($proxy_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);

@@ -58,6 +58,7 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
 struct cb_data {
     void (*client_cb)(struct Address *, void *);
     void *client_cb_data;
+    struct dns_query *query;
 };
 
 
@@ -107,7 +108,7 @@ resolv_shutdown(struct ev_loop * loop) {
     dns_close(ctx);
 }
 
-void
+void *
 resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
@@ -117,19 +118,31 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
     struct cb_data *cb_data = malloc(sizeof(struct cb_data));
     if (cb_data == NULL) {
         err("Failed to allocate memory for DNS query callback data.");
-        return;
+        return NULL;
     }
     cb_data->client_cb = client_cb;
     cb_data->client_cb_data = client_cb_data;
 
     /* Just resolving A records for now */
-    struct dns_query *q = dns_submit_a4(ctx,
+    cb_data->query = dns_submit_a4(ctx,
             hostname, 0,
             dns_query_cb, cb_data);
-    if (q == NULL) {
+    if (cb_data->query == NULL) {
         err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
-        return;
+        return NULL;
     }
+
+    return cb_data;
+}
+
+void
+resolv_cancel(void *query_handle) {
+    struct cb_data *cb_data = (struct cb_data *)query_handle;
+    struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
+
+    dns_cancel(ctx, cb_data->query);
+
+    free(cb_data);
 }
 
 /*

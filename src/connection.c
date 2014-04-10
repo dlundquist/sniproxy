@@ -390,7 +390,7 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         cb_data->address = server_address;
         cb_data->loop = loop;
 
-        resolv_query(address_hostname(server_address), resolv_cb, cb_data);
+        con->query_handle = resolv_query(address_hostname(server_address), resolv_cb, cb_data);
 
         con->state = RESOLVING;
 #endif
@@ -418,6 +418,9 @@ resolv_cb(struct Address *result, void *data) {
     }
 
     if (result == NULL) {
+        con->state = PARSED;
+        con->query_handle = NULL;
+
         notice("unable to resolve %s, closing connection",
                 address_hostname(cb_data->address));
         close_client_socket(con, cb_data->loop);
@@ -434,6 +437,7 @@ resolv_cb(struct Address *result, void *data) {
     memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
 
     con->state = RESOLVED;
+    con->query_handle = NULL;
 
     initiate_server_connect(con, cb_data->loop);
 
@@ -488,6 +492,11 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
 
     if (close(con->client.watcher.fd) < 0)
         warn("close failed: %s", strerror(errno));
+
+    if (con->state == RESOLVING) {
+        resolv_cancel(con->query_handle);
+        con->state = PARSED;
+    }
 
     /* next state depends on previous state */
     if (con->state == SERVER_CLOSED
@@ -558,6 +567,7 @@ new_connection() {
     con->client.addr_len = sizeof(con->client.addr);
     con->server.addr_len = sizeof(con->server.addr);
     con->hostname = NULL;
+    con->query_handle = NULL;
 
     con->client.buffer = new_buffer(4096);
     if (con->client.buffer == NULL) {

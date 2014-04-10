@@ -33,6 +33,12 @@
 #include "listener.h"
 #include "buffer.h"
 
+struct ConnectionResolvCBData {
+    struct Connection *connection;
+    struct Address *address;
+    struct ev_loop *loop;
+};
+
 struct Connection {
     enum State {
         NEW,            /* Before successful accept */
@@ -54,6 +60,7 @@ struct Connection {
     } client, server;
     const struct Listener *listener;
     const char *hostname; /* Requested hostname */
+    struct ConnectionResolvCBData *resolve_cb_data;
     struct timespec established_timestamp;
 
     TAILQ_ENTRY(Connection) entries;
