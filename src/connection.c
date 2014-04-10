@@ -372,14 +372,16 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     struct Address *server_address =
         listener_lookup_server_address(con->listener, con->hostname);
 
-    if (address_is_hostname(server_address)) {
+    if (server_address == NULL) {
+        close_client_socket(con, loop);
+    } else if (address_is_hostname(server_address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
         close_client_socket(con, loop);
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
-            err("malloc");
+            err("%s: malloc", __func__);
             close_client_socket(con, loop);
 
             return;

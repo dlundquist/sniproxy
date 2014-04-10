@@ -294,7 +294,8 @@ listener_lookup_server_address(const struct Listener *listener,
         new_addr = new_address(hostname);
         if (new_addr == NULL) {
             warn("Invalid hostname %s", hostname);
-            return NULL;
+
+            return listener->fallback_address;
         }
 
         if (port != 0)
@@ -302,8 +303,11 @@ listener_lookup_server_address(const struct Listener *listener,
     } else {
         size_t len = address_len(addr);
         new_addr = malloc(len);
-        if (new_addr == NULL)
-            return NULL;
+        if (new_addr == NULL) {
+            err("%s: malloc", __func__);
+
+            return listener->fallback_address;
+        }
 
         memcpy(new_addr, addr, len);
     }
