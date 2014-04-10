@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.3
+Version: 0.3.1
 Release: 1%{?dist}
 Summary: Transparent TLS proxy
 

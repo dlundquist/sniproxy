@@ -1,3 +1,11 @@
+sniproxy (0.3.1-1) unstable; urgency=high
+
+  * Fix bug when client completely fills the buffer before the DNS query is
+    answered.
+  * Fix handling of invalid hostnames in client requests.
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Wed, 09 Apr 2014 21:08:55 -0700
+
 sniproxy (0.3-1) unstable; urgency=medium
 
   * Nonblocking connect and DNS resolution
