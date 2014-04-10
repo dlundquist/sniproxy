@@ -70,6 +70,7 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
 
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_cb(struct Address *, void *);
+static void reactivate_watchers(struct Connection *, struct ev_loop *);
 static void parse_client_request(struct Connection *, struct ev_loop *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
@@ -175,6 +176,7 @@ static inline int
 client_socket_open(const struct Connection *con) {
     return con->state == ACCEPTED ||
         con->state == PARSED ||
+        con->state == RESOLVING ||
         con->state == RESOLVED ||
         con->state == CONNECTED ||
         con->state == SERVER_CLOSED;
@@ -261,6 +263,11 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         return;
     }
 
+    reactivate_watchers(con, loop);
+}
+
+static void
+reactivate_watchers(struct Connection *con, struct ev_loop *loop) {
     struct ev_io *client_watcher = &con->client.watcher;
     struct ev_io *server_watcher = &con->server.watcher;
 
@@ -277,9 +284,11 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     assert(client_socket_open(con) || !ev_is_active(client_watcher));
     assert(server_socket_open(con) || !ev_is_active(server_watcher));
 
-    /* At least one watcher is still active for this connection */
+    /* At least one watcher is still active for this connection,
+     * or DNS callback active */
     assert((ev_is_active(client_watcher) && con->client.watcher.events) ||
-           (ev_is_active(server_watcher) && con->server.watcher.events));
+           (ev_is_active(server_watcher) && con->server.watcher.events) ||
+           con->state == RESOLVING);
 
     ev_verify(loop);
 
@@ -380,19 +389,20 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         cb_data->loop = loop;
 
         resolv_query(address_hostname(server_address), resolv_cb, cb_data);
+
+        con->state = RESOLVING;
 #endif
+    } else {
+        assert(address_is_sockaddr(server_address));
+        con->server.addr_len = address_sa_len(server_address);
+        assert(con->server.addr_len <= sizeof(con->server.addr));
+        memcpy(&con->server.addr, address_sa(server_address),
+            con->server.addr_len);
 
-        return;
+        free(server_address);
+
+        con->state = RESOLVED;
     }
-
-    assert(address_is_sockaddr(server_address));
-    con->server.addr_len = address_sa_len(server_address);
-    assert(con->server.addr_len <= sizeof(con->server.addr));
-    memcpy(&con->server.addr, address_sa(server_address), con->server.addr_len);
-
-    free(server_address);
-
-    con->state = RESOLVED;
 }
 
 static void
@@ -400,8 +410,8 @@ resolv_cb(struct Address *result, void *data) {
     struct resolv_cb_data *cb_data = (struct resolv_cb_data *)data;
     struct Connection *con = cb_data->connection;
 
-    if (con->state != PARSED) {
-        info("%s() called for connection not in PARSED state");
+    if (con->state != RESOLVING) {
+        info("%s() called for connection not in RESOLVING state");
         return;
     }
 
@@ -427,6 +437,8 @@ resolv_cb(struct Address *result, void *data) {
 
     free(cb_data->address);
     free(cb_data);
+
+    reactivate_watchers(con, cb_data->loop);
 }
 
 static void
@@ -479,6 +491,7 @@ close_client_socket(struct Connection *con, struct ev_loop *loop) {
     if (con->state == SERVER_CLOSED
             || con->state == ACCEPTED
             || con->state == PARSED
+            || con->state == RESOLVING
             || con->state == RESOLVED)
         con->state = CLOSED;
     else
@@ -515,12 +528,14 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
 
     assert(con->state == ACCEPTED
             || con->state == PARSED
+            || con->state == RESOLVING
             || con->state == RESOLVED
             || con->state == SERVER_CLOSED
             || con->state == CLOSED);
 
     if (con->state == ACCEPTED
             || con->state == PARSED
+            || con->state == RESOLVING
             || con->state == RESOLVED
             || con->state == SERVER_CLOSED)
         close_client_socket(con, loop);
@@ -652,6 +667,11 @@ print_connection(FILE *file, const struct Connection *con) {
             break;
         case PARSED:
             fprintf(file, "PARSED        %s %zu/%zu\t-\n",
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    con->client.buffer->len, con->client.buffer->size);
+            break;
+        case RESOLVING:
+            fprintf(file, "RESOLVING      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     con->client.buffer->len, con->client.buffer->size);
             break;

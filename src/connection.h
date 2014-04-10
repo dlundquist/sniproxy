@@ -38,6 +38,7 @@ struct Connection {
         NEW,            /* Before successful accept */
         ACCEPTED,       /* Newly accepted client connection */
         PARSED,         /* Parsed initial request and extracted hostname */
+        RESOLVING,      /* DNS query in progress */
         RESOLVED,       /* Server socket address resolved */
         CONNECTED,      /* Connected to server */
         SERVER_CLOSED,  /* Client closed socket */
