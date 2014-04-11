@@ -13,7 +13,13 @@ script:
   - make all
   - make check
   - echo "Checking for memory leaks"
-  - bash -c "cd tests && for TEST in bad_dns_request_test bad_request_test connection_reset_test functional_test hostname_test slow_client_test wildcard_test; do ./${TEST} valgrind --leak-check=full; done"
+  - bash -c "cd tests && ./bad_dns_request_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./bad_request_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./connection_reset_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./functional_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./hostname_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./slow_client_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./wildcard_test valgrind --leak-check=full"
   - echo "Rebuilding without DNS and rerunning unit tests"
   - ./configure --disable-dns
   - make all
