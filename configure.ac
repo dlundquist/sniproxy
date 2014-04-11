@@ -35,11 +35,17 @@ PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
  fi
 ])
 
-PKG_CHECK_MODULES([LIBUDNS], [libudns],,
-[AC_LIB_HAVE_LINKFLAGS(udns,, [#include <udns.h>], [dns_init(0, 0);])
- if test x$ac_cv_libudns = xyes; then
-  AC_SUBST([LIBUDNS_LIBS], [$LIBUDNS])
- fi
+AC_ARG_ENABLE([dns],
+  [AS_HELP_STRING([--disable-dns], [Disable DNS resolution])],
+  [dns="$withval"], [dns=yes])
+
+AM_CONDITIONAL([DNS_ENABLED], [test "x$dns" = "xyes"])
+
+AS_IF([test "x$dns" = "xyes"],
+ [PKG_CHECK_MODULES([LIBUDNS], [libudns],,
+  [AC_LIB_HAVE_LINKFLAGS(udns,, [#include <udns.h>], [dns_init(0, 0);])
+   AS_IF([test x$ac_cv_libudns = xyes], [AC_SUBST([LIBUDNS_LIBS], [$LIBUDNS])])
+  ])
 ])
 
 PKG_CHECK_MODULES([LIBRT], [librt],,

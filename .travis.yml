@@ -13,7 +13,11 @@ script:
   - make all
   - make check
   - echo "Checking for memory leaks"
-  - bash -c "cd tests && ./functional_test valgrind --error-exitcode=1"
+  - bash -c "cd tests && for TEST in bad_dns_request_test bad_request_test connection_reset_test functional_test hostname_test slow_client_test wildcard_test; do ./${TEST} valgrind --leak-check=full; done"
+  - echo "Rebuilding without DNS and rerunning unit tests"
+  - ./configure --disable-dns
+  - make all
+  - make check
   - echo "Testing Debian package build"
   - dpkg-buildpackage
   - echo "Testing RPM package build"

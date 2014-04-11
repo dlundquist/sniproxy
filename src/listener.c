@@ -150,6 +150,14 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
         fprintf(stderr, "Unable to parse fallback address: %s\n", fallback);
         return 0;
     }
+#ifndef HAVE_LIBUDNS
+    if (!address_is_sockaddr(listener->fallback_address)) {
+        fprintf(stderr, "Only fallback socket addresses permitted when compiled without libudns\n");
+        free(listener->fallback_address);
+        listener->fallback_address = NULL;
+        return 0;
+    }
+#endif
     if (address_is_wildcard(listener->fallback_address)) {
         free(listener->fallback_address);
         listener->fallback_address = NULL;

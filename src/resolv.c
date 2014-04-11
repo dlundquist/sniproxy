@@ -49,8 +49,13 @@ void
 resolv_shutdown(struct ev_loop *loop) {
 }
 
+struct ResolvQuery *
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void (*client_free_cb)(void *), void *client_cb_data) {
+    return NULL;
+}
+
 void
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
+resolv_cancel(struct ResolvQuery *query_handle) {
 }
 
 #else
@@ -131,7 +136,8 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
             dns_query_cb, cb_data);
     if (cb_data->query == NULL) {
         err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
-        cb_data->client_free_cb(cb_data->client_cb_data);
+        if (cb_data->client_free_cb != NULL)
+            cb_data->client_free_cb(cb_data->client_cb_data);
         free(cb_data);
         return NULL;
     }
@@ -147,7 +153,8 @@ resolv_cancel(struct ResolvQuery *query_handle) {
     dns_cancel(ctx, cb_data->query);
 
     free(cb_data->query);
-    cb_data->client_free_cb(cb_data->client_cb_data);
+    if (cb_data->client_free_cb != NULL)
+        cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
 }
 
@@ -186,7 +193,8 @@ dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
 
     cb_data->client_cb(address, cb_data->client_cb_data);
 
-    cb_data->client_free_cb(cb_data->client_cb_data);
+    if (cb_data->client_free_cb != NULL)
+        cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
     free(result);
     free(address);

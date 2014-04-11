@@ -5,13 +5,16 @@ TESTS = http_test \
         buffer_test \
         address_test \
         cfg_tokenizer_test \
-        config_test \
-        resolv_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-        connection_reset_test \
-        bad_dns_request_test
+        connection_reset_test
+
+if DNS_ENABLED
+  TESTS += config_test \
+           resolv_test \
+           bad_dns_request_test
+endif
 
 check_PROGRAMS = http_test \
                  tls_test \
