@@ -22,8 +22,12 @@ static void query_cb(struct Address *result, void *data) {
 }
 
 static void
+dummy(void *unused) {
+}
+
+static void
 test_init_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
-    resolv_query("localhost", query_cb, &query_count);
+    resolv_query("localhost", query_cb, dummy, &query_count);
 }
 
 static void
