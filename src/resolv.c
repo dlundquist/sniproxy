@@ -55,8 +55,9 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
 
 #else
 
-struct cb_data {
+struct ResolvQuery {
     void (*client_cb)(struct Address *, void *);
+    void (*client_free_cb)(void *);
     void *client_cb_data;
     struct dns_query *query;
 };
@@ -108,19 +109,20 @@ resolv_shutdown(struct ev_loop * loop) {
     dns_close(ctx);
 }
 
-void *
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void *client_cb_data) {
+struct ResolvQuery *
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void (*client_free_cb)(void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
     /*
      * Wrap udns's call back in our own
      */
-    struct cb_data *cb_data = malloc(sizeof(struct cb_data));
+    struct ResolvQuery *cb_data = malloc(sizeof(struct ResolvQuery));
     if (cb_data == NULL) {
         err("Failed to allocate memory for DNS query callback data.");
         return NULL;
     }
     cb_data->client_cb = client_cb;
+    cb_data->client_free_cb = client_free_cb;
     cb_data->client_cb_data = client_cb_data;
 
     /* Just resolving A records for now */
@@ -129,6 +131,8 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
             dns_query_cb, cb_data);
     if (cb_data->query == NULL) {
         err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+        cb_data->client_free_cb(cb_data->client_cb_data);
+        free(cb_data);
         return NULL;
     }
 
@@ -136,12 +140,14 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
 }
 
 void
-resolv_cancel(void *query_handle) {
-    struct cb_data *cb_data = (struct cb_data *)query_handle;
+resolv_cancel(struct ResolvQuery *query_handle) {
+    struct ResolvQuery *cb_data = (struct ResolvQuery *)query_handle;
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
     dns_cancel(ctx, cb_data->query);
 
+    free(cb_data->query);
+    cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
 }
 
@@ -161,7 +167,7 @@ resolv_sock_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
  */
 static void
 dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
-    struct cb_data *cb_data = (struct cb_data *)data;
+    struct ResolvQuery *cb_data = (struct ResolvQuery *)data;
     struct Address *address = NULL;
 
     if (result == NULL) {
@@ -180,7 +186,9 @@ dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
 
     cb_data->client_cb(address, cb_data->client_cb_data);
 
+    cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
+    free(result);
     free(address);
 }
 

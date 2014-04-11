@@ -82,6 +82,7 @@ static void log_connection(struct Connection *);
 static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
+static void free_resolv_cb_data(struct resolv_cb_data *);
 
 
 void
@@ -390,7 +391,8 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         cb_data->address = server_address;
         cb_data->loop = loop;
 
-        con->query_handle = resolv_query(address_hostname(server_address), resolv_cb, cb_data);
+        con->query_handle = resolv_query(address_hostname(server_address), resolv_cb,
+            (void (*)(void *))free_resolv_cb_data, cb_data);
 
         con->state = RESOLVING;
 #endif
@@ -411,6 +413,7 @@ static void
 resolv_cb(struct Address *result, void *data) {
     struct resolv_cb_data *cb_data = (struct resolv_cb_data *)data;
     struct Connection *con = cb_data->connection;
+    struct ev_loop *loop = cb_data->loop;
 
     if (con->state != RESOLVING) {
         info("%s() called for connection not in RESOLVING state");
@@ -423,7 +426,7 @@ resolv_cb(struct Address *result, void *data) {
 
         notice("unable to resolve %s, closing connection",
                 address_hostname(cb_data->address));
-        close_client_socket(con, cb_data->loop);
+        close_client_socket(con, loop);
         return;
     }
 
@@ -439,12 +442,15 @@ resolv_cb(struct Address *result, void *data) {
     con->state = RESOLVED;
     con->query_handle = NULL;
 
-    initiate_server_connect(con, cb_data->loop);
+    initiate_server_connect(con, loop);
 
+    reactivate_watchers(con, loop);
+}
+
+static void
+free_resolv_cb_data(struct resolv_cb_data *cb_data) {
     free(cb_data->address);
     free(cb_data);
-
-    reactivate_watchers(con, cb_data->loop);
 }
 
 static void

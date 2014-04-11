@@ -54,7 +54,7 @@ struct Connection {
     } client, server;
     const struct Listener *listener;
     const char *hostname; /* Requested hostname */
-    void *query_handle;
+    struct ResolvQuery *query_handle;
     struct timespec established_timestamp;
 
     TAILQ_ENTRY(Connection) entries;

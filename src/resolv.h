@@ -28,9 +28,11 @@
 
 #include "address.h"
 
+struct ResolvQuery;
+
 int resolv_init(struct ev_loop *);
-void *resolv_query(const char *, void(*cb)(struct Address *, void *), void *);
-void resolv_cancel(void *);
+struct ResolvQuery *resolv_query(const char *, void(*)(struct Address *, void *), void (*)(void *), void *);
+void resolv_cancel(struct ResolvQuery *);
 void resolv_shutdown(struct ev_loop *);
 
 #endif
