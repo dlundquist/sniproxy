@@ -40,6 +40,8 @@ struct Listener {
     char *table_name;
     char *alpn_table_name;
     unsigned prefer_alpn;
+    struct Logger *access_log;
+    int log_bad_requests;
 
     /* Runtime fields */
     struct ev_io watcher;
@@ -56,6 +58,7 @@ int accept_listener_alpn_table_name(struct Listener *, char *);
 int prefer_in_listener(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
+int accept_listener_bad_request_action(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
 void init_listeners(struct Listener_head *, const struct Table_head *, const struct Table_head *);

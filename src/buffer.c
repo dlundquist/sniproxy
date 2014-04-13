@@ -29,10 +29,14 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <time.h>
+#include <errno.h>
 #include <unistd.h>
+#include <alloca.h>
+#include <assert.h>
 #include "buffer.h"
+#include "logger.h"
 
-#define DEFAULT_SIZE 4096
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
@@ -43,24 +47,51 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 
 struct Buffer *
-new_buffer() {
+new_buffer(int size) {
     struct Buffer *buf;
 
     buf = malloc(sizeof(struct Buffer));
-    if (buf == NULL) {
+    if (buf == NULL)
         return NULL;
-    }
 
-    buf->size = DEFAULT_SIZE;
+    buf->size = size;
     buf->len = 0;
     buf->head = 0;
+    buf->tx_bytes = 0;
+    buf->rx_bytes = 0;
+    buf->last_recv = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+    buf->last_send = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
-        return NULL;
+        buf = NULL;
     }
 
     return buf;
+}
+
+ssize_t
+buffer_resize(struct Buffer *buf, size_t new_size) {
+    char *new_buffer;
+
+    if (new_size < buf->len)
+        return -1; /* new_size too small to hold existing data */
+
+    new_buffer = malloc(new_size);
+    if (new_buffer == NULL)
+        return -2;
+
+    if (buffer_peek(buf, new_buffer, new_size) != buf->len) {
+        err("failed to copy existing buffer contents into new buffer");
+        free(new_buffer);
+        return -3;
+    }
+
+    free(buf->buffer);
+    buf->buffer = new_buffer;
+    buf->head = 0;
+
+    return buf->len;
 }
 
 void
@@ -78,6 +109,10 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     struct iovec iov[2];
     struct msghdr msg;
 
+    /* coalesce when reading into an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
+
     msg.msg_name = NULL;
     msg.msg_namelen = 0;
     msg.msg_iov = iov;
@@ -87,6 +122,9 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
     msg.msg_flags = 0;
 
     bytes = recvmsg(sockfd, &msg, flags);
+
+    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_recv) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
@@ -110,6 +148,9 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = sendmsg(sockfd, &msg, flags);
 
+    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_send) < 0)
+        err("clock_gettime() failed: %s", strerror(errno));
+
     if (bytes > 0)
         advance_read_position(buffer, bytes);
 
@@ -123,6 +164,10 @@ ssize_t
 buffer_read(struct Buffer *buffer, int fd) {
     ssize_t bytes;
     struct iovec iov[2];
+
+    /* coalesce when reading into an empty buffer */
+    if (buffer->len == 0)
+        buffer->head = 0;
 
     bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
 
@@ -149,15 +194,37 @@ buffer_write(struct Buffer *buffer, int fd) {
 }
 
 size_t
+buffer_coalesce(struct Buffer *buffer, const void **dst) {
+    if ((buffer->head + buffer->len) % buffer->size > buffer->head) {
+        if (dst != NULL)
+            *dst = &buffer->buffer[buffer->head];
+
+        return buffer->len;
+    } else {
+        size_t len = buffer->len;
+        char *temp = alloca(len);
+
+        buffer_pop(buffer, temp, len);
+        assert(buffer->len == 0);
+
+        buffer_push(buffer, temp, len);
+        assert(buffer->head == 0);
+        assert(buffer->len = len);
+
+        if (dst != NULL)
+            *dst = buffer->buffer;
+        return buffer->len;
+    }
+}
+
+size_t
 buffer_peek(const struct Buffer *src, void *dst, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_copied = 0;
 
-    iov_len = setup_read_iov(src, iov, len);
+    size_t iov_len = setup_read_iov(src, iov, len);
 
-    for (i = 0; i < iov_len; i ++) {
+    for (int i = 0; i < iov_len; i++) {
         memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
 
         bytes_copied += iov[i].iov_len;
@@ -181,16 +248,18 @@ buffer_pop(struct Buffer *src, void *dst, size_t len) {
 size_t
 buffer_push(struct Buffer *dst, const void *src, size_t len) {
     struct iovec iov[2];
-    int iov_len;
-    int i;
     size_t bytes_appended = 0;
+
+    /* coalesce when reading into an empty buffer */
+    if (dst->len == 0)
+        dst->head = 0;
 
     if (dst->size - dst->len < len)
         return -1; /* insufficient room */
 
-    iov_len = setup_write_iov(dst, iov, len);
+    size_t iov_len = setup_write_iov(dst, iov, len);
 
-    for (i = 0; i < iov_len; i++) {
+    for (int i = 0; i < iov_len; i++) {
         memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
         bytes_appended += iov[i].iov_len;
     }
@@ -220,8 +289,8 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len)
         room = MIN(room, len);
 
-    start = (buffer->head + buffer->len) & (buffer->size - 1);
-    end = (start + room) & (buffer->size - 1);
+    start = (buffer->head + buffer->len) % buffer->size;
+    end = (start + room) % buffer->size;
 
     if (end > start) { /* simple case */
         iov[0].iov_base = &buffer->buffer[start];
@@ -250,7 +319,7 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len)
         end = MIN(end, buffer->head + len);
 
-    end = end & (buffer->size - 1);
+    end = end % buffer->size;
 
     if (end > buffer->head) {
         iov[0].iov_base = &buffer->buffer[buffer->head];
@@ -270,10 +339,12 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
 static inline void
 advance_write_position(struct Buffer *buffer, size_t offset) {
     buffer->len += offset;
+    buffer->rx_bytes += offset;
 }
 
 static inline void
 advance_read_position(struct Buffer *buffer, size_t offset) {
-    buffer->head = (buffer->head + offset) & (buffer->size - 1);
+    buffer->head = (buffer->head + offset) % buffer->size;
     buffer->len -= offset;
+    buffer->tx_bytes += offset;
 }

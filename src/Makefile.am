@@ -1,3 +1,4 @@
+AM_CPPFLAGS = $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_LIBS) $(LIBUDNS_LIBS)
 
 sbin_PROGRAMS = sniproxy
 
@@ -22,7 +23,9 @@ sniproxy_SOURCES = address.c \
                    listener.h \
                    logger.c \
                    logger.h \
-				   protocol.h \
+                   protocol.h \
+                   resolv.c \
+                   resolv.h \
                    server.c \
                    server.h \
                    sniproxy.c \
@@ -32,4 +35,4 @@ sniproxy_SOURCES = address.c \
                    tls.c \
                    tls.h
 
-sniproxy_LDADD = -lpcre -lev
+sniproxy_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS) $(LIBUDNS_LIBS)

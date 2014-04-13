@@ -84,11 +84,6 @@ sub bad_client($) {
 }
 
 sub main {
-    unless ($^O eq 'linux') {
-        print STDERR "connection_reset_test only supported under Linux\n";
-        exit 0;
-    }
-
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
 
@@ -97,7 +92,8 @@ sub main {
     my $httpd_pid = start_child('server', \&simple_server, $httpd_port);
 
     # Wait for proxy to load and parse config
-    sleep 1;
+    wait_for_port($httpd_port);
+    wait_for_port($proxy_port);
 
     for (my $i = 0; $i < 10; $i++) {
         start_child('worker', \&bad_client, $proxy_port);

@@ -4,9 +4,14 @@ a.out
 .dirstamp
 *.swp
 *.swo
+*.gcov
+*.gcda
+*.gcno
 .vimrc
 depcomp
 compile
+config.guess
+config.sub
 core
 autoscan.log
 aclocal.m4

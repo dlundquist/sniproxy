@@ -5,6 +5,8 @@ use warnings;
 use TestUtils;
 use TestHTTPD;
 use File::Temp;
+use IO::Socket::INET;
+use Time::HiRes;
 
 sub proxy {
     my $config = shift;
@@ -12,35 +14,45 @@ sub proxy {
     exec(@_, '../src/sniproxy', '-f', '-c', $config);
 }
 
-sub worker($$$$) {
-    my ($hostname, $path, $port, $requests) = @_;
+sub slow_client($$) {
+    my $port = shift;
+    my $requests = shift;
+    my $request = "GET / HTTP/1.1\r\n" .
+        "UserAgent: slow_client/0.1\r\n" .
+        "Host: localhost:$port\r\n" .
+        "Accept: */*\r\n" .
+        "\r\n";
 
-    for (my $i = 0; $i < $requests; $i++) {
-        system('curl',
-                '-s', '-S',
-                '-H', "Host: $hostname",
-                '-o', '/dev/null',
-                "http://localhost:$port/$path");
+    local $SIG{ALRM} = sub { die "alarm\n" };
+    alarm 10;
 
-        if ($? == -1) {
-            die "failed to execute: $!\n";
-        } elsif ($? & 127) {
-            printf STDERR "child died with signal %d, %s coredump\n", ($? & 127), ($? & 128) ? 'with' : 'without';
-            exit 255;
-        } elsif ($? >> 8) {
-            exit $? >> 8;
-        }
+    my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+            PeerPort => $port,
+            Proto => "tcp",
+            Type => SOCK_STREAM)
+        or die "couldn't connect $!";
+
+    $socket->send($request);
+    foreach (split("\r\n", $request)) {
+        $socket->send("$_\r\n");
+        sleep(1);
     }
-    # Success
-    exit 0;
-}
 
+    my $buffer;
+    $socket->recv($buffer, 4096);
+
+    $socket->close();
+
+    die("Unexpected response: $buffer") unless ($buffer =~ /\AHTTP\/1\.1 200 OK/);
+
+    exit(0);
+}
 
 sub main {
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
     my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
-    my $workers = $ENV{WORKERS} || 10;
-    my $iterations = $ENV{ITERATIONS} || 10;
+    my $workers = $ENV{WORKERS} || 3;
+    my $iterations = $ENV{ITERATIONS} || 3;
     my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
 
     my $config = make_config($proxy_port, $local_httpd || $httpd_port);
@@ -52,7 +64,7 @@ sub main {
     wait_for_port($proxy_port);
 
     for (my $i = 0; $i < $workers; $i++) {
-        start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
+        start_child('worker', \&slow_client, $proxy_port, $iterations);
     }
 
     # Wait for all our children to finish

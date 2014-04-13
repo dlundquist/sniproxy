@@ -43,33 +43,33 @@ static const char *bad[] = {
 int main() {
     unsigned int i;
     int result;
-    char *hostname;
+    struct ProtocolRes res;
     struct Listener l;
 
-    memset(&l, 0, sizeof(l));
-
     for (i = 0; i < sizeof(good) / sizeof(const char *); i++) {
-        hostname = NULL;
+        memset(&res, 0, sizeof(res));
 
-        result = http_protocol->parse_packet(&l, good[i], strlen(good[i]), &hostname);
+        result = http_protocol->parse_packet(&l, good[i], strlen(good[i]), &res);
 
         assert(result == 9);
 
-        assert(NULL != hostname);
+        assert(NULL != res.name);
 
-        assert(0 == strcmp("localhost", hostname));
+        assert(1 == res.name_type);
 
-        free(hostname);
+        assert(0 == strcmp("localhost", res.name));
+
+        free(res.name);
     }
 
     for (i = 0; i < sizeof(bad) / sizeof(const char *); i++) {
-        hostname = NULL;
+        memset(&res, 0, sizeof(res));
 
-        result = http_protocol->parse_packet(&l, bad[i], strlen(bad[i]), &hostname);
+        result = http_protocol->parse_packet(&l, bad[i], strlen(bad[i]), &res);
 
         assert(result < 0);
 
-        assert(hostname == NULL);
+        assert(res.name == NULL);
     }
 
     return 0;

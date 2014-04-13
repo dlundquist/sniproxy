@@ -30,6 +30,7 @@
 #include <stddef.h> /* offsetof */
 #include <strings.h> /* strcasecmp() */
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <sys/queue.h>
 #include <sys/types.h>
@@ -80,6 +81,8 @@ new_listener() {
     listener->address = NULL;
     listener->fallback_address = NULL;
     listener->protocol = tls_protocol;
+    listener->access_log = NULL;
+    listener->log_bad_requests = 0;
 
     return listener;
 }
@@ -168,6 +171,14 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
         fprintf(stderr, "Unable to parse fallback address: %s\n", fallback);
         return 0;
     }
+#ifndef HAVE_LIBUDNS
+    if (!address_is_sockaddr(listener->fallback_address)) {
+        fprintf(stderr, "Only fallback socket addresses permitted when compiled without libudns\n");
+        free(listener->fallback_address);
+        listener->fallback_address = NULL;
+        return 0;
+    }
+#endif
     if (address_is_wildcard(listener->fallback_address)) {
         free(listener->fallback_address);
         listener->fallback_address = NULL;
@@ -177,6 +188,15 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
          * much sense to configure it as a wildcard. */
         fprintf(stderr, "Wildcard address prohibited as fallback address\n");
         return 0;
+    }
+
+    return 1;
+}
+
+int
+accept_listener_bad_request_action(struct Listener *listener, char *action) {
+    if (strncmp("log", action, strlen(action)) == 0) {
+        listener->log_bad_requests = 1;
     }
 
     return 1;
@@ -260,6 +280,14 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
     /* Here listener->table and listener->alpn_table may both be null.
      * In that case the default SNI table will be used.
      */
+    if (listener->table_name == NULL && listener->alpn_table_name == NULL) {
+        listener->table = table_lookup(tables, listener->table_name);
+        if (listener->table == NULL) {
+            fprintf(stderr, "Default table not defined\n");
+            return -1;
+        }
+        init_table(listener->table);
+    }
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
@@ -289,6 +317,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
         close(sockfd);
         return -4;
     }
+
+
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
     struct ev_io *listener_watcher = &listener->watcher;
     ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
@@ -323,7 +355,8 @@ listener_lookup_server_address(const struct Listener *listener,
         new_addr = new_address(name);
         if (new_addr == NULL) {
             warn("Invalid name %s", name);
-            return NULL;
+
+            return listener->fallback_address;
         }
 
         if (port != 0)
@@ -331,8 +364,11 @@ listener_lookup_server_address(const struct Listener *listener,
     } else {
         size_t len = address_len(addr);
         new_addr = malloc(len);
-        if (new_addr == NULL)
-            return NULL;
+        if (new_addr == NULL) {
+            err("%s: malloc", __func__);
+
+            return listener->fallback_address;
+        }
 
         memcpy(new_addr, addr, len);
     }

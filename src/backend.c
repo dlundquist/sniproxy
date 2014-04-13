@@ -36,6 +36,7 @@
 
 static void free_backend(struct Backend *);
 
+
 struct Backend *
 new_backend() {
     struct Backend *backend;
@@ -59,7 +60,7 @@ accept_backend_arg(struct Backend *backend, char *arg) {
         }
     } else if (backend->address == NULL) {
         /* Store address in lower case */
-        for (char *c = arg; *c == '\0'; c++)
+        for (char *c = arg; *c != '\0'; c++)
             *c = tolower(*c);
 
         backend->address = new_address(arg);
@@ -67,6 +68,12 @@ accept_backend_arg(struct Backend *backend, char *arg) {
             err("invalid address: %s\n", arg);
             return -1;
         }
+#ifndef HAVE_LIBUDNS
+        if (!address_is_sockaddr(backend->address)) {
+            fprintf(stderr, "Only socket address backends are permitted when compiled without libudns\n");
+            return -1;
+        }
+#endif
     } else if (address_port(backend->address) == 0 && is_numeric(arg)) {
         address_set_port(backend->address, atoi(arg));
     } else {

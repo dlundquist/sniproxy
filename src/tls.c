@@ -163,6 +163,11 @@ parse_tls_header(const struct Listener * t, const char* data, size_t data_len,
     len = (unsigned char)data[pos];
     pos += 1 + len;
 
+    if (pos == data_len && tls_version_major == 3 && tls_version_minor == 0) {
+        debug("Received SSL 3.0 handshake without extensions");
+        return -2;
+    }
+
     /* Extensions */
     if (pos + 2 > data_len)
         return -5;

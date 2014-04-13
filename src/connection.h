@@ -28,15 +28,20 @@
 
 #include <sys/socket.h>
 #include <sys/queue.h>
+#include <sys/time.h> /* struct timeval */
 #include <ev.h>
 #include "listener.h"
 #include "buffer.h"
+#include "protocol.h"
 
 struct Connection {
     enum State {
         NEW,            /* Before successful accept */
         ACCEPTED,       /* Newly accepted client connection */
-        CONNECTED,      /* Parsed client hello and connected to server */
+        PARSED,         /* Parsed initial request and extracted hostname */
+        RESOLVING,      /* DNS query in progress */
+        RESOLVED,       /* Server socket address resolved */
+        CONNECTED,      /* Connected to server */
         SERVER_CLOSED,  /* Client closed socket */
         CLIENT_CLOSED,  /* Server closed socket */
         CLOSED          /* Both sockets closed */
@@ -49,7 +54,9 @@ struct Connection {
         struct Buffer *buffer;
     } client, server;
     const struct Listener *listener;
-    const char *hostname; /* Requested hostname */
+    struct ProtocolRes pres;
+    struct ResolvQuery *query_handle;
+    struct timespec established_timestamp;
 
     TAILQ_ENTRY(Connection) entries;
 };

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+find . -name \*.{gcno,gcda,gcov} -delete
+
+./configure CFLAGS="-fprofile-arcs -ftest-coverage" && \
+    make clean all check
+
+# Run additional network dependent tests
+pushd tests && \
+    ./wildcard_test && \
+    ./hostname_test && \
+    popd
+
+find . -name \*.gcda | while read FILE; do
+    pushd $( dirname ${FILE} )
+    gcov $( basename ${FILE} )
+    popd
+done

@@ -3,10 +3,11 @@ package TestUtils;
 use warnings;
 use strict;
 use POSIX ":sys_wait_h";
+use IO::Socket::INET;
 require File::Temp;
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT = qw(start_child reap_children wait_for_type make_config);
+our @EXPORT = qw(start_child reap_children wait_for_type wait_for_port make_config);
 our $VERSION = '0.01';
 
 $SIG{CHLD} = \&REAPER;
@@ -85,18 +86,47 @@ sub wait_for_type($) {
     }
 }
 
+sub wait_for_port($) {
+    my $port = shift;
+
+    my $delay = 1;
+    while ($delay < 60) {
+        my $port_open = undef;
+        eval {
+            my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
+                                            PeerPort => $port,
+                                            Proto => "tcp",
+                                            Type => SOCK_STREAM);
+            if ($socket && $socket->connected()) {
+                $socket->shutdown(2);
+                $port_open = 1;
+            }
+        };
+
+        return 1 if ($port_open);
+
+        sleep($delay);
+        $delay *= 2;
+    }
+
+    return undef;
+}
+
 sub make_config($$) {
     my $proxy_port = shift;
     my $httpd_port = shift;
 
     my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
 
     # Write out a test config file
     print $fh <<END;
 # Minimal test configuration
 
-listen $proxy_port {
+listen 127.0.0.1 $proxy_port {
     proto http
+
+    access_log $logfile
 }
 
 table {

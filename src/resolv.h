@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,45 +23,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef BUFFER_H
-#define BUFFER_H
+#ifndef RESOLV_H
+#define RESOLV_H
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/time.h> /* struct timeval */
+#include "address.h"
 
+struct ResolvQuery;
 
-struct Buffer {
-    char *buffer;
-    size_t size;
-    size_t head;
-    size_t len;
-    struct timespec last_recv;
-    struct timespec last_send;
-    size_t tx_bytes;
-    size_t rx_bytes;
-};
-
-struct Buffer *new_buffer(int);
-void free_buffer(struct Buffer *);
-
-ssize_t buffer_recv(struct Buffer *, int, int);
-ssize_t buffer_send(struct Buffer *, int, int);
-ssize_t buffer_read(struct Buffer *, int);
-ssize_t buffer_write(struct Buffer *, int);
-ssize_t buffer_resize(struct Buffer *, size_t);
-size_t buffer_peek(const struct Buffer *, void *, size_t);
-size_t buffer_coalesce(struct Buffer *, const void **);
-size_t buffer_pop(struct Buffer *, void *, size_t);
-size_t buffer_push(struct Buffer *, const void *, size_t);
-static inline size_t buffer_size(const struct Buffer *b) {
-    return b->size;
-}
-static inline size_t buffer_len(const struct Buffer *b) {
-    return b->len;
-}
-static inline size_t buffer_room(const struct Buffer *b) {
-    return b->size - b->len;
-}
+int resolv_init(struct ev_loop *);
+struct ResolvQuery *resolv_query(const char *, void(*)(struct Address *, void *), void (*)(void *), void *);
+void resolv_cancel(struct ResolvQuery *);
+void resolv_shutdown(struct ev_loop *);
 
 #endif

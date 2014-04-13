@@ -2,7 +2,7 @@ Source: sniproxy
 Section: unknown
 Priority: extra
 Maintainer: Andreas Loibl <andreas@andreas-loibl.de>
-Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, libev-dev (>= 4.0), libpcre3-dev
+Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, pkg-config, libev-dev (>= 4.0), libpcre3-dev, libudns-dev
 Standards-Version: 3.9.3
 Vcs-Git: https://github.com/dlundquist/HTTPS-SNI-Proxy.git
 Vcs-Browser: https://github.com/dlundquist/HTTPS-SNI-Proxy
@@ -11,4 +11,4 @@ Package: sniproxy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: HTTPS SNI Proxy
- Proxies incoming HTTP and TLS connections based on the hostname contained in the initial request. This enables HTTPS name based virtual hosting to seperate backend servers without the installing the private key on the proxy machine.
+ Proxies incoming HTTP and TLS connections based on the hostname contained in the initial request. This enables HTTPS name based virtual hosting to separate backend servers without the installing the private key on the proxy machine.
