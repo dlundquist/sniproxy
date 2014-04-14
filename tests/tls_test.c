@@ -317,7 +317,7 @@ int main() {
     for (i = 0; i < sizeof(good) / sizeof(struct test_packet); i++) {
         hostname = NULL;
 
-        result = tls_protocol->parse_packet(good[i].packet, good[i].len, &hostname);
+        result = tls_protocol->parse_packet(NULL, good[i].packet, good[i].len, &hostname);
 
         assert(result == 9);
 
@@ -328,13 +328,13 @@ int main() {
         free(hostname);
     }
 
-    result = tls_protocol->parse_packet(good[0].packet, good[0].len, NULL);
+    result = tls_protocol->parse_packet(NULL, good[0].packet, good[0].len, NULL);
     assert(result == -3);
 
     for (i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
         hostname = NULL;
 
-        result = tls_protocol->parse_packet(bad[i].packet, bad[i].len, &hostname);
+        result = tls_protocol->parse_packet(NULL, bad[i].packet, bad[i].len, &hostname);
 
         // parse failure or not "localhost"
         assert(result < 0 ||

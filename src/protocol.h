@@ -29,7 +29,7 @@
 struct Protocol {
     const char *const name;
     const int default_port;
-    int (*const parse_packet)(const char*, size_t, char **);
+    int (*const parse_packet)(void *, const char*, size_t, char **);
     const char *const abort_message;
     const size_t abort_message_len;
 };

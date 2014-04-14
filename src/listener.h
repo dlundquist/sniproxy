@@ -37,6 +37,7 @@ struct Listener {
     /* Configuration fields */
     struct Address *address, *fallback_address, *source_address;
     const struct Protocol *protocol;
+    void *protocol_data;
     char *table_name;
     struct Logger *access_log;
     int log_bad_requests;

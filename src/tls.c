@@ -52,7 +52,7 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
-static int parse_tls_header(const char *, size_t, char **);
+static int parse_tls_header(void *, const char *, size_t, char **);
 static int parse_extensions(const char *, size_t, char **);
 static int parse_server_name_extension(const char *, size_t, char **);
 
@@ -80,7 +80,8 @@ const struct Protocol *const tls_protocol = &tls_protocol_st;
  *  < -4 - Invalid TLS client hello
  */
 static int
-parse_tls_header(const char *data, size_t data_len, char **hostname) {
+parse_tls_header(void *unused, const char *data, size_t data_len, char **hostname) {
+
     char tls_content_type;
     char tls_version_major;
     char tls_version_minor;
