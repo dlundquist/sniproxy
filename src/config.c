@@ -389,7 +389,7 @@ end_error_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
 }
 
 static int
-end_global_accesss_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
+end_global_access_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
     struct Logger *logger = NULL;
 
     if (lb->filename != NULL && lb->syslog_facility == NULL)
