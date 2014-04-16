@@ -12,13 +12,13 @@ script:
   - ./configure
   - make all check
   - echo "Checking for memory leaks"
-  - bash -c "cd tests && ./bad_dns_request_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./bad_request_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./connection_reset_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./functional_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./hostname_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./slow_client_test valgrind --leak-check=full"
-  - bash -c "cd tests && ./wildcard_test valgrind --leak-check=full"
+  - bash -c "cd tests && ./bad_dns_request_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./bad_request_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./connection_reset_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./functional_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./hostname_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./slow_client_test valgrind --leak-check=full --error-exitcode=1"
+  - bash -c "cd tests && ./wildcard_test valgrind --leak-check=full --error-exitcode=1"
   - echo "Testing Debian package build"
   - dpkg-buildpackage
   - echo "Testing RPM package build"
