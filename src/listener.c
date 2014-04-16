@@ -360,6 +360,7 @@ free_listener(struct Listener *listener) {
     free(listener->address);
     free(listener->fallback_address);
     free(listener->table_name);
+    free_logger(listener->access_log);
     free(listener);
 }
 
