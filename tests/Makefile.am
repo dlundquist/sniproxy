@@ -34,7 +34,7 @@ tls_test_SOURCES = tls_test.c \
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
 
-buffer_test_LDADD = -lrt
+buffer_test_LDADD = $(LIBRT_LIBS)
 
 address_test_SOURCES = address_test.c \
                       ../src/address.c
