@@ -46,5 +46,7 @@ int main() {
 
     ev_run(loop, 0);
 
+    resolv_shutdown(loop);
+
     return 0;
 }
