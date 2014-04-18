@@ -37,7 +37,7 @@ table_lookup_backend(const struct Table *table, const char *hostname) {
     return lookup_backend(&table->backends, hostname);
 }
 
-static inline void
+static inline void __attribute__((unused))
 remove_table_backend(struct Table *table, struct Backend *backend) {
     remove_backend(&table->backends, backend);
 }

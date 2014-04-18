@@ -71,7 +71,7 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_cb(struct Address *, void *);
 static void reactivate_watchers(struct Connection *, struct ev_loop *);
-static void parse_client_request(struct Connection *, struct ev_loop *);
+static void parse_client_request(struct Connection *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
 static void close_connection(struct Connection *, struct ev_loop *);
@@ -242,7 +242,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Handle any state specific logic */
     if (is_client && con->state == ACCEPTED)
-        parse_client_request(con, loop);
+        parse_client_request(con);
     if (is_client && con->state == PARSED)
         resolve_server_address(con, loop);
     if (is_client && con->state == RESOLVED)
@@ -325,7 +325,7 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 }
 
 static void
-parse_client_request(struct Connection *con, struct ev_loop *loop) {
+parse_client_request(struct Connection *con) {
     const char *payload;
     ssize_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
@@ -639,7 +639,7 @@ log_connection(struct Connection *con) {
 }
 
 static void
-log_bad_request(struct Connection *con, const char *req, size_t req_len, int parse_result) {
+log_bad_request(struct Connection *con __attribute__((unused)), const char *req, size_t req_len, int parse_result) {
     char *message = alloca(64 + 6 * req_len);
     char *message_pos = message;
 

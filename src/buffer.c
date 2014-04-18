@@ -224,7 +224,7 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
 
     size_t iov_len = setup_read_iov(src, iov, len);
 
-    for (int i = 0; i < iov_len; i++) {
+    for (size_t i = 0; i < iov_len; i++) {
         memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
 
         bytes_copied += iov[i].iov_len;
@@ -259,7 +259,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
 
     size_t iov_len = setup_write_iov(dst, iov, len);
 
-    for (int i = 0; i < iov_len; i++) {
+    for (size_t i = 0; i < iov_len; i++) {
         memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
         bytes_appended += iov[i].iov_len;
     }

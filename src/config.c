@@ -352,7 +352,7 @@ accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
         { "debug",      LOG_DEBUG },
     };
 
-    for (int i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
+    for (size_t i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
         if(strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
             lb->priority = priorities[i].priority;
             return 1;
@@ -362,7 +362,7 @@ accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
 }
 
 static int
-end_error_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
+end_error_logger_stanza(struct Config *config __attribute__ ((unused)), struct LoggerBuilder *lb) {
     struct Logger *logger = NULL;
 
     if (lb->filename != NULL && lb->syslog_facility == NULL)
@@ -388,7 +388,7 @@ end_error_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
     return 1;
 }
 
-static int
+static int __attribute__((unused))
 end_global_access_logger_stanza(struct Config *config, struct LoggerBuilder *lb) {
     struct Logger *logger = NULL;
 
