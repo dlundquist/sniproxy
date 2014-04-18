@@ -51,8 +51,7 @@ main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
-    pid_t pid;
-    int opt, err;
+    int opt;
 
     while ((opt = getopt(argc, argv, "fc:")) != -1) {
         switch (opt) {
