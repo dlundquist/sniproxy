@@ -1,14 +1,28 @@
 Source: sniproxy
 Section: unknown
 Priority: extra
-Maintainer: Andreas Loibl <andreas@andreas-loibl.de>
+Maintainer: Dustin Lundquist <dustin@null-ptr.net>
 Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, pkg-config, libev-dev (>= 4.0), libpcre3-dev, libudns-dev
 Standards-Version: 3.9.3
-Vcs-Git: https://github.com/dlundquist/HTTPS-SNI-Proxy.git
-Vcs-Browser: https://github.com/dlundquist/HTTPS-SNI-Proxy
+Vcs-Git: https://github.com/dlundquist/sniproxy.git
+Vcs-Browser: https://github.com/dlundquist/sniproxy
 
 Package: sniproxy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: HTTPS SNI Proxy
- Proxies incoming HTTP and TLS connections based on the hostname contained in the initial request. This enables HTTPS name based virtual hosting to separate backend servers without the installing the private key on the proxy machine.
+Description: SNI Proxy
+ Proxies incoming HTTP and TLS connections based on the hostname contained in
+ the initial request. This enables HTTPS name based virtual hosting to separate
+ backend servers without the installing the private key on the proxy machine.
+
+Package: sniproxy-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sniproxy (= ${binary:Version}), ${misc:Depends}
+Description: debugging symbols for sniproxy
+ Proxies incoming HTTP and TLS connections based on the hostname contained in
+ the initial request. This enables HTTPS name based virtual hosting to separate
+ backend servers without the installing the private key on the proxy machine.
+ .
+ This package contains the debugging symbols for sniproxy.
