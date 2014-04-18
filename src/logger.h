@@ -44,13 +44,20 @@ void set_logger_priority(struct Logger *, int);
 void free_logger(struct Logger *);
 
 /* Shorthand to log to global error log */
-void fatal(const char *, ...);
-void err(const char *, ...);
-void warn(const char *, ...);
-void notice(const char *, ...);
-void info(const char *, ...);
-void debug(const char *, ...);
+void fatal(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
+void err(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
+void warn(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
+void notice(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
+void info(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
+void debug(const char *, ...)
+    __attribute__ ((format (printf, 1, 2)));
 
-void log_msg(struct Logger *, int, const char *, ...);
+void log_msg(struct Logger *, int, const char *, ...)
+    __attribute__ ((format (printf, 3, 4)));
 
 #endif

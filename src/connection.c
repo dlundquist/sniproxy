@@ -339,8 +339,8 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
                 return; /* give client a chance to send more data */
 
             warn("Request from %s exceeded %ld byte buffer size",
-                    buffer_size(con->client.buffer),
-                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    buffer_size(con->client.buffer));
         } else if (result == -2) {
             warn("Request from %s did not include a hostname",
                     display_sockaddr(&con->client.addr, client, sizeof(client)));
@@ -625,7 +625,7 @@ log_connection(struct Connection *con) {
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
-           "%s -> %s -> %s [%s] %d/%d bytes tx %d/%d bytes rx %d.%03d seconds",
+           "%s -> %s -> %s [%s] %ld/%ld bytes tx %ld/%ld bytes rx %ld.%03ld seconds",
            client_address,
            listener_address,
            server_address,
