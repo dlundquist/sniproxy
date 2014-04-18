@@ -24,6 +24,11 @@ my $bad_requests = [
         client => \&http_client,
     },
     {
+        # Exceed buffer size before host header
+        request => "GET /" . 'x' x 65536,
+        client => \&http_client,
+    },
+    {
         # Invalid hostname
         request => "GET / HTTP/1.1\r\nHost: \0example.com\r\n\r\n",
         client => \&http_client,
