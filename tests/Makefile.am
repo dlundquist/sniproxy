@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_CFLAGS) $(LIBUDNS_LIBS)
+AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_CFLAGS) $(LIBUDNS_CFLAGS)
 
 TESTS = http_test \
         tls_test \
