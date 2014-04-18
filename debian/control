@@ -1,6 +1,6 @@
 Source: sniproxy
-Section: unknown
-Priority: extra
+Section: web
+Priority: optional
 Maintainer: Dustin Lundquist <dustin@null-ptr.net>
 Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, pkg-config, libev-dev (>= 4.0), libpcre3-dev, libudns-dev
 Standards-Version: 3.9.3
