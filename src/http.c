@@ -116,7 +116,6 @@ get_header(const char *header, const char *data, int data_len, char **value) {
 
             return len - header_len;
         }
-    fprintf(stderr, "%s: data_len = %d\n", __func__, data_len);
 
     /* If there is no data left after reading all the headers then we do not
      * have a complete HTTP request, there must be a blank line */
