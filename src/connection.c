@@ -416,7 +416,7 @@ resolv_cb(struct Address *result, void *data) {
     struct ev_loop *loop = cb_data->loop;
 
     if (con->state != RESOLVING) {
-        info("%s() called for connection not in RESOLVING state");
+        info("resolv_cb() called for connection not in RESOLVING state");
         return;
     }
 
@@ -650,7 +650,7 @@ log_bad_request(struct Connection *con, const char *req, size_t req_len, int par
 
     message_pos -= 2; // Delete the trailing ', '
     message_pos += sprintf(message_pos, "}, %ld, ...) = %d", req_len, parse_result);
-    debug(message);
+    debug("%s", message);
 }
 
 /*
