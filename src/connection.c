@@ -374,17 +374,30 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         listener_lookup_server_address(con->listener, con->hostname);
 
     if (server_address == NULL) {
-        close_client_socket(con, loop);
+        buffer_push(con->server.buffer,
+                    con->listener->protocol->abort_message,
+                    con->listener->protocol->abort_message_len);
+
+        con->state = SERVER_CLOSED;
+        return;
     } else if (address_is_hostname(server_address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
-        close_client_socket(con, loop);
+        buffer_push(con->server.buffer,
+                    con->listener->protocol->abort_message,
+                    con->listener->protocol->abort_message_len);
+
+        con->state = SERVER_CLOSED;
+        return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
-            close_client_socket(con, loop);
+            buffer_push(con->server.buffer,
+                        con->listener->protocol->abort_message,
+                        con->listener->protocol->abort_message_len);
 
+            con->state = SERVER_CLOSED;
             return;
         }
         cb_data->connection = con;
@@ -421,29 +434,30 @@ resolv_cb(struct Address *result, void *data) {
     }
 
     if (result == NULL) {
-        con->state = PARSED;
-        con->query_handle = NULL;
-
         notice("unable to resolve %s, closing connection",
                 address_hostname(cb_data->address));
-        close_client_socket(con, loop);
-        return;
+
+        buffer_push(con->server.buffer,
+                    con->listener->protocol->abort_message,
+                    con->listener->protocol->abort_message_len);
+
+        con->state = SERVER_CLOSED;
+    } else {
+        assert(address_is_sockaddr(result));
+
+        /* copy port from server_address */
+        address_set_port(result, address_port(cb_data->address));
+
+        con->server.addr_len = address_sa_len(result);
+        assert(con->server.addr_len <= sizeof(con->server.addr));
+        memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
+
+        con->state = RESOLVED;
+
+        initiate_server_connect(con, loop);
     }
 
-    assert(address_is_sockaddr(result));
-
-    /* copy port from server_address */
-    address_set_port(result, address_port(cb_data->address));
-
-    con->server.addr_len = address_sa_len(result);
-    assert(con->server.addr_len <= sizeof(con->server.addr));
-    memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
-
-    con->state = RESOLVED;
     con->query_handle = NULL;
-
-    initiate_server_connect(con, loop);
-
     reactivate_watchers(con, loop);
 }
 
