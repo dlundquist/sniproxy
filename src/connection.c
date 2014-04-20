@@ -291,8 +291,6 @@ reactivate_watchers(struct Connection *con, struct ev_loop *loop) {
            (ev_is_active(server_watcher) && con->server.watcher.events) ||
            con->state == RESOLVING);
 
-    ev_verify(loop);
-
     /* Move to head of queue, so we can find inactive connections */
     TAILQ_REMOVE(&connections, con, entries);
     TAILQ_INSERT_HEAD(&connections, con, entries);
