@@ -9,7 +9,7 @@ URL: https://github.com/dlundquist/sniproxy
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires: autoconf, automake, curl, libev-devel >= 4.0, pcre-devel, perl, udns-devel >= 0.4
+BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl, udns-devel
 
 %description
 Proxies incoming HTTP and TLS connections based on the hostname contained in

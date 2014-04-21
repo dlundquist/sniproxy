@@ -6,12 +6,8 @@ sniproxy.postinst.debhelper
 sniproxy.postrm.debhelper
 sniproxy.prerm.debhelper
 sniproxy.substvars
-sniproxy
-sniproxy-dbg.debhelper.log
-sniproxy-dbg.substvars
-sniproxy-dbg
+sniproxy/
 stamp-autotools
 stamp-autotools-files
 stamp-makefile-build
 stamp-makefile-install
-tmp

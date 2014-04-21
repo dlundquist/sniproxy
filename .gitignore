@@ -1,6 +1,5 @@
 a.out
 *.o
-*.cdbs-orig
 .deps
 .dirstamp
 *.swp
