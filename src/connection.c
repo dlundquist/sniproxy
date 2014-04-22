@@ -90,24 +90,30 @@ init_connections() {
     TAILQ_INIT(&connections);
 }
 
-/*
+/**
  * Accept a new incoming connection
+ *
+ * Returns 1 on success or 0 on error;
  */
-void
+int
 accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     struct Connection *con = new_connection();
     if (con == NULL) {
         err("new_connection failed");
-        return;
+        return 0;
     }
 
     int sockfd = accept(listener->watcher.fd,
                     (struct sockaddr *)&con->client.addr,
                     &con->client.addr_len);
     if (sockfd < 0) {
+        int saved_errno = errno;
+
         warn("accept failed: %s", strerror(errno));
         free_connection(con);
-        return;
+
+        errno = saved_errno;
+        return 0;
     }
 
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -125,6 +131,8 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
     ev_io_start(loop, client_watcher);
+
+    return 1;
 }
 
 /*

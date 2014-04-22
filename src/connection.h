@@ -61,7 +61,7 @@ struct Connection {
 };
 
 void init_connections();
-void accept_connection(const struct Listener *, struct ev_loop *);
+int accept_connection(const struct Listener *, struct ev_loop *);
 void free_connections(struct ev_loop *);
 void print_connections();
 
