@@ -482,6 +482,10 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
                 strerror(errno),
                 display_sockaddr(&con->client.addr, client, sizeof(client)));
 
+        buffer_push(con->server.buffer,
+                con->listener->protocol->abort_message,
+                con->listener->protocol->abort_message_len);
+
         con->state = SERVER_CLOSED;
         return;
     }
@@ -498,6 +502,10 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         warn("Failed to open connection to %s: %s",
                 display_sockaddr(&con->server.addr, server, sizeof(server)),
                 strerror(errno));
+
+        buffer_push(con->server.buffer,
+                con->listener->protocol->abort_message,
+                con->listener->protocol->abort_message_len);
 
         con->state = SERVER_CLOSED;
         return;
