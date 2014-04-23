@@ -28,9 +28,6 @@
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
 #include <ctype.h> /* isblank() */
-#include <unistd.h> /* close() */
-#include <sys/types.h>
-#include <sys/socket.h> /* send() */
 #include "http.h"
 #include "protocol.h"
 
