@@ -76,6 +76,7 @@ static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
 static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
+static void abort_connection(struct Connection *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
 static void log_connection(struct Connection *);
@@ -360,11 +361,7 @@ parse_client_request(struct Connection *con) {
         }
 
         if (con->listener->fallback_address == NULL) {
-            buffer_push(con->server.buffer,
-                    con->listener->protocol->abort_message,
-                    con->listener->protocol->abort_message_len);
-
-            con->state = SERVER_CLOSED;
+            abort_connection(con);
             return;
         }
     }
@@ -374,36 +371,33 @@ parse_client_request(struct Connection *con) {
 }
 
 static void
+abort_connection(struct Connection *con) {
+    buffer_push(con->server.buffer,
+            con->listener->protocol->abort_message,
+            con->listener->protocol->abort_message_len);
+
+    con->state = SERVER_CLOSED;
+}
+
+static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     /* TODO avoid extra malloc in listener_lookup_server_address() */
     struct Address *server_address =
         listener_lookup_server_address(con->listener, con->hostname);
 
     if (server_address == NULL) {
-        buffer_push(con->server.buffer,
-                    con->listener->protocol->abort_message,
-                    con->listener->protocol->abort_message_len);
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
         return;
     } else if (address_is_hostname(server_address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
-        buffer_push(con->server.buffer,
-                    con->listener->protocol->abort_message,
-                    con->listener->protocol->abort_message_len);
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
         return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
-            buffer_push(con->server.buffer,
-                        con->listener->protocol->abort_message,
-                        con->listener->protocol->abort_message_len);
-
-            con->state = SERVER_CLOSED;
+            abort_connection(con);
             return;
         }
         cb_data->connection = con;
@@ -442,12 +436,7 @@ resolv_cb(struct Address *result, void *data) {
     if (result == NULL) {
         notice("unable to resolve %s, closing connection",
                 address_hostname(cb_data->address));
-
-        buffer_push(con->server.buffer,
-                    con->listener->protocol->abort_message,
-                    con->listener->protocol->abort_message_len);
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
     } else {
         assert(address_is_sockaddr(result));
 
@@ -481,12 +470,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         warn("socket failed: %s, closing connection from %s",
                 strerror(errno),
                 display_sockaddr(&con->client.addr, client, sizeof(client)));
-
-        buffer_push(con->server.buffer,
-                con->listener->protocol->abort_message,
-                con->listener->protocol->abort_message_len);
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
         return;
     }
 
@@ -502,12 +486,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         warn("Failed to open connection to %s: %s",
                 display_sockaddr(&con->server.addr, server, sizeof(server)),
                 strerror(errno));
-
-        buffer_push(con->server.buffer,
-                con->listener->protocol->abort_message,
-                con->listener->protocol->abort_message_len);
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
         return;
     }
 
