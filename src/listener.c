@@ -384,7 +384,7 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             char address_buf[256];
             int backoff_time = 2;
 
-            err("File descriptor limit reached!"
+            err("File descriptor limit reached! "
                 "Suspending accepting new connections on %s for %d seconds",
                 display_address(listener->address, address_buf, sizeof(address_buf)),
                 backoff_time);

@@ -45,7 +45,7 @@
 static void usage();
 static void perror_exit(const char *);
 static void daemonize(void);
-static void set_limits(void);
+static void set_limits(int);
 static void drop_perms(const char* username);
 static void write_pidfile(const char *, pid_t);
 
@@ -54,15 +54,19 @@ main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
+    int max_nofiles = 65536;
     int opt;
 
-    while ((opt = getopt(argc, argv, "fc:")) != -1) {
+    while ((opt = getopt(argc, argv, "fc:n:")) != -1) {
         switch (opt) {
             case 'c':
                 config_file = optarg;
                 break;
             case 'f': /* foreground */
                 background_flag = 0;
+                break;
+            case 'n':
+                max_nofiles = atoi(optarg);
                 break;
             default:
                 usage();
@@ -90,7 +94,7 @@ main(int argc, char **argv) {
         }
     }
 
-    set_limits();
+    set_limits(max_nofiles);
 
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : DEFAULT_USERNAME);
@@ -158,10 +162,10 @@ daemonize(void) {
  * At some point we should make this a config parameter
  */
 static void
-set_limits() {
+set_limits(int max_nofiles) {
     struct rlimit fd_limit = {
-        .rlim_cur = 65536,
-        .rlim_max = 65536,
+        .rlim_cur = max_nofiles,
+        .rlim_max = max_nofiles,
     };
 
     int result = setrlimit(RLIMIT_NOFILE, &fd_limit);
@@ -195,7 +199,7 @@ drop_perms(const char *username) {
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f]\n");
+    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>\n");
 }
 
 static void

@@ -8,7 +8,8 @@ TESTS = http_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-        connection_reset_test
+        connection_reset_test \
+		fd_limit_test
 
 if DNS_ENABLED
   TESTS += config_test \
