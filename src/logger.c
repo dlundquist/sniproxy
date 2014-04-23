@@ -78,6 +78,7 @@ new_file_logger(const char *filepath) {
         free(logger);
         return NULL;
     }
+    setvbuf(logger->fd, NULL, _IOLBF, 0);
     logger->priority = LOG_DEBUG;
     logger->facility = 0;
     logger->ident = NULL;
