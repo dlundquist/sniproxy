@@ -477,7 +477,12 @@ static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        warn("socket failed");
+        char client[INET6_ADDRSTRLEN + 8];
+        warn("socket failed: %s, closing connection from %s",
+                strerror(errno),
+                display_sockaddr(&con->client.addr, client, sizeof(client)));
+
+        con->state = SERVER_CLOSED;
         return;
     }
 
