@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_CFLAGS) $(LIBUDNS_LIBS) -DSELF_CONTAINED
+AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_CFLAGS) $(LIBUDNS_CFLAGS) -DSELF_CONTAINED
 
 TESTS = http_test \
         tls_test \
@@ -8,7 +8,8 @@ TESTS = http_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-        connection_reset_test
+        connection_reset_test \
+		fd_limit_test
 
 if DNS_ENABLED
   TESTS += config_test \
@@ -39,7 +40,7 @@ tls_test_LDADD = $(LIBPCRE_LIBS)
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
 
-buffer_test_LDADD = -lrt
+buffer_test_LDADD = $(LIBRT_LIBS)
 
 address_test_SOURCES = address_test.c \
                       ../src/address.c

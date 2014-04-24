@@ -25,6 +25,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <pwd.h>
@@ -34,6 +35,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <errno.h>
 #include "sniproxy.h"
 #include "config.h"
 #include "server.h"
@@ -43,6 +45,7 @@
 static void usage();
 static void perror_exit(const char *);
 static void daemonize(void);
+static void set_limits(int);
 static void drop_perms(const char* username);
 static void write_pidfile(const char *, pid_t);
 
@@ -51,16 +54,19 @@ main(int argc, char **argv) {
     struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
-    pid_t pid;
-    int opt, err;
+    int max_nofiles = 65536;
+    int opt;
 
-    while ((opt = getopt(argc, argv, "fc:")) != -1) {
+    while ((opt = getopt(argc, argv, "fc:n:")) != -1) {
         switch (opt) {
             case 'c':
                 config_file = optarg;
                 break;
             case 'f': /* foreground */
                 background_flag = 0;
+                break;
+            case 'n':
+                max_nofiles = atoi(optarg);
                 break;
             default:
                 usage();
@@ -88,10 +94,10 @@ main(int argc, char **argv) {
         }
     }
 
+    set_limits(max_nofiles);
+
     /* Drop permissions only when we can */
-    if (getuid() == 0) {
-        drop_perms(config->user ? config->user : DEFAULT_USERNAME);
-    }
+    drop_perms(config->user ? config->user : DEFAULT_USERNAME);
 
     run_server();
 
@@ -151,9 +157,28 @@ daemonize(void) {
     return;
 }
 
+/**
+ * Raise file handle limit to reasonable level
+ * At some point we should make this a config parameter
+ */
+static void
+set_limits(int max_nofiles) {
+    struct rlimit fd_limit = {
+        .rlim_cur = max_nofiles,
+        .rlim_max = max_nofiles,
+    };
+
+    int result = setrlimit(RLIMIT_NOFILE, &fd_limit);
+    if (result < 0)
+        warn("Failed to set file handle limit: %s", strerror(errno));
+}
+
 static void
 drop_perms(const char *username) {
     struct passwd *user;
+
+    if (getuid() != 0)
+        return;
 
     user = getpwnam(username);
     if (user == NULL)
@@ -174,7 +199,7 @@ drop_perms(const char *username) {
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f]\n");
+    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>\n");
 }
 
 static void

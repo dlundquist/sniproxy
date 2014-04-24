@@ -71,11 +71,12 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_cb(struct Address *, void *);
 static void reactivate_watchers(struct Connection *, struct ev_loop *);
-static void parse_client_request(struct Connection *, struct ev_loop *);
+static void parse_client_request(struct Connection *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
 static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
+static void abort_connection(struct Connection *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
 static struct Connection *new_connection();
 static void log_connection(struct Connection *);
@@ -90,24 +91,30 @@ init_connections() {
     TAILQ_INIT(&connections);
 }
 
-/*
+/**
  * Accept a new incoming connection
+ *
+ * Returns 1 on success or 0 on error;
  */
-void
+int
 accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     struct Connection *con = new_connection();
     if (con == NULL) {
         err("new_connection failed");
-        return;
+        return 0;
     }
 
     int sockfd = accept(listener->watcher.fd,
                     (struct sockaddr *)&con->client.addr,
                     &con->client.addr_len);
     if (sockfd < 0) {
+        int saved_errno = errno;
+
         warn("accept failed: %s", strerror(errno));
         free_connection(con);
-        return;
+
+        errno = saved_errno;
+        return 0;
     }
 
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -125,6 +132,8 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
     ev_io_start(loop, client_watcher);
+
+    return 1;
 }
 
 /*
@@ -242,7 +251,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Handle any state specific logic */
     if (is_client && con->state == ACCEPTED)
-        parse_client_request(con, loop);
+        parse_client_request(con);
     if (is_client && con->state == PARSED)
         resolve_server_address(con, loop);
     if (is_client && con->state == RESOLVED)
@@ -291,8 +300,6 @@ reactivate_watchers(struct Connection *con, struct ev_loop *loop) {
            (ev_is_active(server_watcher) && con->server.watcher.events) ||
            con->state == RESOLVING);
 
-    ev_verify(loop);
-
     /* Move to head of queue, so we can find inactive connections */
     TAILQ_REMOVE(&connections, con, entries);
     TAILQ_INSERT_HEAD(&connections, con, entries);
@@ -325,7 +332,7 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 }
 
 static void
-parse_client_request(struct Connection *con, struct ev_loop *loop) {
+parse_client_request(struct Connection *con) {
     const char *payload;
     ssize_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
 
@@ -340,8 +347,8 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
                 return; /* give client a chance to send more data */
 
             warn("Request from %s exceeded %ld byte buffer size",
-                    buffer_size(con->client.buffer),
-                    display_sockaddr(&con->client.addr, client, sizeof(client)));
+                    display_sockaddr(&con->client.addr, client, sizeof(client)),
+                    buffer_size(con->client.buffer));
         } else if (result == -2) {
             warn("Request from %s did not include a hostname",
                     display_sockaddr(&con->client.addr, client, sizeof(client)));
@@ -355,16 +362,23 @@ parse_client_request(struct Connection *con, struct ev_loop *loop) {
         }
 
         if (con->listener->fallback_address == NULL) {
-            buffer_push(con->server.buffer,
-                    con->listener->protocol->abort_message,
-                    con->listener->protocol->abort_message_len);
-
-            con->state = SERVER_CLOSED;
+            abort_connection(con);
             return;
         }
     }
 
     con->state = PARSED;
+}
+
+static void
+abort_connection(struct Connection *con) {
+    assert(client_socket_open(con));
+
+    buffer_push(con->server.buffer,
+            con->listener->protocol->abort_message,
+            con->listener->protocol->abort_message_len);
+
+    con->state = SERVER_CLOSED;
 }
 
 static void
@@ -376,17 +390,18 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
                                        con->pres.name_type);
 
     if (server_address == NULL) {
-        close_client_socket(con, loop);
+        abort_connection(con);
+        return;
     } else if (address_is_hostname(server_address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
-        close_client_socket(con, loop);
+        abort_connection(con);
+        return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
-            close_client_socket(con, loop);
-
+            abort_connection(con);
             return;
         }
         cb_data->connection = con;
@@ -418,34 +433,30 @@ resolv_cb(struct Address *result, void *data) {
     struct ev_loop *loop = cb_data->loop;
 
     if (con->state != RESOLVING) {
-        info("%s() called for connection not in RESOLVING state");
+        info("resolv_cb() called for connection not in RESOLVING state");
         return;
     }
 
     if (result == NULL) {
-        con->state = PARSED;
-        con->query_handle = NULL;
-
         notice("unable to resolve %s, closing connection",
                 address_hostname(cb_data->address));
-        close_client_socket(con, loop);
-        return;
+        abort_connection(con);
+    } else {
+        assert(address_is_sockaddr(result));
+
+        /* copy port from server_address */
+        address_set_port(result, address_port(cb_data->address));
+
+        con->server.addr_len = address_sa_len(result);
+        assert(con->server.addr_len <= sizeof(con->server.addr));
+        memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
+
+        con->state = RESOLVED;
+
+        initiate_server_connect(con, loop);
     }
 
-    assert(address_is_sockaddr(result));
-
-    /* copy port from server_address */
-    address_set_port(result, address_port(cb_data->address));
-
-    con->server.addr_len = address_sa_len(result);
-    assert(con->server.addr_len <= sizeof(con->server.addr));
-    memcpy(&con->server.addr, address_sa(result), con->server.addr_len);
-
-    con->state = RESOLVED;
     con->query_handle = NULL;
-
-    initiate_server_connect(con, loop);
-
     reactivate_watchers(con, loop);
 }
 
@@ -459,7 +470,11 @@ static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        warn("socket failed");
+        char client[INET6_ADDRSTRLEN + 8];
+        warn("socket failed: %s, closing connection from %s",
+                strerror(errno),
+                display_sockaddr(&con->client.addr, client, sizeof(client)));
+        abort_connection(con);
         return;
     }
 
@@ -475,8 +490,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         warn("Failed to open connection to %s: %s",
                 display_sockaddr(&con->server.addr, server, sizeof(server)),
                 strerror(errno));
-
-        con->state = SERVER_CLOSED;
+        abort_connection(con);
         return;
     }
 
@@ -629,7 +643,7 @@ log_connection(struct Connection *con) {
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
-           "%s -> %s -> %s [%s] %d/%d bytes tx %d/%d bytes rx %d.%03d seconds",
+           "%s -> %s -> %s [%s] %ld/%ld bytes tx %ld/%ld bytes rx %ld.%03ld seconds",
            client_address,
            listener_address,
            server_address,
@@ -643,7 +657,7 @@ log_connection(struct Connection *con) {
 }
 
 static void
-log_bad_request(struct Connection *con, const char *req, size_t req_len, int parse_result) {
+log_bad_request(struct Connection *con __attribute__((unused)), const char *req, size_t req_len, int parse_result) {
     char *message = alloca(64 + 6 * req_len);
     char *message_pos = message;
 
@@ -654,7 +668,7 @@ log_bad_request(struct Connection *con, const char *req, size_t req_len, int par
 
     message_pos -= 2; // Delete the trailing ', '
     message_pos += sprintf(message_pos, "}, %ld, ...) = %d", req_len, parse_result);
-    debug(message);
+    debug("%s", message);
 }
 
 /*

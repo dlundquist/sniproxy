@@ -78,6 +78,7 @@ new_file_logger(const char *filepath) {
         free(logger);
         return NULL;
     }
+    setvbuf(logger->fd, NULL, _IOLBF, 0);
     logger->priority = LOG_DEBUG;
     logger->facility = 0;
     logger->ident = NULL;
@@ -249,7 +250,7 @@ lookup_syslog_facility(const char *facility) {
         { "uucp",   LOG_UUCP },
     };
 
-    for (int i = 0; i < sizeof(facilities) / sizeof(facilities[0]); i++)
+    for (size_t i = 0; i < sizeof(facilities) / sizeof(facilities[0]); i++)
         if(strncasecmp(facilities[i].name, facility, strlen(facility)) == 0)
             return facilities[i].number;
 

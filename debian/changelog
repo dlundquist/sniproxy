@@ -1,3 +1,12 @@
+sniproxy (0.3.3) unstable; urgency=medium
+
+  * Fix format argument segfault in buffer full warning.
+  * Add sniproxy-dbg package.
+  * File descriptor limit: raise limit and improve handling when limit is
+    reached.
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Tue, 22 Apr 2014 17:35:59 -0700
+
 sniproxy (0.3.2-1) unstable; urgency=high
 
   * Fix use after free when client closes connection before DNS response is

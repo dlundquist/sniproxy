@@ -32,7 +32,8 @@
 #include "logger.h"
 #include "protocol.h"
 
-static inline void
+
+static inline void __attribute__((unused))
 remove_table_backend(struct Table *table, struct Backend *backend) {
     remove_backend(&table->backends, backend);
 }
@@ -116,14 +117,12 @@ remove_table(struct Table_head *tables, struct Table *table) {
 }
 
 const struct Address *
-table_lookup_server_address(const struct Table *table,
-                            const char *name,
-                            unsigned name_size) {
+table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
     struct Backend *b;
 
-    b = table_lookup_backend(table, name, name_size);
+    b = table_lookup_backend(table, name, name_len);
     if (b == NULL) {
-        info("No match found for %.*s", name_size, name);
+        info("No match found for %.*s", (int)name_len, name);
         return NULL;
     }
 

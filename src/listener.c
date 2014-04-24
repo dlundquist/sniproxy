@@ -49,6 +49,7 @@
 
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
+static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
 
 
 /*
@@ -322,25 +323,26 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
-    struct ev_io *listener_watcher = &listener->watcher;
-    ev_io_init(listener_watcher, accept_cb, sockfd, EV_READ);
+    ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
+    ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
+    listener->backoff_timer.data = listener;
 
-    ev_io_start(EV_DEFAULT, listener_watcher);
+    ev_io_start(EV_DEFAULT, &listener->watcher);
 
     return sockfd;
 }
 
 struct Address *
 listener_lookup_server_address(const struct Listener *listener,
-        const char *name, unsigned name_size, unsigned ntype) {
+        const char *name, size_t name_len, unsigned ntype) {
     struct Address *new_addr = NULL;
     const struct Address *addr = NULL;
 
     if (ntype == NTYPE_ALPN && listener->alpn_table) {
-        addr = table_lookup_server_address(listener->alpn_table, name, name_size);
+        addr = table_lookup_server_address(listener->alpn_table, name, name_len);
     } else if (ntype == NTYPE_HOST && listener->table) {
-        addr = table_lookup_server_address(listener->table, name, name_size);
+        addr = table_lookup_server_address(listener->table, name, name_len);
     }
 
     if (addr == NULL)
@@ -354,7 +356,7 @@ listener_lookup_server_address(const struct Listener *listener,
     if (address_is_wildcard(addr)) {
         new_addr = new_address(name);
         if (new_addr == NULL) {
-            warn("Invalid name %s", name);
+            warn("Invalid hostname %.*s", (int)name_len, name);
 
             return listener->fallback_address;
         }
@@ -413,6 +415,7 @@ free_listener(struct Listener *listener) {
     free(listener->address);
     free(listener->fallback_address);
     free(listener->table_name);
+    free_logger(listener->access_log);
     free(listener);
 }
 
@@ -428,6 +431,32 @@ static void
 accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Listener *listener = (struct Listener *)w->data;
 
-    if (revents & EV_READ)
-        accept_connection(listener, loop);
+    if (revents & EV_READ) {
+        int result = accept_connection(listener, loop);
+        if (result == 0 && (errno == EMFILE || errno == ENFILE)) {
+            char address_buf[256];
+            int backoff_time = 2;
+
+            err("File descriptor limit reached! "
+                "Suspending accepting new connections on %s for %d seconds",
+                display_address(listener->address, address_buf, sizeof(address_buf)),
+                backoff_time);
+            ev_io_stop(loop, w);
+
+            ev_timer_set(&listener->backoff_timer, backoff_time, 0.0);
+            ev_timer_start(loop, &listener->backoff_timer);
+        }
+    }
+}
+
+static void
+backoff_timer_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
+    struct Listener *listener = (struct Listener *)w->data;
+
+    if (revents & EV_TIMER) {
+        ev_timer_stop(loop, &listener->backoff_timer);
+
+        ev_io_set(&listener->watcher, listener->watcher.fd, EV_READ);
+        ev_io_start(loop, &listener->watcher);
+    }
 }

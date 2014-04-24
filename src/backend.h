@@ -34,11 +34,11 @@
 STAILQ_HEAD(Backend_head, Backend);
 
 struct Backend {
-    char *hostname; /* name actually */
+    char *name;
     struct Address *address;
 
     /* Runtime fields */
-    pcre *hostname_re;
+    pcre *name_re;
     STAILQ_ENTRY(Backend) entries;
 };
 

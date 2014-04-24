@@ -31,7 +31,6 @@
 #include <stdio.h>
 #include <stdlib.h> /* malloc() */
 #include <string.h> /* strncpy() */
-#include <unistd.h> /* close() */
 #include <sys/socket.h>
 #include "tls.h"
 #include "protocol.h"
