@@ -179,7 +179,7 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
     size_t len;
 
     /* Parse each 4 bytes for the extension header */
-    while (pos + 4 < data_len) {
+    while (pos + 4 <= data_len) {
         /* Extension Length */
         len = ((unsigned char)data[pos + 2] << 8) +
             (unsigned char)data[pos + 3];
