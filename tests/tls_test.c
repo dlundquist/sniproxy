@@ -129,6 +129,40 @@ const unsigned char good_data_3[] = {
                 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74
 };
 
+const unsigned char good_data_4[] = {
+    // TLS record
+    0x16, // Content Type: Handshake
+    0x03, 0x01, // Version: TLS 1.0
+    0x00, 0x47, // Length
+        // Handshake
+        0x01, // Handshake Type: Client Hello
+        0x00, 0x00, 0x41, // Length
+        0x03, 0x03, // Version: TLS 1.2
+        // Random
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, // Session ID Length
+        0x00, 0x04, // Cipher Suites Length
+            0x00, 0x01, // NULL-MD5
+            0x00, 0xff, // RENEGOTIATION INFO SCSV
+        0x01, // Compression Methods
+            0x00, // NULL
+        0x00, 0x16, // Extensions Length
+            // Extension
+            0x00, 0x00, // Extension Type: Server Name
+            0x00, 0x0e, // Length
+            0x00, 0x0c, // Server Name Indication Length
+                0x00, // Server Name Type: host_name
+                0x00, 0x09, // Length
+                // "localhost"
+                0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74,
+            // Extension
+            0x00, 0x23, // Extension Type: Session Ticket TLS
+            0x00, 0x00, // Length
+};
+
 const unsigned char ssl30_request[] = {
     // TLS record
     0x16, // Content Type: Handshake
@@ -264,7 +298,8 @@ const unsigned char bad_data_4[] = {
 static struct test_packet good[] = {
     { (char *)good_data_1, sizeof(good_data_1) },
     { (char *)good_data_2, sizeof(good_data_2) },
-    { (char *)good_data_3, sizeof(good_data_3) }
+    { (char *)good_data_3, sizeof(good_data_3) },
+    { (char *)good_data_4, sizeof(good_data_4) }
 };
 
 static struct test_packet bad[] = {
