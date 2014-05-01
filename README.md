@@ -34,7 +34,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 
 **Prerequisites**
 
-+ Autotools (autoconf, automake and libtool)
++ Autotools (autoconf, automake, gettext and libtool)
 + libev4, libpcre and libudns development headers
 + Perl and cURL for test suite
 
