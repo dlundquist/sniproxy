@@ -228,7 +228,7 @@ free_at_exit() {
 
 static int
 lookup_syslog_facility(const char *facility) {
-    const struct {
+    static const struct {
         const char *name;
         int number;
     } facilities[] = {
