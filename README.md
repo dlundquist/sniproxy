@@ -5,6 +5,11 @@ Proxies incoming HTTP and TLS connections based on the hostname contained in
 the initial request. This enables HTTPS name-based virtual hosting to separate
 backend servers without installing the private key on the proxy machine.
 
+News
+----
+
+First [user survey](https://docs.google.com/forms/d/1K9Wpm6dZqBl9w4vhx_t2sWhRvOeNbJ8n0DBzYOo6ILo/viewform), please take a moment to offer your input.
+
 Features
 --------
 + Name-based proxying of HTTPS without decrypting traffic. No keys or
@@ -17,9 +22,10 @@ Features
 Usage
 -----
 
-    Usage: sniproxy [-c <config>] [-f]
+    Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>]
         -c  configuration file, defaults to /etc/sniproxy.conf
         -f  run in foreground, do not drop privileges
+        -n  specify file descriptor limit
 
 
 Installation
@@ -29,7 +35,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 
 **Prerequisites**
 
-+ Autotools (autoconf, automake and libtool)
++ Autotools (autoconf, automake, gettext and libtool)
 + libev4, libpcre and libudns development headers
 + Perl and cURL for test suite
 
@@ -43,15 +49,15 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-        sudo apt-get install dpkg-dev cdbs debhelper dh-autoreconf libev-dev libpcre3-dev libudns-dev pkg-config
+    sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config
 
 2. Build a Debian package
 
-        dpkg-buildpackage
+    dpkg-buildpackage
 
 3. Install the resulting package
 
-        sudo dpkg -i ../sniproxy_<version>_<arch>.deb
+    sudo dpkg -i ../sniproxy_<version>_<arch>.deb
 
 ***Note on Upgrading***
 

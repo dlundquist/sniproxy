@@ -89,9 +89,8 @@ main(int argc, char **argv) {
 
         daemonize();
 
-        if (config->pidfile != NULL) {
+        if (config->pidfile != NULL)
             write_pidfile(config->pidfile, getpid());
-        }
     }
 
     set_limits(max_nofiles);
@@ -124,9 +123,8 @@ daemonize(void) {
     pid = fork();
     if (pid < 0)
         perror_exit("fork()");
-    else if (pid != 0) {
+    else if (pid != 0)
         exit(EXIT_SUCCESS);
-    }
 
     if (setsid() < 0)
         perror_exit("setsid()");
