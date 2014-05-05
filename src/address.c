@@ -252,6 +252,7 @@ address_port(const struct Address *addr) {
                     return ntohs(((struct sockaddr_in6 *)addr->data)
                             ->sin6_port);
                 case AF_UNIX:
+                case AF_UNSPEC:
                     return 0;
                 default:
                     assert(0);
@@ -288,6 +289,7 @@ address_set_port(struct Address *addr, int port) {
                         htons(port);
                     break;
                 case AF_UNIX:
+                case AF_UNSPEC:
                     /* no op */
                     break;
                 default:
@@ -367,6 +369,9 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
         case AF_UNIX:
             snprintf(buffer, buffer_len, "unix:%s",
                     ((struct sockaddr_un *)sa)->sun_path);
+            break;
+        case AF_UNSPEC:
+            snprintf(buffer, buffer_len, "NONE");
             break;
         default:
             /* unexpected AF */

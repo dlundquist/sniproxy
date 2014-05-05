@@ -634,10 +634,7 @@ log_connection(struct Connection *con) {
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
     display_address(con->listener->address, listener_address, sizeof(listener_address));
-    if (con->server.addr.ss_family == AF_UNSPEC)
-        strcpy(server_address, "NONE");
-    else
-        display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
+    display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
