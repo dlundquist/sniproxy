@@ -54,6 +54,7 @@ struct Connection {
     } client, server;
     const struct Listener *listener;
     const char *hostname; /* Requested hostname */
+    size_t hostname_len;
     struct ResolvQuery *query_handle;
     struct timespec established_timestamp;
 

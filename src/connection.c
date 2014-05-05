@@ -367,6 +367,7 @@ parse_client_request(struct Connection *con) {
     }
 
     con->hostname = hostname;
+    con->hostname_len = result;
     con->state = PARSED;
 }
 
@@ -385,7 +386,7 @@ static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     /* TODO avoid extra malloc in listener_lookup_server_address() */
     struct Address *server_address =
-        listener_lookup_server_address(con->listener, con->hostname, con->hostname ? strlen(con->hostname) : 0);
+        listener_lookup_server_address(con->listener, con->hostname, con->hostname_len);
 
     if (server_address == NULL) {
         abort_connection(con);
@@ -587,6 +588,7 @@ new_connection() {
     con->client.addr_len = sizeof(con->client.addr);
     con->server.addr_len = sizeof(con->server.addr);
     con->hostname = NULL;
+    con->hostname_len = 0;
     con->query_handle = NULL;
 
     con->client.buffer = new_buffer(4096);
@@ -639,10 +641,11 @@ log_connection(struct Connection *con) {
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
-           "%s -> %s -> %s [%s] %ld/%ld bytes tx %ld/%ld bytes rx %ld.%03ld seconds",
+           "%s -> %s -> %s [%.*s] %ld/%ld bytes tx %ld/%ld bytes rx %ld.%03ld seconds",
            client_address,
            listener_address,
            server_address,
+           (int)con->hostname_len,
            con->hostname,
            con->server.buffer->tx_bytes,
            con->server.buffer->rx_bytes,
