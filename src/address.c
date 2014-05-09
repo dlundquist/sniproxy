@@ -408,10 +408,10 @@ valid_hostname(const char *hostname) {
 
     const char *label = hostname;
     while (label < hostname + hostname_len) {
+        size_t label_len = hostname_len - (label - hostname);
         char *next_dot = strchr(label, '.');
-        size_t label_len = (next_dot == NULL)
-                         ? hostname_len - (label - hostname)
-                         : next_dot - label;
+        if (next_dot != NULL)
+            label_len = next_dot - label;
         assert(label + label_len <= hostname + hostname_len);
 
         if (label_len > 63 || label_len < 1)
