@@ -22,13 +22,15 @@ static void query_cb(struct Address *result, void *data) {
 }
 
 static void
-test_init_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
-    resolv_query("localhost", query_cb, NULL, &query_count);
+test_init_cb(struct ev_loop *loop __attribute__((unused)), struct ev_timer *w __attribute__((unused)), int revents) {
+    if (revents & EV_TIMER)
+        resolv_query("localhost", query_cb, NULL, &query_count);
 }
 
 static void
-timeout_cb(struct ev_loop *loop, struct ev_timer *w, int revents) {
-    ev_break(loop, EVBREAK_ALL);
+timeout_cb(struct ev_loop *loop, struct ev_timer *w __attribute__((unused)), int revents) {
+    if (revents & EV_TIMER)
+        ev_break(loop, EVBREAK_ALL);
 }
 
 
