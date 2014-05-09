@@ -27,11 +27,11 @@
 #define PROTOCOL_H
 
 struct Protocol {
-    const char *name;
-    int default_port;
-    int (*parse_packet)(const char*, size_t, char **);
-    const char *abort_message;
-    size_t abort_message_len;
+    const char *const name;
+    const int default_port;
+    int (*const parse_packet)(const char*, size_t, char **);
+    const char *const abort_message;
+    const size_t abort_message_len;
 };
 
 #endif

@@ -50,7 +50,7 @@ static const struct Protocol http_protocol_st = {
     .abort_message = http_503,
     .abort_message_len = sizeof(http_503)
 };
-const struct Protocol *http_protocol = &http_protocol_st;
+const struct Protocol *const http_protocol = &http_protocol_st;
 
 /*
  * Parses a HTTP request for the Host: header

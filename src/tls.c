@@ -63,7 +63,7 @@ static const struct Protocol tls_protocol_st = {
     .abort_message = tls_alert,
     .abort_message_len = sizeof(tls_alert)
 };
-const struct Protocol *tls_protocol = &tls_protocol_st;
+const struct Protocol *const tls_protocol = &tls_protocol_st;
 
 
 /* Parse a TLS packet for the Server Name Indication extension in the client

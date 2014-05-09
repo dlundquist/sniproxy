@@ -29,6 +29,6 @@
 #include <stdio.h>
 #include "protocol.h"
 
-const struct Protocol *http_protocol;
+const struct Protocol *const http_protocol;
 
 #endif
