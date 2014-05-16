@@ -9,6 +9,7 @@ TESTS = http_test \
         bad_request_test \
         slow_client_test \
         connection_reset_test \
+		bind_source_test \
 		fd_limit_test
 
 if DNS_ENABLED
