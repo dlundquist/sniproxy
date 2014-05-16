@@ -1,6 +1,7 @@
-* Allow nameservers to be specified in configuration file
+* ALPN support
 * Allow source address for connection to backend to be specified
 * Reimplement configuration reloading
 * Improved table backend lookup, currently this is a linear search
 ** Considering splitting hostname at label boundaries and search backwards from TLD
 * HTTP or DNS interface for backend servers to determine remote IP and port of connection
+* Allow nameservers to be specified in configuration file (functionality currently provided by NAMESERVERS environmental variable)
