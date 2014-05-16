@@ -35,7 +35,7 @@ SLIST_HEAD(Listener_head, Listener);
 
 struct Listener {
     /* Configuration fields */
-    struct Address *address, *fallback_address;
+    struct Address *address, *fallback_address, *source_address;
     const struct Protocol *protocol;
     char *table_name;
     struct Logger *access_log;
@@ -53,6 +53,7 @@ struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
+int accept_listener_source_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
 int accept_listener_bad_request_action(struct Listener *, char *);
 

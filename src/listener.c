@@ -81,6 +81,7 @@ new_listener() {
 
     listener->address = NULL;
     listener->fallback_address = NULL;
+    listener->source_address = NULL;
     listener->protocol = tls_protocol;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
@@ -168,6 +169,33 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
          * much sense to configure it as a wildcard. */
         fprintf(stderr, "Wildcard address prohibited as fallback address\n");
         return 0;
+    }
+
+    return 1;
+}
+
+int
+accept_listener_source_address(struct Listener *listener, char *source) {
+    if (listener->source_address != NULL) {
+        fprintf(stderr, "Duplicate source address: %s\n", source);
+        return 0;
+    }
+    listener->source_address = new_address(source);
+    if (listener->source_address == NULL) {
+        fprintf(stderr, "Unable to parse source address: %s\n", source);
+        return 0;
+    }
+    if (!address_is_sockaddr(listener->source_address)) {
+        fprintf(stderr, "Only source socket addresses permitted\n");
+        free(listener->source_address);
+        listener->source_address = NULL;
+        return 0;
+    }
+    if (address_port(listener->source_address) != 0) {
+        char address[256];
+        fprintf(stderr, "Source address on listener %s set to non zero port, "
+                "this prevents multiple connection to each backend server.",
+                display_address(listener->address, address, sizeof(address)));
     }
 
     return 1;
@@ -361,6 +389,7 @@ free_listener(struct Listener *listener) {
 
     free(listener->address);
     free(listener->fallback_address);
+    free(listener->source_address);
     free(listener->table_name);
     free_logger(listener->access_log);
     free(listener);

@@ -480,9 +480,32 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
+    if (con->listener->source_address) {
+        int on = 1;
+        setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+        int result = 0;
+        int tries = 5;
+        do {
+            result = bind(sockfd,
+                    address_sa(con->listener->source_address),
+                    address_sa_len(con->listener->source_address));
+        } while (tries-- > 0
+                && result < 0
+                && errno == EADDRINUSE
+                && address_port(con->listener->source_address) == 0);
+        if (result < 0) {
+            err("bind failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
+    }
+
     int result = connect(sockfd,
             (struct sockaddr *)&con->server.addr,
             con->server.addr_len);
+    // TODO retry connect in EADDRNOTAVAIL case
     if (result < 0 && errno != EINPROGRESS) {
         close(sockfd);
         char server[INET6_ADDRSTRLEN + 8];
