@@ -1,3 +1,12 @@
+sniproxy (0.3.4) unstable; urgency=medium
+
+  * Add source address specification configuration option.
+  * Line buffer log files.
+  * Fix segfault when no hostname included in TLS extensions.
+  * Fix erroneously report of invalid TLS client handshake.
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Sun, 18 May 2014 14:38:33 -0700
+
 sniproxy (0.3.3) unstable; urgency=medium
 
   * Fix format argument segfault in buffer full warning.
