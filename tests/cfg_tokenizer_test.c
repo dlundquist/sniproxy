@@ -20,6 +20,7 @@ static char config1[] = "# Comment\n"
                  "   one\n"
                  "   two\n"
                  "   three\n"
+                 "   \"[0-9a-z-]+\\.edu\"\n"
                  "}";
 static struct Result results1[] = {
     { TOKEN_EOL, NULL },
@@ -31,6 +32,8 @@ static struct Result results1[] = {
     { TOKEN_WORD, "two" },
     { TOKEN_EOL, NULL },
     { TOKEN_WORD, "three" },
+    { TOKEN_EOL, NULL },
+    { TOKEN_WORD, "[0-9a-z-]+.edu" },
     { TOKEN_EOL, NULL },
     { TOKEN_CBRACE, NULL },
     { TOKEN_END, NULL },
