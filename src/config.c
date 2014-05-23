@@ -218,8 +218,9 @@ reload_config(struct Config *config, struct ev_loop *loop) {
     if (new_config == NULL)
         return err("failed to load %s", config->filename);
 
+    // TODO update access_log
     reload_tables(&config->tables, &new_config->tables);
-
+    listeners_reload(&config->listeners, &new_config->listeners, &config->tables, loop);
     free_config(new_config);
 }
 

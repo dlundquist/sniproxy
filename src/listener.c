@@ -51,6 +51,8 @@
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
+static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
+static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
 
 
 /*
@@ -58,16 +60,102 @@ static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
  */
 void
 init_listeners(struct Listener_head *listeners,
-        const struct Table_head *tables) {
+        const struct Table_head *tables, struct ev_loop *loop) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        if (init_listener(iter, tables) < 0) {
+        if (init_listener(iter, tables, loop) < 0) {
             err("Failed to initialize listener");
             print_listener_config(stderr, iter);
             exit(1);
         }
     }
+}
+
+void
+listeners_reload(struct Listener_head *existing_listeners,
+        struct Listener_head *new_listeners,
+        const struct Table_head *tables, struct ev_loop *loop) {
+    struct Listener *iter_existing = SLIST_FIRST(existing_listeners);
+    struct Listener *iter_new = SLIST_FIRST(new_listeners);
+
+    while (iter_existing != NULL || iter_new != NULL) {
+        int compare_result;
+        char address[128];
+
+        if (iter_existing == NULL)
+            compare_result = 1;
+        else if (iter_new == NULL)
+            compare_result = -1;
+        else
+            compare_result = address_compare(iter_existing->address, iter_new->address);
+
+        if (compare_result > 0) {
+            struct Listener *new_listener = iter_new;
+            iter_new = SLIST_NEXT(iter_new, entries);
+
+            notice("Listener %s added.",
+                    display_address(new_listener->address,
+                            address, sizeof(address)));
+
+            SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
+            add_listener(existing_listeners, new_listener);
+            init_listener(new_listener, tables, loop);
+        } else if (compare_result == 0) {
+            notice ("Listener %s updated.",
+                    display_address(iter_existing->address,
+                            address, sizeof(address)));
+
+            listener_update(iter_existing, iter_new, tables);
+
+            iter_existing = SLIST_NEXT(iter_existing, entries);
+            iter_new = SLIST_NEXT(iter_new, entries);
+        } else {
+            struct Listener *removed_listener = iter_existing;
+            iter_existing = SLIST_NEXT(iter_existing, entries);
+
+            notice("Listener %s removed.",
+                    display_address(removed_listener->address,
+                            address, sizeof(address)));
+
+            SLIST_REMOVE(existing_listeners, removed_listener, Listener, entries);
+            close_listener(loop, removed_listener);
+        }
+    }
+}
+
+/*
+ * Copy contents of new_listener into existing listener
+ */
+static void
+listener_update(struct Listener *existing_listener, struct Listener *new_listener, const struct Table_head *tables) {
+    assert(existing_listener != NULL);
+    assert(new_listener != NULL);
+    assert(address_compare(existing_listener->address, new_listener->address) == 0);
+
+    free(existing_listener->fallback_address);
+    existing_listener->fallback_address = new_listener->fallback_address;
+    new_listener->fallback_address = NULL;
+
+    free(existing_listener->source_address);
+    existing_listener->source_address = new_listener->source_address;
+    new_listener->source_address = NULL;
+
+    existing_listener->protocol = new_listener->protocol;
+
+    free(existing_listener->table_name);
+    existing_listener->table_name = new_listener->table_name;
+    new_listener->table_name = NULL;
+
+    free(existing_listener->access_log);
+    existing_listener->access_log = new_listener->access_log;
+    new_listener->access_log = NULL;
+
+    existing_listener->log_bad_requests = new_listener->log_bad_requests;
+
+    existing_listener->table = table_lookup(tables, existing_listener->table_name);
+    init_table(existing_listener->table);
+    new_listener->table = NULL;
 }
 
 struct Listener *
@@ -280,11 +368,8 @@ valid_listener(const struct Listener *listener) {
     return 1;
 }
 
-int
-init_listener(struct Listener *listener, const struct Table_head *tables) {
-    int sockfd;
-    int on = 1;
-
+static int
+init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
     listener->table = table_lookup(tables, listener->table_name);
     if (listener->table == NULL) {
         err("Table \"%s\" not defined", listener->table_name);
@@ -299,18 +384,22 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
-    sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
         return -2;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
+    int on = 1;
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
     if (bind(sockfd, address_sa(listener->address),
                 address_sa_len(listener->address)) < 0) {
-        err("bind failed: %s", strerror(errno));
+        char address[128];
+        err("bind %s failed: %s",
+            display_address(listener->address, address, sizeof(address)),
+            strerror(errno));
         close(sockfd);
         return -3;
     }
@@ -330,7 +419,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
     listener->backoff_timer.data = listener;
 
-    ev_io_start(EV_DEFAULT, &listener->watcher);
+    ev_io_start(loop, &listener->watcher);
 
     return sockfd;
 }
@@ -380,7 +469,7 @@ listener_lookup_server_address(const struct Listener *listener,
 
 void
 print_listener_config(FILE *file, const struct Listener *listener) {
-    char address[256];
+    char address[128];
 
     fprintf(file, "listener %s {\n",
             display_address(listener->address, address, sizeof(address)));

@@ -646,9 +646,9 @@ new_connection() {
 static void
 log_connection(struct Connection *con) {
     struct timespec duration;
-    char client_address[256];
-    char listener_address[256];
-    char server_address[256];
+    char client_address[128];
+    char listener_address[128];
+    char server_address[128];
 
     if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
         timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
