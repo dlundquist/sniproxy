@@ -42,6 +42,7 @@ struct Listener {
     int log_bad_requests;
 
     /* Runtime fields */
+    int reference_count;
     struct ev_io watcher;
     struct ev_timer backoff_timer;
     struct Table *table;
@@ -68,6 +69,8 @@ struct Address *listener_lookup_server_address(const struct Listener *,
         const char *, size_t);
 void print_listener_config(FILE *, const struct Listener *);
 void free_listener(struct Listener *);
+void listener_ref_put(struct Listener *);
+struct Listener *listener_ref_get(struct Listener *);
 
 
 #endif

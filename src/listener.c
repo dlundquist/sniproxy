@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -101,6 +102,7 @@ listeners_reload(struct Listener_head *existing_listeners,
             SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
             add_listener(existing_listeners, new_listener);
             init_listener(new_listener, tables, loop);
+            listener_ref_put(new_listener); // -1 for removing from new_listeners
         } else if (compare_result == 0) {
             notice ("Listener %s updated.",
                     display_address(iter_existing->address,
@@ -120,6 +122,7 @@ listeners_reload(struct Listener_head *existing_listeners,
 
             SLIST_REMOVE(existing_listeners, removed_listener, Listener, entries);
             close_listener(loop, removed_listener);
+            listener_ref_put(removed_listener); // -1 for removing from existing_listeners
         }
     }
 }
@@ -160,9 +163,7 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
 
 struct Listener *
 new_listener() {
-    struct Listener *listener;
-
-    listener = calloc(1, sizeof(struct Listener));
+    struct Listener *listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
         err("calloc");
         return NULL;
@@ -172,8 +173,15 @@ new_listener() {
     listener->fallback_address = NULL;
     listener->source_address = NULL;
     listener->protocol = tls_protocol;
+    listener->table_name = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
+    listener->reference_count = 0;
+    /* Initializes sock fd to negative sentinel value to indicate watchers
+     * are not active */
+    ev_io_init(&listener->watcher, accept_cb, -1, EV_READ);
+    ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
+    listener->table = NULL;
 
     return listener;
 }
@@ -308,6 +316,7 @@ add_listener(struct Listener_head *listeners, struct Listener *listener) {
     assert(listeners != NULL);
     assert(listener != NULL);
     assert(listener->address != NULL);
+    listener_ref_get(listener);
 
     if (SLIST_FIRST(listeners) == NULL ||
             address_compare(listener->address, SLIST_FIRST(listeners)->address) < 0) {
@@ -329,7 +338,7 @@ void
 remove_listener(struct Listener_head *listeners, struct Listener *listener) {
     SLIST_REMOVE(listeners, listener, Listener, entries);
     close_listener(EV_DEFAULT, listener);
-    free_listener(listener);
+    listener_ref_put(listener);
 }
 
 int
@@ -414,9 +423,9 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
+    listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
-    ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
     listener->backoff_timer.data = listener;
 
     ev_io_start(loop, &listener->watcher);
@@ -493,9 +502,14 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 }
 
 static void
-close_listener(struct ev_loop *loop, struct Listener * listener) {
+close_listener(struct ev_loop *loop, struct Listener *listener) {
+    if (listener->watcher.fd < 0)
+        return;
+
+    ev_timer_stop(loop, &listener->backoff_timer);
     ev_io_stop(loop, &listener->watcher);
     close(listener->watcher.fd);
+    listener_ref_put(listener);
 }
 
 void
@@ -517,6 +531,36 @@ free_listeners(struct Listener_head *listeners) {
 
     while ((iter = SLIST_FIRST(listeners)) != NULL)
         remove_listener(listeners, iter);
+}
+
+/*
+ * Listener reference counting
+ *
+ * Since when reloading the configuration a listener with active connections
+ * could be removed and connections require a reference to to the listener on
+ * which they where received we need to allow listeners to linger outside the
+ * listeners list in the active configuration, and free them when their last
+ * connection closes.
+ *
+ * Accomplishing this with reference counting, each connection counts as a one
+ * reference, plus one for the active EV watchers and one for the listener
+ * being a member on a configurations listeners list.
+ */
+void
+listener_ref_put(struct Listener *listener) {
+    if (listener == NULL)
+        return;
+
+    assert(listener->reference_count > 0);
+    listener->reference_count--;
+    if (listener->reference_count == 0)
+        free_listener(listener);
+}
+
+struct Listener *
+listener_ref_get(struct Listener *listener) {
+    listener->reference_count++;
+    return listener;
 }
 
 static void

@@ -125,7 +125,7 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
     con->client.watcher.data = con;
     con->state = ACCEPTED;
-    con->listener = listener;
+    con->listener = listener_ref_get(listener);
     if (clock_gettime(CLOCK_MONOTONIC, &con->established_timestamp) < 0)
         err("clock_gettime() failed: %s", strerror(errno));
 
@@ -700,6 +700,7 @@ free_connection(struct Connection *con) {
     if (con == NULL)
         return;
 
+    listener_ref_put(con->listener);
     free_buffer(con->client.buffer);
     free_buffer(con->server.buffer);
     free((void *)con->hostname); /* cast away const'ness */
