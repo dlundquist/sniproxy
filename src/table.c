@@ -135,6 +135,33 @@ table_lookup_server_address(const struct Table *table, const char *name, size_t 
 }
 
 void
+reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
+    struct Table *new_table;
+
+    /* TODO remove unused tables which were removed from the new configuration */
+
+    while ((new_table = SLIST_FIRST(new_tables)) != NULL) {
+        SLIST_REMOVE_HEAD(new_tables, entries);
+
+        /* Initialize table regular expressions */
+        init_table(new_table);
+
+        struct Table *existing = table_lookup(tables, new_table->name);
+        if (existing) {
+            /* Swap table contents */
+            struct Backend_head temp = existing->backends;
+            existing->backends = new_table->backends;
+            new_table->backends = temp;
+
+            /* free new table (contains old table contents) */
+            free_table(new_table);
+        } else {
+            add_table(tables, new_table);
+        }
+    }
+}
+
+void
 print_table_config(FILE *file, struct Table *table) {
     struct Backend *backend;
 

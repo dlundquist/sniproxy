@@ -40,7 +40,7 @@ struct Config {
 };
 
 struct Config *init_config(const char *);
-int reload_config(struct Config *);
+void reload_config(struct Config *, struct ev_loop *);
 void free_config(struct Config *);
 void print_config(FILE *, struct Config *);
 
