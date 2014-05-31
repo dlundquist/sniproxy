@@ -61,13 +61,13 @@ start_binder() {
     */
 
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) {
-        perror("sockpair()");
+        err("sockpair: %s", strerror(errno));
         return;
     }
 
     pid = fork();
     if (pid == -1) { /* error case */
-        perror("fork()");
+        err("fork: %s", strerror(errno));
         close(sockets[0]);
         close(sockets[1]);
         return;
@@ -92,7 +92,7 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
     char control_buf[64];
 
     if (binder_pid <= 0) {
-        fprintf(stderr, "Binder not started\n");
+        err("%s: Binder not started", __func__);
         return -1;
     }
 
@@ -103,7 +103,7 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
     memcpy(&request->address, addr, addr_len);
 
     if (send(binder_sock, request, request_len, 0) < 0) {
-        perror("send()");
+        err("send: %s", strerror(errno));
         return -1;
     }
 
@@ -117,7 +117,7 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
     msg.msg_controllen = sizeof(control_buf);
 
     if (recvmsg(binder_sock, &msg, 0) < 0) {
-        perror("recvmsg()");
+        err("recvmsg: %s", strerror(errno));
         return -1;
     }
 
@@ -146,7 +146,7 @@ run_binder(int sockfd) {
     while (running) {
         len = recv(sockfd, buffer, sizeof(buffer), 0);
         if (len < 0) {
-            perror("recv()");
+            err("recv: %s", strerror(errno));
             return;
         } else if (len == 0) {
             /* socket was closed */
@@ -162,14 +162,14 @@ run_binder(int sockfd) {
 
         fd = socket(req->address[0].sa_family, SOCK_STREAM, 0);
         if (fd < 0) {
-            perror("ERROR opening socket:");
+            err("socket: %s", strerror(errno));
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "ERROR opening socket:", sizeof(buffer));
             goto error;
         }
 
         if (bind(fd, req->address, req->address_len) < 0) {
-            perror("ERROR on binding:");
+            err("bind: %s", strerror(errno));
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "ERROR on binding:", sizeof(buffer));
             goto error;
@@ -194,7 +194,7 @@ run_binder(int sockfd) {
         msg.msg_controllen = cmsg->cmsg_len;
 
         if (sendmsg(sockfd, &msg, 0) < 0) {
-            perror("sendmsg()");
+            err("sendmsg: %s", strerror(errno));
             return;
         }
 
@@ -207,7 +207,7 @@ run_binder(int sockfd) {
                 sizeof(buffer) - strlen(buffer));
 
         if (send(sockfd, buffer, strlen(buffer), 0) < 0) {
-            perror("send()");
+            err("send: %s", strerror(errno));
             return;
         }
     }

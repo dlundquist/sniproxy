@@ -42,7 +42,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
     while ((token = next_token(cfg, buffer, sizeof(buffer))) != TOKEN_END) {
         switch (token) {
             case TOKEN_ERROR:
-                fprintf(stderr, "tokenizer error\n");
+                err("%s: tokenizer error", __func__);
                 return -1;
             case TOKEN_WORD:
                 if (keyword && sub_context && keyword->parse_arg) {
@@ -57,7 +57,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                         sub_context = context;
 
                     if (sub_context == NULL) {
-                        fprintf(stderr, "failed to create subcontext\n");
+                        err("failed to create subcontext");
                         return -1;
                     }
 
@@ -69,7 +69,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                     }
 
                 } else {
-                    fprintf(stderr, "unknown keyword %s\n", buffer);
+                    err("%s: unknown keyword %s", __func__, buffer);
                     return -1;
                 }
                 break;
@@ -80,7 +80,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                     if (result <= 0)
                         return result;
                 } else {
-                    fprintf(stderr, "block without context\n");
+                    err("%s: block without context", __func__);
                     return -1;
                 }
                 break;

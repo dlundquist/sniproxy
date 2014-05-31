@@ -151,13 +151,9 @@ static struct Keyword global_grammar[] = {
 
 struct Config *
 init_config(const char *filename) {
-    FILE *file;
-    struct Config *config;
-    int i;
-
-    config = malloc(sizeof(struct Config));
+    struct Config *config = malloc(sizeof(struct Config));
     if (config == NULL) {
-        perror("malloc()");
+        err("%s: malloc", __func__);
         return NULL;
     }
 
@@ -170,28 +166,27 @@ init_config(const char *filename) {
 
     config->filename = strdup(filename);
     if (config->filename == NULL) {
-        perror("malloc()");
+        err("%s: strdup", __func__);
         free_config(config);
         return NULL;
     }
 
 
-    file = fopen(config->filename, "r");
+    FILE *file = fopen(config->filename, "r");
     if (file == NULL) {
-        perror("unable to open config file");
+        err("%s: unable to open configuration file: %s", __func__, config->filename);
         free_config(config);
         return NULL;
     }
 
-    if (parse_config((void *)config, file, global_grammar) <= 0) {
+    if (parse_config(config, file, global_grammar) <= 0) {
         uint64_t whence = ftell(file);
         char buffer[256];
 
-        fprintf(stderr, "error parsing %s at %ld near:\n", filename, whence);
+        err("error parsing %s at %ld near:", filename, whence);
         fseek(file, -20, SEEK_CUR);
-        for (i = 0; i < 5; i++)
-            fprintf(stderr, "%ld\t%s", ftell(file),
-                    fgets(buffer, sizeof(buffer), file));
+        for (int i = 0; i < 5; i++)
+            err("%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
 
         free_config(config);
         config = NULL;
@@ -215,17 +210,17 @@ free_config(struct Config *config) {
     free(config);
 }
 
-int
-reload_config(struct Config *config) {
-    /* TODO */
+void
+reload_config(struct Config *config, struct ev_loop *loop) {
+    notice("reloading configuration from %s", config->filename);
 
-    /* Open client connections have references the listener they connected
-     * to, so we can't simply load a new configuration and discard the old
-     * one.
-     */
-    info("reload of %s not supported, see TODO", config->filename);
+    struct Config *new_config = init_config(config->filename);
+    if (new_config == NULL)
+        return err("failed to load %s", config->filename);
 
-    return 0;
+    reload_tables(&config->tables, &new_config->tables);
+
+    free_config(new_config);
 }
 
 void
@@ -253,30 +248,30 @@ print_config(FILE *file, struct Config *config) {
 
 static int
 accept_username(struct Config *config, char *username) {
-        config->user = strdup(username);
-        if (config->user == NULL) {
-            perror("malloc:");
-            return -1;
-        }
+    config->user = strdup(username);
+    if (config->user == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
-        return 1;
+    return 1;
 }
 
 static int
 accept_pidfile(struct Config *config, char *pidfile) {
-        config->pidfile = strdup(pidfile);
-        if (config->pidfile == NULL) {
-            perror("malloc:");
-            return -1;
-        }
+    config->pidfile = strdup(pidfile);
+    if (config->pidfile == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
-        return 1;
+    return 1;
 }
 
 static int
 end_listener_stanza(struct Config *config, struct Listener *listener) {
     if (valid_listener(listener) <= 0) {
-        fprintf(stderr, "Invalid listener\n");
+        err("Invalid listener");
         print_listener_config(stderr, listener);
         free_listener(listener);
         return -1;
@@ -301,6 +296,7 @@ end_backend(struct Table *table, struct Backend *backend) {
     /* TODO check backend */
 
     add_backend(&table->backends, backend);
+
     return 1;
 }
 
@@ -308,7 +304,7 @@ static struct LoggerBuilder *
 new_logger_builder() {
     struct LoggerBuilder *lb = malloc(sizeof(struct LoggerBuilder));
     if (lb == NULL) {
-        err("malloc");
+        err("%s: malloc", __func__);
         return NULL;
     }
 
@@ -323,7 +319,7 @@ static int
 accept_logger_filename(struct LoggerBuilder *lb, char *filename) {
     lb->filename = strdup(filename);
     if (lb->filename == NULL) {
-        err("strdup");
+        err("%s: strdup", __func__);
         return -1;
     }
 
@@ -334,7 +330,7 @@ static int
 accept_logger_syslog_facility(struct LoggerBuilder *lb, char *facility) {
     lb->syslog_facility = strdup(facility);
     if (lb->syslog_facility == NULL) {
-        err("strdup");
+        err("%s: strdup", __func__);
         return -1;
     }
 
@@ -402,7 +398,7 @@ end_global_access_logger_stanza(struct Config *config, struct LoggerBuilder *lb)
     else if (lb->syslog_facility != NULL && lb->filename == NULL)
         logger = new_syslog_logger("sniproxy", lb->syslog_facility);
     else
-        fprintf(stderr, "Logger can not be both file logger and syslog logger");
+        err("Logger can not be both file logger and syslog logger");
 
     if (logger == NULL) {
         free((char *)lb->filename);
@@ -429,7 +425,7 @@ end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilde
     else if (lb->syslog_facility != NULL && lb->filename == NULL)
         logger = new_syslog_logger("sniproxy", lb->syslog_facility);
     else
-        fprintf(stderr, "Logger can not be both file logger and syslog logger");
+        err("Logger can not be both file logger and syslog logger");
 
     if (logger == NULL) {
         free((char *)lb->filename);

@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <errno.h>
 #include "table.h"
 #include "backend.h"
 #include "address.h"
@@ -49,7 +50,7 @@ new_table() {
 
     table = malloc(sizeof(struct Table));
     if (table == NULL) {
-        perror("malloc");
+        err("malloc: %s", strerror(errno));
         return NULL;
     }
 
@@ -64,11 +65,11 @@ accept_table_arg(struct Table *table, char *arg) {
     if (table->name == NULL) {
         table->name = strdup(arg);
         if (table->name == NULL) {
-            perror("strdup");
+            err("strdup: %s", strerror(errno));
             return -1;
         }
     } else {
-        fprintf(stderr, "Unexpected table argument: %s\n", arg);
+        err("Unexpected table argument: %s", arg);
         return -1;
     }
 
@@ -132,6 +133,33 @@ table_lookup_server_address(const struct Table *table, const char *name, size_t 
     }
 
     return b->address;
+}
+
+void
+reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
+    struct Table *new_table;
+
+    /* TODO remove unused tables which were removed from the new configuration */
+
+    while ((new_table = SLIST_FIRST(new_tables)) != NULL) {
+        SLIST_REMOVE_HEAD(new_tables, entries);
+
+        /* Initialize table regular expressions */
+        init_table(new_table);
+
+        struct Table *existing = table_lookup(tables, new_table->name);
+        if (existing) {
+            /* Swap table contents */
+            struct Backend_head temp = existing->backends;
+            existing->backends = new_table->backends;
+            new_table->backends = temp;
+
+            /* free new table (contains old table contents) */
+            free_table(new_table);
+        } else {
+            add_table(tables, new_table);
+        }
+    }
 }
 
 void
