@@ -62,7 +62,7 @@ init_listeners(struct Listener_head *listeners,
 
     SLIST_FOREACH(iter, listeners, entries) {
         if (init_listener(iter, tables) < 0) {
-            fprintf(stderr, "Failed to initialize listener\n");
+            err("Failed to initialize listener");
             print_listener_config(stderr, iter);
             exit(1);
         }
@@ -96,7 +96,7 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 
         if (listener->address == NULL ||
                 !address_is_sockaddr(listener->address)) {
-            fprintf(stderr, "Invalid listener argument %s\n", arg);
+            err("Invalid listener argument %s", arg);
             return -1;
         }
     } else if (listener->address == NULL && is_numeric(arg)) {
@@ -104,7 +104,7 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 
         if (listener->address == NULL ||
                 !address_is_sockaddr(listener->address)) {
-            fprintf(stderr, "Unable to initialize default address\n");
+            err("Unable to initialize default address");
             return -1;
         }
 
@@ -112,7 +112,7 @@ accept_listener_arg(struct Listener *listener, char *arg) {
     } else if (address_port(listener->address) == 0 && is_numeric(arg)) {
         address_set_port(listener->address, atoi(arg));
     } else {
-        fprintf(stderr, "Invalid listener argument %s\n", arg);
+        err("Invalid listener argument %s", arg);
     }
 
     return 1;
@@ -123,7 +123,7 @@ accept_listener_table_name(struct Listener *listener, char *table_name) {
     if (listener->table_name == NULL)
         listener->table_name = strdup(table_name);
     else
-        fprintf(stderr, "Duplicate table_name: %s\n", table_name);
+        err("Duplicate table_name: %s", table_name);
 
     return 1;
 }
@@ -144,17 +144,17 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
     if (listener->fallback_address != NULL) {
-        fprintf(stderr, "Duplicate fallback address: %s\n", fallback);
+        err("Duplicate fallback address: %s", fallback);
         return 0;
     }
     listener->fallback_address = new_address(fallback);
     if (listener->fallback_address == NULL) {
-        fprintf(stderr, "Unable to parse fallback address: %s\n", fallback);
+        err("Unable to parse fallback address: %s", fallback);
         return 0;
     }
 #ifndef HAVE_LIBUDNS
     if (!address_is_sockaddr(listener->fallback_address)) {
-        fprintf(stderr, "Only fallback socket addresses permitted when compiled without libudns\n");
+        err("Only fallback socket addresses permitted when compiled without libudns");
         free(listener->fallback_address);
         listener->fallback_address = NULL;
         return 0;
@@ -167,7 +167,7 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
          * hostname from the client's request, if we couldn't find the
          * hostname and are using a fallback address it doesn't make
          * much sense to configure it as a wildcard. */
-        fprintf(stderr, "Wildcard address prohibited as fallback address\n");
+        err("Wildcard address prohibited as fallback address");
         return 0;
     }
 
@@ -177,23 +177,24 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
 int
 accept_listener_source_address(struct Listener *listener, char *source) {
     if (listener->source_address != NULL) {
-        fprintf(stderr, "Duplicate source address: %s\n", source);
+        err("Duplicate source address: %s", source);
         return 0;
     }
+
     listener->source_address = new_address(source);
     if (listener->source_address == NULL) {
-        fprintf(stderr, "Unable to parse source address: %s\n", source);
+        err("Unable to parse source address: %s", source);
         return 0;
     }
     if (!address_is_sockaddr(listener->source_address)) {
-        fprintf(stderr, "Only source socket addresses permitted\n");
+        err("Only source socket addresses permitted");
         free(listener->source_address);
         listener->source_address = NULL;
         return 0;
     }
     if (address_port(listener->source_address) != 0) {
         char address[256];
-        fprintf(stderr, "Source address on listener %s set to non zero port, "
+        err("Source address on listener %s set to non zero port, "
                 "this prevents multiple connection to each backend server.",
                 display_address(listener->address, address, sizeof(address)));
     }
@@ -225,12 +226,12 @@ remove_listener(struct Listener_head *listeners, struct Listener *listener) {
 int
 valid_listener(const struct Listener *listener) {
     if (listener->address == NULL) {
-        fprintf(stderr, "No address specified\n");
+        err("No address specified");
         return 0;
     }
 
     if (!address_is_sockaddr(listener->address)) {
-        fprintf(stderr, "Address not specified as IP/socket\n");
+        err("Address not specified as IP/socket");
         return 0;
     }
 
@@ -241,17 +242,17 @@ valid_listener(const struct Listener *listener) {
             /* fall through */
         case AF_INET6:
             if (address_port(listener->address) == 0) {
-                fprintf(stderr, "No port specified\n");
+                err("No port specified");
                 return 0;
             }
             break;
         default:
-            fprintf(stderr, "Invalid address family\n");
+            err("Invalid address family");
             return 0;
     }
 
     if (listener->protocol != tls_protocol && listener->protocol != http_protocol) {
-        fprintf(stderr, "Invalid protocol\n");
+        err("Invalid protocol");
         return 0;
     }
 
@@ -265,7 +266,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
 
     listener->table = table_lookup(tables, listener->table_name);
     if (listener->table == NULL) {
-        fprintf(stderr, "Table \"%s\" not defined\n", listener->table_name);
+        err("Table \"%s\" not defined", listener->table_name);
         return -1;
     }
     init_table(listener->table);
@@ -371,6 +372,11 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     if (listener->fallback_address)
         fprintf(file, "\tfallback %s\n",
                 display_address(listener->fallback_address,
+                    address, sizeof(address)));
+
+    if (listener->source_address)
+        fprintf(file, "\tsource %s\n",
+                display_address(listener->source_address,
                     address, sizeof(address)));
 
     fprintf(file, "}\n\n");

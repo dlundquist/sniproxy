@@ -153,7 +153,7 @@ struct Config *
 init_config(const char *filename) {
     struct Config *config = malloc(sizeof(struct Config));
     if (config == NULL) {
-        err("%s: malloc()", __func__);
+        err("%s: malloc", __func__);
         return NULL;
     }
 
@@ -166,7 +166,7 @@ init_config(const char *filename) {
 
     config->filename = strdup(filename);
     if (config->filename == NULL) {
-        err("%s: malloc()", __func__);
+        err("%s: strdup", __func__);
         free_config(config);
         return NULL;
     }
@@ -179,7 +179,7 @@ init_config(const char *filename) {
         return NULL;
     }
 
-    if (parse_config((void *)config, file, global_grammar) <= 0) {
+    if (parse_config(config, file, global_grammar) <= 0) {
         uint64_t whence = ftell(file);
         char buffer[256];
 
@@ -248,24 +248,24 @@ print_config(FILE *file, struct Config *config) {
 
 static int
 accept_username(struct Config *config, char *username) {
-        config->user = strdup(username);
-        if (config->user == NULL) {
-            perror("malloc:");
-            return -1;
-        }
+    config->user = strdup(username);
+    if (config->user == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
-        return 1;
+    return 1;
 }
 
 static int
 accept_pidfile(struct Config *config, char *pidfile) {
-        config->pidfile = strdup(pidfile);
-        if (config->pidfile == NULL) {
-            perror("malloc:");
-            return -1;
-        }
+    config->pidfile = strdup(pidfile);
+    if (config->pidfile == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
-        return 1;
+    return 1;
 }
 
 static int
@@ -296,6 +296,7 @@ end_backend(struct Table *table, struct Backend *backend) {
     /* TODO check backend */
 
     add_backend(&table->backends, backend);
+
     return 1;
 }
 
@@ -303,7 +304,7 @@ static struct LoggerBuilder *
 new_logger_builder() {
     struct LoggerBuilder *lb = malloc(sizeof(struct LoggerBuilder));
     if (lb == NULL) {
-        err("malloc");
+        err("%s: malloc", __func__);
         return NULL;
     }
 
@@ -318,7 +319,7 @@ static int
 accept_logger_filename(struct LoggerBuilder *lb, char *filename) {
     lb->filename = strdup(filename);
     if (lb->filename == NULL) {
-        err("strdup");
+        err("%s: strdup", __func__);
         return -1;
     }
 
@@ -329,7 +330,7 @@ static int
 accept_logger_syslog_facility(struct LoggerBuilder *lb, char *facility) {
     lb->syslog_facility = strdup(facility);
     if (lb->syslog_facility == NULL) {
-        err("strdup");
+        err("%s: strdup", __func__);
         return -1;
     }
 

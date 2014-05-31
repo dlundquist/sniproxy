@@ -65,19 +65,19 @@ accept_backend_arg(struct Backend *backend, char *arg) {
 
         backend->address = new_address(arg);
         if (backend->address == NULL) {
-            err("invalid address: %s\n", arg);
+            err("invalid address: %s", arg);
             return -1;
         }
 #ifndef HAVE_LIBUDNS
         if (!address_is_sockaddr(backend->address)) {
-            fprintf(stderr, "Only socket address backends are permitted when compiled without libudns\n");
+            err("Only socket address backends are permitted when compiled without libudns");
             return -1;
         }
 #endif
     } else if (address_port(backend->address) == 0 && is_numeric(arg)) {
         address_set_port(backend->address, atoi(arg));
     } else {
-        err("Unexpected table backend argument: %s\n", arg);
+        err("Unexpected table backend argument: %s", arg);
         return -1;
     }
 
