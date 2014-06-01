@@ -337,7 +337,10 @@ parse_client_request(struct Connection *con) {
     ssize_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
 
-    int result = con->listener->protocol->parse_packet(payload, payload_len, &hostname);
+    int result = con->listener->protocol->parse_packet(
+                                            con->listener->protocol_data,
+                                            payload, payload_len,
+                                            &hostname);
     if (result < 0) {
         char client[INET6_ADDRSTRLEN + 8];
 

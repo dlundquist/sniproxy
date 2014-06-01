@@ -4,10 +4,16 @@
 #include <assert.h>
 #include "tls.h"
 
-struct test_packet {
+
+struct Test {
     const char *packet;
-    int len;
+    int packet_len;
+    struct TLSProtocol **tls_data_ptr;
+    const char *expected_name;
 };
+
+struct TLSProtocol *tls_sni_data;
+struct TLSProtocol *tls_alpn_data;
 
 const unsigned char good_data_1[] = {
     // TLS record
@@ -163,6 +169,134 @@ const unsigned char good_data_4[] = {
             0x00, 0x00, // Length
 };
 
+const unsigned char alpn_good_data_1[] = {
+    // TLS record
+    0x16, // Content Type: Handshake
+    0x03, 0x00, // Version: SSL 3.0
+    0x01, 0x16, // Length
+        // Handshake
+        0x01, // Handshake Type: Client Hello
+        0x00, 0x01, 0x12, // Length
+        0x03, 0x03, // Version: TLS 1.2
+        // Random
+        0x53, 0x03, 0x59, 0x03, 0xa8, 0xb2, 0xa9, 0x36,
+        0x4c, 0x2d, 0x04, 0x72, 0x4f, 0xea, 0x98, 0xd5,
+        0xb5, 0xbb, 0xea, 0x07, 0x4f, 0x00, 0x83, 0x1c,
+        0xfa, 0xa0, 0x01, 0xcc, 0x7d, 0x2f, 0x4f, 0x6f,
+        0x00, // Session ID Length
+        0x00, 0x84, // Cipher Suites Length
+            0xc0, 0x2b,
+            0xc0, 0x2c,
+            0xc0, 0x86,
+            0xc0, 0x87,
+            0xc0, 0x09,
+            0xc0, 0x23,
+            0xc0, 0x0a,
+            0xc0, 0x24,
+            0xc0, 0x72,
+            0xc0, 0x73,
+            0xc0, 0x08,
+            0xc0, 0x07,
+            0xc0, 0x2f,
+            0xc0, 0x30,
+            0xc0, 0x8a,
+            0xc0, 0x8b,
+            0xc0, 0x13,
+            0xc0, 0x27,
+            0xc0, 0x14,
+            0xc0, 0x28,
+            0xc0, 0x76,
+            0xc0, 0x77,
+            0xc0, 0x12,
+            0xc0, 0x11,
+            0x00, 0x9c,
+            0x00, 0x9d,
+            0xc0, 0x7a,
+            0xc0, 0x7b,
+            0x00, 0x2f,
+            0x00, 0x3c,
+            0x00, 0x35,
+            0x00, 0x3d,
+            0x00, 0x41,
+            0x00, 0xba,
+            0x00, 0x84,
+            0x00, 0xc0,
+            0x00, 0x0a,
+            0x00, 0x05,
+            0x00, 0x04,
+            0x00, 0x9e,
+            0x00, 0x9f,
+            0xc0, 0x7c,
+            0xc0, 0x7d,
+            0x00, 0x33,
+            0x00, 0x67,
+            0x00, 0x39,
+            0x00, 0x6b,
+            0x00, 0x45,
+            0x00, 0xbe,
+            0x00, 0x88,
+            0x00, 0xc4,
+            0x00, 0x16,
+            0x00, 0xa2,
+            0x00, 0xa3,
+            0xc0, 0x80,
+            0xc0, 0x81,
+            0x00, 0x32,
+            0x00, 0x40,
+            0x00, 0x38,
+            0x00, 0x6a,
+            0x00, 0x44,
+            0x00, 0xbd,
+            0x00, 0x87,
+            0x00, 0xc3,
+            0x00, 0x13,
+            0x00, 0x66,
+            0x01, // Compression Methods
+                0x00, // NULL
+            0x00, 0x65, // Extensions Length
+                // Extension
+                0x00, 0x05,
+                0x00, 0x05,
+                0x01, 0x00, 0x00, 0x00, 0x00,
+                // Extension
+                0x00, 0x00, // Extension Type: Server Name
+                0x00, 0x0e, // Length
+                0x00, 0x0c, // Server Name Indication Length
+                    0x00, // Server Name Type: host_name
+                    0x00, 0x09, // Length
+                    // "localhost"
+                    0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74,
+                // Extension
+                0xff, 0x01,
+                0x00, 0x01,
+                0x00,
+                // Extension
+                0x00, 0x23,
+                0x00, 0x00,
+                // Extension
+                0x00, 0x0a,
+                0x00, 0x08,
+                0x00, 0x06, 0x00, 0x17, 0x00, 0x18, 0x00, 0x19,
+                // Extension
+                0x00, 0x0b,
+                0x00, 0x02,
+                0x01, 0x00,
+                // Extension
+                0x00, 0x0d,
+                0x00, 0x1c,
+                0x00, 0x1a, 0x04, 0x01, 0x04, 0x02, 0x04, 0x03,
+                0x05, 0x01, 0x05, 0x03, 0x06, 0x01, 0x06, 0x03,
+                0x03, 0x01, 0x03, 0x02, 0x03, 0x03, 0x02, 0x01,
+                0x02, 0x02, 0x02, 0x03,
+                // Extension
+                0x00, 0x10, // Extension Type: ALPN
+                0x00, 0x0b,
+                0x00, 0x09,
+                    0x08, // Length
+                    // "http/2.0"
+                    0x68, 0x74, 0x74, 0x70, 0x2f, 0x32, 0x2e, 0x30
+};
+
 const unsigned char ssl30_request[] = {
     // TLS record
     0x16, // Content Type: Handshake
@@ -295,46 +429,63 @@ const unsigned char bad_data_4[] = {
             0x00, 0x01, // Length
             0x01 // Mode: Peer allows to send requests
 };
-static struct test_packet good[] = {
-    { (char *)good_data_1, sizeof(good_data_1) },
-    { (char *)good_data_2, sizeof(good_data_2) },
-    { (char *)good_data_3, sizeof(good_data_3) },
-    { (char *)good_data_4, sizeof(good_data_4) }
+
+static struct Test good[] = {
+    { (char *)good_data_1, sizeof(good_data_1), &tls_sni_data, "localhost" },
+    { (char *)good_data_2, sizeof(good_data_2), &tls_sni_data, "localhost" },
+    { (char *)good_data_3, sizeof(good_data_3), &tls_sni_data, "localhost" },
+    { (char *)good_data_4, sizeof(good_data_4), &tls_sni_data, "localhost" },
+    { (char *)alpn_good_data_1, sizeof(alpn_good_data_1), &tls_alpn_data, "http/2.0" }
 };
 
-static struct test_packet bad[] = {
-    { (char *)ssl30_request, sizeof(ssl30_request) },
-    { (char *)bad_data_1, sizeof(bad_data_1) },
-    { (char *)bad_data_2, sizeof(bad_data_2) },
-    { (char *)bad_data_3, sizeof(bad_data_3) }
+static struct Test bad[] = {
+    { (char *)ssl30_request, sizeof(ssl30_request), NULL },
+    { (char *)bad_data_1, sizeof(bad_data_1), NULL },
+    { (char *)bad_data_2, sizeof(bad_data_2), NULL },
+    { (char *)bad_data_3, sizeof(bad_data_3), NULL }
 };
 
 int main() {
-    unsigned int i;
-    int result;
-    char *hostname;
+    tls_sni_data = new_tls_data();
+    assert(tls_sni_data != NULL);
+    tls_alpn_data = new_tls_data();
+    assert(tls_alpn_data != NULL);
+    tls_alpn_data = tls_data_append_alpn_protocol(tls_alpn_data, "http/1.1", 8);
+    assert(tls_alpn_data != NULL);
+    tls_alpn_data = tls_data_append_alpn_protocol(tls_alpn_data, "http/2.0", 8);
+    assert(tls_alpn_data != NULL);
+    tls_alpn_data = tls_data_append_alpn_protocol(tls_alpn_data, "spdy/3", 6);
+    assert(tls_alpn_data != NULL);
+    tls_alpn_data = tls_data_use_alpn(tls_alpn_data, 1);
 
-    for (i = 0; i < sizeof(good) / sizeof(struct test_packet); i++) {
-        hostname = NULL;
+    for (struct Test *test = good; test < good + sizeof(good) / sizeof(struct Test); test++) {
+        char *hostname = NULL;
 
-        result = tls_protocol->parse_packet(good[i].packet, good[i].len, &hostname);
+        int result = tls_protocol->parse_packet(*test->tls_data_ptr, test->packet, test->packet_len, &hostname);
 
-        assert(result == 9);
+        assert(result == strlen(test->expected_name));
 
         assert(NULL != hostname);
 
-        assert(0 == strcmp("localhost", hostname));
+        if (strcmp(test->expected_name, hostname) != 0) {
+            fprintf(stderr, "test received \"%s\", expected \"%s\"\n", hostname, test->expected_name);
+            assert(0);
+        }
 
         free(hostname);
     }
 
-    result = tls_protocol->parse_packet(good[0].packet, good[0].len, NULL);
+    int result = tls_protocol->parse_packet(tls_sni_data, good[0].packet, good[0].packet_len, NULL);
     assert(result == -3);
 
-    for (i = 0; i < sizeof(bad) / sizeof(struct test_packet); i++) {
-        hostname = NULL;
+    char *hostname = NULL;
+    result = tls_protocol->parse_packet(NULL, good[0].packet, good[0].packet_len, &hostname);
+    assert(result == -3);
 
-        result = tls_protocol->parse_packet(bad[i].packet, bad[i].len, &hostname);
+    for (struct Test *test = bad; test < bad + sizeof(bad) / sizeof(struct Test); test++) {
+        char *hostname = NULL;
+
+        int result = tls_protocol->parse_packet(tls_sni_data, test->packet, test->packet_len, &hostname);
 
         // parse failure or not "localhost"
         assert(result < 0 ||
@@ -343,6 +494,9 @@ int main() {
 
         free(hostname);
     }
+
+    free(tls_sni_data);
+    free(tls_alpn_data);
 
     return 0;
 }

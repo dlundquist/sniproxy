@@ -1,4 +1,3 @@
-* ALPN support
 * Reimplement configuration reloading
 * Improved table backend lookup, currently this is a linear search
 ** Considering splitting hostname at label boundaries and search backwards from TLD

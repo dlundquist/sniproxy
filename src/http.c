@@ -39,7 +39,7 @@ static const char http_503[] =
     "Connection: close\r\n\r\n"
     "Backend not available";
 
-static int parse_http_header(const char *, size_t, char **);
+static int parse_http_header(void *, const char *, size_t, char **);
 static int get_header(const char *, const char *, int, char **);
 static int next_header(const char **, int *);
 
@@ -66,7 +66,7 @@ const struct Protocol *const http_protocol = &http_protocol_st;
  *
  */
 static int
-parse_http_header(const char* data, size_t data_len, char **hostname) {
+parse_http_header(void *unused __attribute__((unused)), const char* data, size_t data_len, char **hostname) {
     int result, i;
 
     if (hostname == NULL)
