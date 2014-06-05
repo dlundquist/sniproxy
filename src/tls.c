@@ -94,6 +94,17 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     if (data_len < TLS_HEADER_LEN)
         return -1;
 
+    /* SSL 2.0 compatible Client Hello
+     *
+     * High bit of first byte (length) and content type is Client Hello
+     *
+     * See RFC5246 Appendix E.2
+     */
+    if (data[0] & 0x80 && data[2] == 1) {
+        debug("Received SSL 2.0 Client Hello which can not support SNI.");
+        return -2;
+    }
+
     tls_content_type = data[0];
     if (tls_content_type != TLS_HANDSHAKE_CONTENT_TYPE) {
         debug("Request did not begin with TLS handshake.");
@@ -103,7 +114,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     tls_version_major = data[1];
     tls_version_minor = data[2];
     if (tls_version_major < 3) {
-        debug("Received SSL %d.%d handshake which cannot be parsed.",
+        debug("Received SSL %d.%d handshake which which can not support SNI.",
               tls_version_major, tls_version_minor);
 
         return -2;
