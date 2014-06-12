@@ -209,7 +209,7 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
 
         buffer_push(buffer, temp, len);
         assert(buffer->head == 0);
-        assert(buffer->len = len);
+        assert(buffer->len == len);
 
         if (dst != NULL)
             *dst = buffer->buffer;
