@@ -10,7 +10,7 @@
     +-----------+                 v
     |Listener:  |+            +-------+             +------------+
     |  socket   ||            |Table: |+            |Backend:    |+
-    |  protocol ||--has one-->|  name ||--has many->|  hostname* ||+
+    |  protocol ||--has one-->|  name ||--has many->|  pattern*  ||+
     +-----------+|            +-------+|            |  address   |||
      +-----------+             +-------+            |  port      |||
         ^                                           +------------+||

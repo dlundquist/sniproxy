@@ -52,9 +52,9 @@ new_backend() {
 
 int
 accept_backend_arg(struct Backend *backend, char *arg) {
-    if (backend->name == NULL) {
-        backend->name = strdup(arg);
-        if (backend->name == NULL) {
+    if (backend->pattern == NULL) {
+        backend->pattern = strdup(arg);
+        if (backend->pattern == NULL) {
             err("strdup failed");
             return -1;
         }
@@ -95,17 +95,17 @@ init_backend(struct Backend *backend) {
     const char *reerr;
     int reerroffset;
 
-    if (backend->name_re == NULL) {
-        backend->name_re =
-            pcre_compile(backend->name, 0, &reerr, &reerroffset, NULL);
-        if (backend->name_re == NULL) {
+    if (backend->pattern_re == NULL) {
+        backend->pattern_re =
+            pcre_compile(backend->pattern, 0, &reerr, &reerroffset, NULL);
+        if (backend->pattern_re == NULL) {
             err("Regex compilation failed: %s, offset %d",
                     reerr, reerroffset);
             return 0;
         }
 
         debug("Parsed %s %s",
-                backend->name,
+                backend->pattern,
                 display_address(backend->address,
                     address_buf, sizeof(address_buf)));
     }
@@ -123,7 +123,7 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
     }
 
     STAILQ_FOREACH(iter, head, entries)
-        if (pcre_exec(iter->name_re, NULL,
+        if (pcre_exec(iter->pattern_re, NULL,
                     name, name_len, 0, 0, NULL, 0) >= 0)
             return iter;
 
@@ -135,7 +135,7 @@ print_backend_config(FILE *file, const struct Backend *backend) {
     char address[256];
 
     fprintf(file, "\t%s %s\n",
-            backend->name,
+            backend->pattern,
             display_address(backend->address, address, sizeof(address)));
 }
 
@@ -150,9 +150,9 @@ free_backend(struct Backend *backend) {
     if (backend == NULL)
         return;
 
-    free(backend->name);
+    free(backend->pattern);
     free(backend->address);
-    if (backend->name_re != NULL)
-        pcre_free(backend->name_re);
+    if (backend->pattern_re != NULL)
+        pcre_free(backend->pattern_re);
     free(backend);
 }
