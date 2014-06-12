@@ -27,6 +27,7 @@
 #include <string.h>
 #include "cfg_parser.h"
 #include "cfg_tokenizer.h"
+#include "logger.h"
 
 static const struct Keyword *find_keyword(const struct Keyword *, const char *);
 
