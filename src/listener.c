@@ -38,6 +38,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include "address.h"
 #include "listener.h"
 #include "connection.h"
@@ -211,9 +212,29 @@ accept_listener_bad_request_action(struct Listener *listener, char *action) {
     return 1;
 }
 
+/*
+ * Insert an additional listener in to the sorted list of listeners
+ */
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {
-    SLIST_INSERT_HEAD(listeners, listener, entries);
+    assert(listeners != NULL);
+    assert(listener != NULL);
+    assert(listener->address != NULL);
+
+    if (SLIST_FIRST(listeners) == NULL ||
+            address_compare(listener->address, SLIST_FIRST(listeners)->address) < 0) {
+        SLIST_INSERT_HEAD(listeners, listener, entries);
+        return;
+    }
+
+    struct Listener *iter;
+    SLIST_FOREACH(iter, listeners, entries) {
+        if (SLIST_NEXT(iter, entries) == NULL ||
+                address_compare(listener->address, SLIST_NEXT(iter, entries)->address) < 0) {
+            SLIST_INSERT_AFTER(iter, listener, entries);
+            return;
+        }
+    }
 }
 
 void

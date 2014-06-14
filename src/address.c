@@ -52,6 +52,9 @@ static const char valid_label_bytes[] =
 "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
 
 
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+
+
 static int valid_hostname(const char *);
 
 
@@ -178,6 +181,7 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
         addr->type = SOCKADDR;
         addr->len = sa_len;
         memcpy(addr->data, sa, sa_len);
+        addr->port = address_port(addr);
     }
 
     return addr;
@@ -197,6 +201,34 @@ address_len(const struct Address *addr) {
             assert(0);
             return 0;
     }
+}
+
+int
+address_compare(const struct Address *addr_1, const struct Address *addr_2) {
+    if (addr_1 == NULL && addr_2 == NULL)
+        return 0;
+    if (addr_1 == NULL && addr_2 != NULL)
+        return 1;
+    if (addr_1 != NULL && addr_2 == NULL)
+        return -1;
+
+    if (addr_1->type < addr_2->type)
+        return 1;
+    if (addr_1->type > addr_2->type)
+        return -1;
+
+    int result = memcmp(addr_1->data, addr_2->data, MIN(addr_1->len, addr_2->len));
+    if (result == 0 && addr_1->len < addr_2->len)
+        return 1;
+    if (result == 0 && addr_1->len > addr_2->len)
+        return -1;
+
+    if (result == 0 && addr_1->port < addr_2->port)
+        return 1;
+    if (result == 0 && addr_1->port > addr_2->port)
+        return -1;
+
+    return result;
 }
 
 int
@@ -275,9 +307,6 @@ address_set_port(struct Address *addr, int port) {
     }
 
     switch (addr->type) {
-        case HOSTNAME:
-            addr->port = port;
-            break;
         case SOCKADDR:
             switch (address_sa(addr)->sa_family) {
                 case AF_INET:
@@ -295,7 +324,8 @@ address_set_port(struct Address *addr, int port) {
                 default:
                     assert(0);
             }
-            break;
+            /* fall through */
+        case HOSTNAME:
         case WILDCARD:
             addr->port = port;
             break;
