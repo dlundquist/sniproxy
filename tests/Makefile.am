@@ -2,16 +2,17 @@ AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_C
 
 TESTS = http_test \
         tls_test \
+        binder_test \
         buffer_test \
         address_test \
         cfg_tokenizer_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-		reload_test \
+        reload_test \
         connection_reset_test \
-		bind_source_test \
-		fd_limit_test
+        bind_source_test \
+        fd_limit_test
 
 if DNS_ENABLED
   TESTS += config_test \
@@ -21,6 +22,7 @@ endif
 
 check_PROGRAMS = http_test \
                  tls_test \
+                 binder_test \
                  buffer_test \
                  cfg_tokenizer_test \
                  address_test \
@@ -34,6 +36,9 @@ tls_test_SOURCES = tls_test.c \
                    ../src/tls.c \
                    ../src/logger.c
 
+binder_test_SOURCES = binder_test.c \
+                      ../src/binder.c
+
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
 
@@ -46,6 +51,7 @@ cfg_tokenizer_test_SOURCES = cfg_tokenizer_test.c \
                              ../src/cfg_tokenizer.c
 
 config_test_SOURCES = config_test.c \
+                      ../src/binder.c \
                       ../src/config.c \
                       ../src/cfg_parser.c \
                       ../src/cfg_tokenizer.c \

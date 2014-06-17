@@ -13,7 +13,7 @@ int main() {
     int i;
 
     start_binder("binder_test");
-    for (i = 8080; i < 8090; i++)
+    for (i = 8080; i < 8084; i++)
         test_binder(i);
 
     stop_binder();

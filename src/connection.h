@@ -52,7 +52,7 @@ struct Connection {
         struct ev_io watcher;
         struct Buffer *buffer;
     } client, server;
-    const struct Listener *listener;
+    struct Listener *listener;
     const char *hostname; /* Requested hostname */
     size_t hostname_len;
     struct ResolvQuery *query_handle;
@@ -62,7 +62,7 @@ struct Connection {
 };
 
 void init_connections();
-int accept_connection(const struct Listener *, struct ev_loop *);
+int accept_connection(struct Listener *, struct ev_loop *);
 void free_connections(struct ev_loop *);
 void print_connections();
 

@@ -44,6 +44,7 @@
 #include "listener.h"
 #include "connection.h"
 #include "logger.h"
+#include "binder.h"
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
@@ -403,8 +404,21 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     int on = 1;
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    if (bind(sockfd, address_sa(listener->address),
-                address_sa_len(listener->address)) < 0) {
+    int result = bind(sockfd, address_sa(listener->address),
+            address_sa_len(listener->address));
+    if (result < 0 && errno == EACCES) {
+        /* Retry using binder module */
+        close(sockfd);
+        sockfd = bind_socket(address_sa(listener->address),
+                address_sa_len(listener->address));
+        if (sockfd < 0) {
+            char address[128];
+            err("binder failed to bind to %s",
+                display_address(listener->address, address, sizeof(address)));
+            close(sockfd);
+            return -3;
+        }
+    } else if (result < 0) {
         char address[128];
         err("bind %s failed: %s",
             display_address(listener->address, address, sizeof(address)),

@@ -97,7 +97,7 @@ init_connections() {
  * Returns 1 on success or 0 on error;
  */
 int
-accept_connection(const struct Listener *listener, struct ev_loop *loop) {
+accept_connection(struct Listener *listener, struct ev_loop *loop) {
     struct Connection *con = new_connection();
     if (con == NULL) {
         err("new_connection failed");

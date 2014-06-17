@@ -1,4 +1,5 @@
 address_test
+binder_test
 buffer_test
 cfg_tokenizer_test
 config_test

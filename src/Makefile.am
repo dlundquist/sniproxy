@@ -6,6 +6,8 @@ sniproxy_SOURCES = address.c \
                    address.h \
                    backend.c \
                    backend.h \
+                   binder.c \
+                   binder.h \
                    buffer.c \
                    buffer.h \
                    cfg_parser.c \
