@@ -157,9 +157,18 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
 
     existing_listener->log_bad_requests = new_listener->log_bad_requests;
 
-    existing_listener->table = table_lookup(tables, existing_listener->table_name);
-    init_table(existing_listener->table);
-    new_listener->table = NULL;
+    struct Table *new_table =
+            table_lookup(tables, existing_listener->table_name);
+
+    if (new_table != NULL) {
+        init_table(new_table);
+
+        table_ref_put(existing_listener->table);
+        existing_listener->table = table_ref_get(new_table);
+
+        table_ref_put(new_listener->table);
+        new_listener->table = NULL;
+    }
 }
 
 struct Listener *
@@ -380,12 +389,13 @@ valid_listener(const struct Listener *listener) {
 
 static int
 init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
-    listener->table = table_lookup(tables, listener->table_name);
-    if (listener->table == NULL) {
+    struct Table *table = table_lookup(tables, listener->table_name);
+    if (table == NULL) {
         err("Table \"%s\" not defined", listener->table_name);
         return -1;
     }
-    init_table(listener->table);
+    init_table(table);
+    listener->table = table_ref_get(table);
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
@@ -535,6 +545,8 @@ free_listener(struct Listener *listener) {
     free(listener->fallback_address);
     free(listener->source_address);
     free(listener->table_name);
+    table_ref_put(listener->table);
+    listener->table == NULL;
     free_logger(listener->access_log);
     free(listener);
 }
