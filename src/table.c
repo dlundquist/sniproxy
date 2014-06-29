@@ -66,7 +66,7 @@ new_table() {
 }
 
 int
-accept_table_arg(struct Table *table, char *arg) {
+accept_table_arg(struct Table *table, const char *arg) {
     if (table->name == NULL) {
         table->name = strdup(arg);
         if (table->name == NULL) {
@@ -110,12 +110,11 @@ table_lookup(const struct Table_head *tables, const char *name) {
     struct Table *iter;
 
     SLIST_FOREACH(iter, tables, entries) {
-        if (name == NULL) {
-            if (iter->name == NULL)
-                return iter;
-        } else if (iter->name) {
-            if (strcmp(iter->name, name) == 0)
-                return iter;
+        if (iter->name == NULL && name == NULL) {
+            return iter;
+        } else if (iter->name != NULL && name != NULL &&
+                strcmp(iter->name, name) == 0) {
+            return iter;
         }
     }
 
@@ -154,7 +153,7 @@ reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
     }
     /* Remove elements following first used element */
     SLIST_FOREACH(iter, tables, entries) {
-        if (SLIST_NEXT(iter, entries) != NULL ||
+        if (SLIST_NEXT(iter, entries) != NULL &&
                 table_lookup(new_tables,
                         SLIST_NEXT(iter, entries)->name) == NULL) {
             struct Table *temp = SLIST_NEXT(iter, entries);

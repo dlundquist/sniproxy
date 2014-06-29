@@ -2,10 +2,11 @@ AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_C
 
 TESTS = http_test \
         tls_test \
-        binder_test \
         buffer_test \
+        table_test \
         address_test \
         cfg_tokenizer_test \
+        binder_test \
         functional_test \
         bad_request_test \
         slow_client_test \
@@ -22,6 +23,7 @@ endif
 
 check_PROGRAMS = http_test \
                  tls_test \
+                 table_test \
                  binder_test \
                  buffer_test \
                  cfg_tokenizer_test \
@@ -76,3 +78,10 @@ resolv_test_SOURCES = resolv_test.c \
 
 resolv_test_LDADD = $(LIBEV_LIBS) $(LIBUDNS_LIBS)
 
+table_test_SOURCES = table_test.c \
+                      ../src/backend.c \
+                      ../src/table.c \
+                      ../src/address.c \
+                      ../src/logger.c
+
+table_test_LDADD = $(LIBPCRE_LIBS)

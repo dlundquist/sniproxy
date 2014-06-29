@@ -45,7 +45,7 @@ struct Table {
 };
 
 struct Table *new_table();
-int accept_table_arg(struct Table *, char *);
+int accept_table_arg(struct Table *, const char *);
 void add_table(struct Table_head *, struct Table *);
 struct Table *table_lookup(const struct Table_head *, const char *);
 const struct Address *table_lookup_server_address(const struct Table *,

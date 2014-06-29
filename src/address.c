@@ -26,6 +26,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h> /* tolower */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -164,6 +165,10 @@ new_address(const char *hostname_or_ip) {
             addr->len = len;
             memcpy(addr->data, hostname_or_ip, len);
             addr->data[addr->len] = '\0';
+
+            /* Store address in lower case */
+            for (char *c = addr->data; *c != '\0'; c++)
+                *c = tolower(*c);
         }
 
         return addr;

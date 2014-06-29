@@ -89,19 +89,19 @@ sub alter_config($$$$) {
 
 listen 127.0.0.1 $proxy_port1 {
     proto http
-    table table_a
+    table table_c
 }
 
 listen 127.0.0.1 $proxy_port2 {
     proto http
-    table table_b
+    table table_a
 }
 
 table table_a {
     localhost 127.0.0.1 $httpd_port
 }
 
-table table_b  {
+table table_c  {
     localhost 127.0.0.1 $httpd_port
 }
 END

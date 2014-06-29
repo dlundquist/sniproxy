@@ -45,11 +45,10 @@ struct Backend {
 void add_backend(struct Backend_head *, struct Backend *);
 int init_backend(struct Backend *);
 struct Backend *lookup_backend(const struct Backend_head *, const char *, size_t);
-int open_backend_socket(struct Backend *, const char *);
 void print_backend_config(FILE *, const struct Backend *);
 void remove_backend(struct Backend_head *, struct Backend *);
 struct Backend *new_backend();
-int accept_backend_arg(struct Backend *, char *);
+int accept_backend_arg(struct Backend *, const char *);
 
 
 #endif

@@ -26,9 +26,9 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> /* tolower */
 #include <sys/queue.h>
 #include <pcre.h>
+#include <assert.h>
 #include "backend.h"
 #include "address.h"
 #include "logger.h"
@@ -51,7 +51,7 @@ new_backend() {
 }
 
 int
-accept_backend_arg(struct Backend *backend, char *arg) {
+accept_backend_arg(struct Backend *backend, const char *arg) {
     if (backend->pattern == NULL) {
         backend->pattern = strdup(arg);
         if (backend->pattern == NULL) {
@@ -59,9 +59,6 @@ accept_backend_arg(struct Backend *backend, char *arg) {
             return -1;
         }
     } else if (backend->address == NULL) {
-        /* Store address in lower case */
-        for (char *c = arg; *c != '\0'; c++)
-            *c = tolower(*c);
 
         backend->address = new_address(arg);
         if (backend->address == NULL) {
@@ -122,10 +119,12 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
         name_len = 0;
     }
 
-    STAILQ_FOREACH(iter, head, entries)
+    STAILQ_FOREACH(iter, head, entries) {
+        assert(iter->pattern_re != NULL);
         if (pcre_exec(iter->pattern_re, NULL,
                     name, name_len, 0, 0, NULL, 0) >= 0)
             return iter;
+    }
 
     return NULL;
 }
