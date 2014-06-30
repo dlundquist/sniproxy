@@ -55,6 +55,7 @@ static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
 static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
 static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
+static void free_listener(struct Listener *);
 
 
 /*
@@ -151,9 +152,8 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
     existing_listener->table_name = new_listener->table_name;
     new_listener->table_name = NULL;
 
-    free(existing_listener->access_log);
-    existing_listener->access_log = new_listener->access_log;
-    new_listener->access_log = NULL;
+    logger_ref_put(existing_listener->access_log);
+    existing_listener->access_log = logger_ref_get(new_listener->access_log);
 
     existing_listener->log_bad_requests = new_listener->log_bad_requests;
 
@@ -536,7 +536,7 @@ close_listener(struct ev_loop *loop, struct Listener *listener) {
     listener_ref_put(listener);
 }
 
-void
+static void
 free_listener(struct Listener *listener) {
     if (listener == NULL)
         return;
@@ -545,9 +545,13 @@ free_listener(struct Listener *listener) {
     free(listener->fallback_address);
     free(listener->source_address);
     free(listener->table_name);
+
     table_ref_put(listener->table);
     listener->table == NULL;
-    free_logger(listener->access_log);
+
+    logger_ref_put(listener->access_log);
+    listener->access_log = NULL;
+
     free(listener);
 }
 

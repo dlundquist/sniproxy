@@ -203,8 +203,8 @@ free_config(struct Config *config) {
     free(config->user);
     free(config->pidfile);
 
+    logger_ref_put(config->access_log);
     free_listeners(&config->listeners);
-
     free_tables(&config->tables);
 
     free(config);
@@ -218,9 +218,14 @@ reload_config(struct Config *config, struct ev_loop *loop) {
     if (new_config == NULL)
         return err("failed to load %s", config->filename);
 
-    // TODO update access_log
+    /* update access_log */
+    logger_ref_put(config->access_log);
+    config->access_log = logger_ref_get(new_config->access_log);
+
     reload_tables(&config->tables, &new_config->tables);
-    listeners_reload(&config->listeners, &new_config->listeners, &config->tables, loop);
+
+    listeners_reload(&config->listeners, &new_config->listeners,
+            &config->tables, loop);
 
     free_config(new_config);
 }
@@ -275,7 +280,11 @@ end_listener_stanza(struct Config *config, struct Listener *listener) {
     if (valid_listener(listener) <= 0) {
         err("Invalid listener");
         print_listener_config(stderr, listener);
-        free_listener(listener);
+
+        /* free listener */
+        listener_ref_get(listener);
+        listener_ref_put(listener);
+
         return -1;
     }
 
@@ -410,7 +419,8 @@ end_global_access_logger_stanza(struct Config *config, struct LoggerBuilder *lb)
     }
 
     set_logger_priority(logger, lb->priority);
-    config->access_log = logger;
+    logger_ref_put(config->access_log);
+    config->access_log = logger_ref_get(logger);
 
     free((char *)lb->filename);
     free((char *)lb->syslog_facility);
@@ -437,7 +447,8 @@ end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilde
     }
 
     set_logger_priority(logger, lb->priority);
-    listener->access_log = logger;
+    logger_ref_put(listener->access_log);
+    listener->access_log = logger_ref_get(logger);
 
     free((char *)lb->filename);
     free((char *)lb->syslog_facility);

@@ -30,6 +30,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <time.h>
+#include <assert.h>
 #include "logger.h"
 
 struct Logger {
@@ -37,11 +38,14 @@ struct Logger {
     int priority;
     int facility;
     const char *ident;
+    int reference_count;
 };
 
 static struct Logger *default_logger = NULL;
 
 
+static void free_logger(struct Logger *);
+static struct Logger *new_fd_logger(FILE *);
 static void init_default_logger();
 static void vlog_msg(struct Logger *, int, const char *, va_list);
 static void free_at_exit();
@@ -51,16 +55,19 @@ static int lookup_syslog_facility(const char *);
 struct Logger *
 new_syslog_logger(const char *ident, const char *facility) {
     struct Logger *logger = malloc(sizeof(struct Logger));
-    if (logger == NULL)
-        return NULL;
-
-    logger->fd = NULL;
-    logger->priority = LOG_DEBUG;
-    logger->facility = lookup_syslog_facility(facility);
-    logger->ident = strdup(ident);
-    if (logger->ident == NULL) {
-        free(logger);
-        return NULL;
+    if (logger != NULL) {
+        logger->fd = NULL;
+        logger->priority = LOG_DEBUG;
+        logger->facility = lookup_syslog_facility(facility);
+        logger->ident = NULL;
+        logger->reference_count = 0;
+        if (ident != NULL) {
+            logger->ident = strdup(ident);
+            if (logger->ident == NULL) {
+                free(logger);
+                return NULL;
+            }
+        }
     }
 
     return logger;
@@ -68,31 +75,20 @@ new_syslog_logger(const char *ident, const char *facility) {
 
 struct Logger *
 new_file_logger(const char *filepath) {
-    struct Logger *logger = malloc(sizeof(struct Logger));
-    if (logger == NULL)
-        return NULL;
-
-    logger->fd = fopen(filepath, "a");
-    if (logger->fd == NULL) {
+    FILE *fd = fopen(filepath, "a");
+    if (fd == NULL) {
         err("Failed to open new log file: %s", filepath);
-        free(logger);
         return NULL;
     }
-    setvbuf(logger->fd, NULL, _IOLBF, 0);
-    logger->priority = LOG_DEBUG;
-    logger->facility = 0;
-    logger->ident = NULL;
+    setvbuf(fd, NULL, _IOLBF, 0);
 
-    return logger;
+    return new_fd_logger(fd);
 }
 
 void
 set_default_logger(struct Logger *new_logger) {
-    struct Logger *old_logger = default_logger;
-
-    default_logger = new_logger;
-
-    free_logger(old_logger);
+    logger_ref_put(default_logger);
+    default_logger = logger_ref_get(new_logger);
 }
 
 void
@@ -101,6 +97,25 @@ set_logger_priority(struct Logger *logger, int priority) {
 }
 
 void
+logger_ref_put(struct Logger *logger) {
+    if (logger == NULL)
+        return;
+
+    assert(logger->reference_count > 0);
+    logger->reference_count--;
+    if (logger->reference_count == 0)
+        free_logger(logger);
+}
+
+struct Logger *
+logger_ref_get(struct Logger *logger) {
+    if (logger != NULL)
+        logger->reference_count++;
+
+    return logger;
+}
+
+static void
 free_logger(struct Logger *logger) {
     if (logger == NULL)
         return;
@@ -178,16 +193,31 @@ debug(const char *format, ...) {
     va_end(args);
 }
 
+static struct Logger *
+new_fd_logger(FILE *fd) {
+    assert(fd != NULL);
+
+    struct Logger *logger = malloc(sizeof(struct Logger));
+    if (logger != NULL) {
+        logger->fd = fd;
+        logger->priority = LOG_DEBUG;
+        logger->facility = 0;
+        logger->ident = NULL;
+        logger->reference_count = 0;
+    }
+
+    return logger;
+}
+
 static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
     char buffer[1024];
 
-    if (logger == NULL) {
+    if (default_logger == NULL)
         init_default_logger();
 
-        vlog_msg(default_logger, priority, format, args);
+    if (logger == NULL)
         return;
-    }
 
     if (priority > logger->priority)
         return;
@@ -208,21 +238,18 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
 
 static void
 init_default_logger() {
-    struct Logger *logger = malloc(sizeof(struct Logger));
+    struct Logger *logger = new_fd_logger(stderr);
     if (logger == NULL)
         return;
 
-    logger->fd = stderr;
-    logger->priority = LOG_DEBUG;
-
     atexit(free_at_exit);
 
-    default_logger = logger;
+    default_logger = logger_ref_get(logger);
 }
 
 static void
 free_at_exit() {
-    free_logger(default_logger);
+    logger_ref_put(default_logger);
     default_logger = NULL;
 }
 
@@ -254,5 +281,6 @@ lookup_syslog_facility(const char *facility) {
         if(strncasecmp(facilities[i].name, facility, strlen(facility)) == 0)
             return facilities[i].number;
 
+    /* fall back value */
     return LOG_USER;
 }

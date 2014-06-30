@@ -68,7 +68,6 @@ int valid_listener(const struct Listener *);
 struct Address *listener_lookup_server_address(const struct Listener *,
         const char *, size_t);
 void print_listener_config(FILE *, const struct Listener *);
-void free_listener(struct Listener *);
 void listener_ref_put(struct Listener *);
 struct Listener *listener_ref_get(struct Listener *);
 
