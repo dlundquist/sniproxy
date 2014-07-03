@@ -1,9 +1,11 @@
 address_test
+binder_test
 buffer_test
 cfg_tokenizer_test
 config_test
 http_test
 resolv_test
+table_test
 tls_test
 *.log
 *.trs

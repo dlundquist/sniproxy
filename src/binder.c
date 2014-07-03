@@ -29,7 +29,10 @@
 #include <string.h> /* memcpy() */
 #include <errno.h> /* errno */
 #include <alloca.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "binder.h"
+#include "logger.h"
 
 /*
  * binder is a child process we spawn before dropping privileges that is responable for creating new bound sockets to low ports
@@ -49,23 +52,17 @@ struct binder_request {
     struct sockaddr address[];
 };
 
+
 void
 start_binder() {
     int sockets[2];
-    pid_t pid;
-
-    /* Do not start binder if we are not running as root */
-    /*
-    if (getuid() != 0)
-        return;
-    */
 
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) {
         err("sockpair: %s", strerror(errno));
         return;
     }
 
-    pid = fork();
+    pid_t pid = fork();
     if (pid == -1) { /* error case */
         err("fork: %s", strerror(errno));
         close(sockets[0]);
@@ -83,20 +80,16 @@ start_binder() {
 }
 
 int
-bind_socket(struct sockaddr *addr, size_t addr_len) {
+bind_socket(const struct sockaddr *addr, size_t addr_len) {
     struct binder_request *request;
-    struct msghdr msg;
-    struct iovec iov[1];
-    size_t request_len;
-    char data_buf[256];
-    char control_buf[64];
+
 
     if (binder_pid <= 0) {
         err("%s: Binder not started", __func__);
         return -1;
     }
 
-    request_len = sizeof(request) + addr_len;
+    size_t request_len = sizeof(request) + addr_len;
     request = alloca(request_len);
 
     request->address_len = addr_len;
@@ -107,7 +100,10 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
         return -1;
     }
 
-
+    struct msghdr msg;
+    struct iovec iov[1];
+    char control_buf[64];
+    char data_buf[256];
     memset(&msg, 0, sizeof(msg));
     iov[0].iov_base = data_buf;
     iov[0].iov_len = sizeof(data_buf);
@@ -116,38 +112,42 @@ bind_socket(struct sockaddr *addr, size_t addr_len) {
     msg.msg_control = control_buf;
     msg.msg_controllen = sizeof(control_buf);
 
-    if (recvmsg(binder_sock, &msg, 0) < 0) {
+    int len = recvmsg(binder_sock, &msg, 0);
+    if (len < 0) {
         err("recvmsg: %s", strerror(errno));
         return -1;
     }
 
-    return parse_ancillary_data(&msg);
+    int fd = parse_ancillary_data(&msg);
+    if (fd < 0)
+        err("binder returned: %.*s", len, data_buf);
+
+    return fd;
 }
 
 void
 stop_binder() {
     close(binder_sock);
 
-    /* TODO wait() */
+    int status;
+    if (waitpid(binder_pid, &status, 0) < 0)
+        err("waitpid: %s", strerror(errno));
 }
 
 
 /* This function is invoked right after the binder is forked */
 static void
 run_binder(int sockfd) {
-    int running = 1, fd, len;
-    int *fdptr;
-    struct msghdr msg;
-    struct iovec iov[1];
-    struct cmsghdr *cmsg;
-    char control_data[64];
-    char buffer[256];
+    int running = 1;
+
 
     while (running) {
-        len = recv(sockfd, buffer, sizeof(buffer), 0);
+        char buffer[256];
+        int len = recv(sockfd, buffer, sizeof(buffer), 0);
         if (len < 0) {
-            err("recv: %s", strerror(errno));
-            return;
+            memset(buffer, 0, sizeof(buffer));
+            snprintf(buffer, sizeof(buffer), "recv(): %s", strerror(errno));
+            goto error;
         } else if (len == 0) {
             /* socket was closed */
             running = 0;
@@ -160,21 +160,27 @@ run_binder(int sockfd) {
 
         struct binder_request *req = (struct binder_request *)buffer;
 
-        fd = socket(req->address[0].sa_family, SOCK_STREAM, 0);
+        int fd = socket(req->address[0].sa_family, SOCK_STREAM, 0);
         if (fd < 0) {
-            err("socket: %s", strerror(errno));
             memset(buffer, 0, sizeof(buffer));
-            strncpy(buffer, "ERROR opening socket:", sizeof(buffer));
+            snprintf(buffer, sizeof(buffer), "socket(): %s", strerror(errno));
             goto error;
         }
+
+        /* set SO_REUSEADDR on server socket to facilitate restart */
+        int on = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
         if (bind(fd, req->address, req->address_len) < 0) {
-            err("bind: %s", strerror(errno));
             memset(buffer, 0, sizeof(buffer));
-            strncpy(buffer, "ERROR on binding:", sizeof(buffer));
+            snprintf(buffer, sizeof(buffer), "bind(): %s", strerror(errno));
             goto error;
         }
 
+        struct msghdr msg;
+        struct iovec iov[1];
+        struct cmsghdr *cmsg;
+        char control_data[64];
         memset(&msg, 0, sizeof(msg));
         memset(&iov, 0, sizeof(iov));
         memset(&control_data, 0, sizeof(control_data));
@@ -189,12 +195,13 @@ run_binder(int sockfd) {
         cmsg->cmsg_level = SOL_SOCKET;
         cmsg->cmsg_type = SCM_RIGHTS;
         cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
-        fdptr = (int *)CMSG_DATA(cmsg);
+        int *fdptr = (int *)CMSG_DATA(cmsg);
         memcpy(fdptr, &fd, sizeof(fd));
         msg.msg_controllen = cmsg->cmsg_len;
 
         if (sendmsg(sockfd, &msg, 0) < 0) {
-            err("sendmsg: %s", strerror(errno));
+            memset(buffer, 0, sizeof(buffer));
+            snprintf(buffer, sizeof(buffer), "send: %s", strerror(errno));
             return;
         }
 
@@ -203,8 +210,6 @@ run_binder(int sockfd) {
         continue;
 
         error:
-        strncpy(buffer + strlen(buffer), strerror(errno),
-                sizeof(buffer) - strlen(buffer));
 
         if (send(sockfd, buffer, strlen(buffer), 0) < 0) {
             err("send: %s", strerror(errno));

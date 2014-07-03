@@ -35,24 +35,104 @@ sub worker($$$$) {
     exit 0;
 }
 
+sub make_config($$$) {
+    my $proxy_port1 = shift;
+    my $proxy_port2 = shift;
+    my $httpd_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen 127.0.0.1 $proxy_port1 {
+    proto http
+    table table_a
+    access_log $logfile
+}
+
+listen 127.0.0.1 $proxy_port2 {
+    proto http
+    table table_b
+    access_log $logfile
+}
+
+table table_a {
+    localhost 127.0.0.1 $httpd_port
+}
+
+table table_b  {
+    localhost 127.0.0.1 $httpd_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub alter_config($$$$) {
+    my $filename = shift;
+    my $proxy_port1 = shift;
+    my $proxy_port2 = shift;
+    my $httpd_port = shift;
+
+    my $fh = undef;
+    open($fh, '>', $filename)
+        or die("open(): $!");
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen 127.0.0.1 $proxy_port1 {
+    proto http
+    table table_c
+}
+
+listen 127.0.0.1 $proxy_port2 {
+    proto http
+    table table_a
+}
+
+table table_a {
+    localhost 127.0.0.1 $httpd_port
+}
+
+table table_c  {
+    localhost 127.0.0.1 $httpd_port
+}
+END
+
+    close ($fh);
+}
+
 
 sub main {
-    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
-    my $httpd1_port = $ENV{TEST_HTTPD1_PORT} || 8081;
-    my $httpd2_port = $ENV{TEST_HTTPD2_PORT} || 8082;
+    my $proxy_port1 = $ENV{SNI_PROXY_PORT} || 8080;
+    my $proxy_port2 = $ENV{SNI_PROXY_PORT2} || 8081;
+    my $proxy_port3 = $ENV{SNI_PROXY_PORT3} || 8082;
+    my $httpd_port1 = $ENV{TEST_HTTPD_PORT} || 8083;
+    my $httpd_port2 = $ENV{TEST_HTTPD_PORT2} || 8084;
     my $workers = $ENV{WORKERS} || 10;
     my $iterations = $ENV{ITERATIONS} || 10;
 
-    my $config = make_config($proxy_port, $httpd1_port);
+    my $config = make_config($proxy_port1, $proxy_port2, $httpd_port1);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd1_port);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port1);
 
     # Wait for proxy to load and parse config
-    wait_for_port($httpd1_port);
-    wait_for_port($proxy_port);
+    wait_for_port($httpd_port1);
+    wait_for_port($proxy_port1);
+    wait_for_port($proxy_port2);
 
     for (my $i = 0; $i < $workers; $i++) {
-        start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
+        start_child('worker', \&worker, 'localhost', '', $proxy_port1, $iterations);
+    }
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, 'localhost', '', $proxy_port2, $iterations);
     }
 
     # Wait for all our children to finish
@@ -61,14 +141,18 @@ sub main {
     kill 15, $httpd_pid;
 
     # edit config
-    system('/usr/bin/perl', '-p', '-i', '-e', "s/$httpd1_port/$httpd2_port/", $config);
+    alter_config($config, $proxy_port2, $proxy_port3, $httpd_port2);
+
     kill 1, $proxy_pid;
 
-    $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd2_port);
-    wait_for_port($httpd2_port);
+    $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port2);
+    wait_for_port($httpd_port2);
 
     for (my $i = 0; $i < $workers; $i++) {
-        start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
+        start_child('worker', \&worker, 'localhost', '', $proxy_port2, $iterations);
+    }
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, 'localhost', '', $proxy_port3, $iterations);
     }
 
     # Wait for all our children to finish

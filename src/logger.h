@@ -41,7 +41,8 @@ struct Logger *new_syslog_logger(const char *indent, const char *facility);
 struct Logger *new_file_logger(const char *filepath);
 void set_default_logger(struct Logger *);
 void set_logger_priority(struct Logger *, int);
-void free_logger(struct Logger *);
+struct Logger *logger_ref_get(struct Logger *);
+void logger_ref_put(struct Logger *);
 
 /* Shorthand to log to global error log */
 void fatal(const char *, ...)

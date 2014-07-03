@@ -27,10 +27,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <assert.h>
 #include "table.h"
 #include "backend.h"
 #include "address.h"
 #include "logger.h"
+
+
+static void free_table(struct Table *);
 
 
 static inline struct Backend *
@@ -55,13 +59,14 @@ new_table() {
     }
 
     table->name = NULL;
+    table->reference_count = 0;
     STAILQ_INIT(&table->backends);
 
     return table;
 }
 
 int
-accept_table_arg(struct Table *table, char *arg) {
+accept_table_arg(struct Table *table, const char *arg) {
     if (table->name == NULL) {
         table->name = strdup(arg);
         if (table->name == NULL) {
@@ -79,6 +84,7 @@ accept_table_arg(struct Table *table, char *arg) {
 
 void
 add_table(struct Table_head *tables, struct Table *table) {
+    table_ref_get(table);
     SLIST_INSERT_HEAD(tables, table, entries);
 }
 
@@ -95,7 +101,7 @@ free_tables(struct Table_head *tables) {
 
     while ((iter = SLIST_FIRST(tables)) != NULL) {
         SLIST_REMOVE_HEAD(tables, entries);
-        free_table(iter);
+        table_ref_put(iter);
     }
 }
 
@@ -104,12 +110,11 @@ table_lookup(const struct Table_head *tables, const char *name) {
     struct Table *iter;
 
     SLIST_FOREACH(iter, tables, entries) {
-        if (name == NULL) {
-            if (iter->name == NULL)
-                return iter;
-        } else if (iter->name) {
-            if (strcmp(iter->name, name) == 0)
-                return iter;
+        if (iter->name == NULL && name == NULL) {
+            return iter;
+        } else if (iter->name != NULL && name != NULL &&
+                strcmp(iter->name, name) == 0) {
+            return iter;
         }
     }
 
@@ -119,7 +124,7 @@ table_lookup(const struct Table_head *tables, const char *name) {
 void
 remove_table(struct Table_head *tables, struct Table *table) {
     SLIST_REMOVE(tables, table, Table, entries);
-    free_table(table);
+    table_ref_put(table);
 }
 
 const struct Address *
@@ -137,28 +142,44 @@ table_lookup_server_address(const struct Table *table, const char *name, size_t 
 
 void
 reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
-    struct Table *new_table;
+    struct Table *iter;
 
-    /* TODO remove unused tables which were removed from the new configuration */
+    /* Remove unused tables which were removed from the new configuration */
+    /* Unused elements at the beginning of the list */
+    while ((iter = SLIST_FIRST(tables)) != NULL &&
+            table_lookup(new_tables, SLIST_FIRST(tables)->name) == NULL) {
+        SLIST_REMOVE_HEAD(tables, entries);
+        table_ref_put(iter);
+    }
+    /* Remove elements following first used element */
+    SLIST_FOREACH(iter, tables, entries) {
+        if (SLIST_NEXT(iter, entries) != NULL &&
+                table_lookup(new_tables,
+                        SLIST_NEXT(iter, entries)->name) == NULL) {
+            struct Table *temp = SLIST_NEXT(iter, entries);
+            /* SLIST remove next */
+            SLIST_NEXT(iter, entries) = SLIST_NEXT(temp, entries);
+            table_ref_put(temp);
+        }
+    }
 
-    while ((new_table = SLIST_FIRST(new_tables)) != NULL) {
+
+    while ((iter = SLIST_FIRST(new_tables)) != NULL) {
         SLIST_REMOVE_HEAD(new_tables, entries);
 
         /* Initialize table regular expressions */
-        init_table(new_table);
+        init_table(iter);
 
-        struct Table *existing = table_lookup(tables, new_table->name);
+        struct Table *existing = table_lookup(tables, iter->name);
         if (existing) {
             /* Swap table contents */
             struct Backend_head temp = existing->backends;
-            existing->backends = new_table->backends;
-            new_table->backends = temp;
-
-            /* free new table (contains old table contents) */
-            free_table(new_table);
+            existing->backends = iter->backends;
+            iter->backends = temp;
         } else {
-            add_table(tables, new_table);
+            add_table(tables, iter);
         }
+        table_ref_put(iter);
     }
 }
 
@@ -177,7 +198,7 @@ print_table_config(FILE *file, struct Table *table) {
     fprintf(file, "}\n\n");
 }
 
-void
+static void
 free_table(struct Table *table) {
     struct Backend *iter;
 
@@ -191,3 +212,19 @@ free_table(struct Table *table) {
     free(table);
 }
 
+void
+table_ref_put(struct Table *table) {
+    if (table == NULL)
+        return;
+
+    assert(table->reference_count > 0);
+    table->reference_count--;
+    if (table->reference_count == 0)
+        free_table(table);
+}
+
+struct Table *
+table_ref_get(struct Table *table) {
+    table->reference_count++;
+    return table;
+}

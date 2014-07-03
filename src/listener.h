@@ -42,6 +42,7 @@ struct Listener {
     int log_bad_requests;
 
     /* Runtime fields */
+    int reference_count;
     struct ev_io watcher;
     struct ev_timer backoff_timer;
     struct Table *table;
@@ -58,16 +59,17 @@ int accept_listener_protocol(struct Listener *, char *);
 int accept_listener_bad_request_action(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
-void init_listeners(struct Listener_head *, const struct Table_head *);
+void init_listeners(struct Listener_head *, const struct Table_head *, struct ev_loop *);
+void listeners_reload(struct Listener_head *, struct Listener_head *, const struct Table_head *, struct ev_loop *);
 void remove_listener(struct Listener_head *, struct Listener *);
 void free_listeners(struct Listener_head *);
 
 int valid_listener(const struct Listener *);
-int init_listener(struct Listener *, const struct Table_head *);
 struct Address *listener_lookup_server_address(const struct Listener *,
         const char *, size_t);
 void print_listener_config(FILE *, const struct Listener *);
-void free_listener(struct Listener *);
+void listener_ref_put(struct Listener *);
+struct Listener *listener_ref_get(struct Listener *);
 
 
 #endif

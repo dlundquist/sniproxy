@@ -50,6 +50,18 @@ static const char *bad[] = {
     "1n\\/l1|>|-|0$T|\\|4M"
 };
 
+int compare_address_strings(const char *a, const char *b) {
+    struct Address *addr_a = new_address(a);
+    struct Address *addr_b = new_address(b);
+
+    int result = address_compare(addr_a, addr_b);
+
+    free(addr_a);
+    free(addr_b);
+
+    return result;
+}
+
 int main() {
     /* using volatile variables so we can example core dumps */
     struct Address *addr;
@@ -101,6 +113,12 @@ int main() {
             return 1;
         }
     }
+
+    assert(compare_address_strings("unix:/dev/log", "127.0.0.1") < 0);
+    assert(compare_address_strings("0.0.0.0", "127.0.0.1") < 0);
+    assert(compare_address_strings("127.0.0.1", "0.0.0.0") > 0);
+    assert(compare_address_strings("127.0.0.1", "127.0.0.1") == 0);
+    assert(compare_address_strings("127.0.0.1:80", "127.0.0.1:81") < 0);
 
     return 0;
 }

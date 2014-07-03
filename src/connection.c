@@ -97,7 +97,7 @@ init_connections() {
  * Returns 1 on success or 0 on error;
  */
 int
-accept_connection(const struct Listener *listener, struct ev_loop *loop) {
+accept_connection(struct Listener *listener, struct ev_loop *loop) {
     struct Connection *con = new_connection();
     if (con == NULL) {
         err("new_connection failed");
@@ -125,7 +125,7 @@ accept_connection(const struct Listener *listener, struct ev_loop *loop) {
     ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
     con->client.watcher.data = con;
     con->state = ACCEPTED;
-    con->listener = listener;
+    con->listener = listener_ref_get(listener);
     if (clock_gettime(CLOCK_MONOTONIC, &con->established_timestamp) < 0)
         err("clock_gettime() failed: %s", strerror(errno));
 
@@ -646,9 +646,9 @@ new_connection() {
 static void
 log_connection(struct Connection *con) {
     struct timespec duration;
-    char client_address[256];
-    char listener_address[256];
-    char server_address[256];
+    char client_address[128];
+    char listener_address[128];
+    char server_address[128];
 
     if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
         timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
@@ -700,6 +700,7 @@ free_connection(struct Connection *con) {
     if (con == NULL)
         return;
 
+    listener_ref_put(con->listener);
     free_buffer(con->client.buffer);
     free_buffer(con->server.buffer);
     free((void *)con->hostname); /* cast away const'ness */

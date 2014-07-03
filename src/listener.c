@@ -32,16 +32,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include "address.h"
 #include "listener.h"
 #include "connection.h"
 #include "logger.h"
+#include "binder.h"
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
@@ -50,6 +53,9 @@
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
+static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
+static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
+static void free_listener(struct Listener *);
 
 
 /*
@@ -57,11 +63,11 @@ static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
  */
 void
 init_listeners(struct Listener_head *listeners,
-        const struct Table_head *tables) {
+        const struct Table_head *tables, struct ev_loop *loop) {
     struct Listener *iter;
 
     SLIST_FOREACH(iter, listeners, entries) {
-        if (init_listener(iter, tables) < 0) {
+        if (init_listener(iter, tables, loop) < 0) {
             err("Failed to initialize listener");
             print_listener_config(stderr, iter);
             exit(1);
@@ -69,11 +75,105 @@ init_listeners(struct Listener_head *listeners,
     }
 }
 
+void
+listeners_reload(struct Listener_head *existing_listeners,
+        struct Listener_head *new_listeners,
+        const struct Table_head *tables, struct ev_loop *loop) {
+    struct Listener *iter_existing = SLIST_FIRST(existing_listeners);
+    struct Listener *iter_new = SLIST_FIRST(new_listeners);
+
+    while (iter_existing != NULL || iter_new != NULL) {
+        int compare_result;
+        char address[128];
+
+        if (iter_existing == NULL)
+            compare_result = 1;
+        else if (iter_new == NULL)
+            compare_result = -1;
+        else
+            compare_result = address_compare(iter_existing->address, iter_new->address);
+
+        if (compare_result > 0) {
+            struct Listener *new_listener = iter_new;
+            iter_new = SLIST_NEXT(iter_new, entries);
+
+            notice("Listener %s added.",
+                    display_address(new_listener->address,
+                            address, sizeof(address)));
+
+            SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
+            add_listener(existing_listeners, new_listener);
+            init_listener(new_listener, tables, loop);
+            listener_ref_put(new_listener); // -1 for removing from new_listeners
+        } else if (compare_result == 0) {
+            notice ("Listener %s updated.",
+                    display_address(iter_existing->address,
+                            address, sizeof(address)));
+
+            listener_update(iter_existing, iter_new, tables);
+
+            iter_existing = SLIST_NEXT(iter_existing, entries);
+            iter_new = SLIST_NEXT(iter_new, entries);
+        } else {
+            struct Listener *removed_listener = iter_existing;
+            iter_existing = SLIST_NEXT(iter_existing, entries);
+
+            notice("Listener %s removed.",
+                    display_address(removed_listener->address,
+                            address, sizeof(address)));
+
+            SLIST_REMOVE(existing_listeners, removed_listener, Listener, entries);
+            close_listener(loop, removed_listener);
+            listener_ref_put(removed_listener); // -1 for removing from existing_listeners
+        }
+    }
+}
+
+/*
+ * Copy contents of new_listener into existing listener
+ */
+static void
+listener_update(struct Listener *existing_listener, struct Listener *new_listener, const struct Table_head *tables) {
+    assert(existing_listener != NULL);
+    assert(new_listener != NULL);
+    assert(address_compare(existing_listener->address, new_listener->address) == 0);
+
+    free(existing_listener->fallback_address);
+    existing_listener->fallback_address = new_listener->fallback_address;
+    new_listener->fallback_address = NULL;
+
+    free(existing_listener->source_address);
+    existing_listener->source_address = new_listener->source_address;
+    new_listener->source_address = NULL;
+
+    existing_listener->protocol = new_listener->protocol;
+
+    free(existing_listener->table_name);
+    existing_listener->table_name = new_listener->table_name;
+    new_listener->table_name = NULL;
+
+    logger_ref_put(existing_listener->access_log);
+    existing_listener->access_log = logger_ref_get(new_listener->access_log);
+
+    existing_listener->log_bad_requests = new_listener->log_bad_requests;
+
+    struct Table *new_table =
+            table_lookup(tables, existing_listener->table_name);
+
+    if (new_table != NULL) {
+        init_table(new_table);
+
+        table_ref_put(existing_listener->table);
+        existing_listener->table = table_ref_get(new_table);
+
+        table_ref_put(new_listener->table);
+        new_listener->table = NULL;
+    }
+}
+
 struct Listener *
 new_listener() {
-    struct Listener *listener;
-
-    listener = calloc(1, sizeof(struct Listener));
+    struct Listener *listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
         err("calloc");
         return NULL;
@@ -83,8 +183,15 @@ new_listener() {
     listener->fallback_address = NULL;
     listener->source_address = NULL;
     listener->protocol = tls_protocol;
+    listener->table_name = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
+    listener->reference_count = 0;
+    /* Initializes sock fd to negative sentinel value to indicate watchers
+     * are not active */
+    ev_io_init(&listener->watcher, accept_cb, -1, EV_READ);
+    ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
+    listener->table = NULL;
 
     return listener;
 }
@@ -211,16 +318,37 @@ accept_listener_bad_request_action(struct Listener *listener, char *action) {
     return 1;
 }
 
+/*
+ * Insert an additional listener in to the sorted list of listeners
+ */
 void
 add_listener(struct Listener_head *listeners, struct Listener *listener) {
-    SLIST_INSERT_HEAD(listeners, listener, entries);
+    assert(listeners != NULL);
+    assert(listener != NULL);
+    assert(listener->address != NULL);
+    listener_ref_get(listener);
+
+    if (SLIST_FIRST(listeners) == NULL ||
+            address_compare(listener->address, SLIST_FIRST(listeners)->address) < 0) {
+        SLIST_INSERT_HEAD(listeners, listener, entries);
+        return;
+    }
+
+    struct Listener *iter;
+    SLIST_FOREACH(iter, listeners, entries) {
+        if (SLIST_NEXT(iter, entries) == NULL ||
+                address_compare(listener->address, SLIST_NEXT(iter, entries)->address) < 0) {
+            SLIST_INSERT_AFTER(iter, listener, entries);
+            return;
+        }
+    }
 }
 
 void
 remove_listener(struct Listener_head *listeners, struct Listener *listener) {
     SLIST_REMOVE(listeners, listener, Listener, entries);
     close_listener(EV_DEFAULT, listener);
-    free_listener(listener);
+    listener_ref_put(listener);
 }
 
 int
@@ -259,17 +387,15 @@ valid_listener(const struct Listener *listener) {
     return 1;
 }
 
-int
-init_listener(struct Listener *listener, const struct Table_head *tables) {
-    int sockfd;
-    int on = 1;
-
-    listener->table = table_lookup(tables, listener->table_name);
-    if (listener->table == NULL) {
+static int
+init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
+    struct Table *table = table_lookup(tables, listener->table_name);
+    if (table == NULL) {
         err("Table \"%s\" not defined", listener->table_name);
         return -1;
     }
-    init_table(listener->table);
+    init_table(table);
+    listener->table = table_ref_get(table);
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
@@ -278,18 +404,35 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
-    sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
         return -2;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
+    int on = 1;
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    if (bind(sockfd, address_sa(listener->address),
-                address_sa_len(listener->address)) < 0) {
-        err("bind failed: %s", strerror(errno));
+    int result = bind(sockfd, address_sa(listener->address),
+            address_sa_len(listener->address));
+    if (result < 0 && errno == EACCES) {
+        /* Retry using binder module */
+        close(sockfd);
+        sockfd = bind_socket(address_sa(listener->address),
+                address_sa_len(listener->address));
+        if (sockfd < 0) {
+            char address[128];
+            err("binder failed to bind to %s",
+                display_address(listener->address, address, sizeof(address)));
+            close(sockfd);
+            return -3;
+        }
+    } else if (result < 0) {
+        char address[128];
+        err("bind %s failed: %s",
+            display_address(listener->address, address, sizeof(address)),
+            strerror(errno));
         close(sockfd);
         return -3;
     }
@@ -304,12 +447,12 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
+    listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
-    ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
     listener->backoff_timer.data = listener;
 
-    ev_io_start(EV_DEFAULT, &listener->watcher);
+    ev_io_start(loop, &listener->watcher);
 
     return sockfd;
 }
@@ -359,7 +502,7 @@ listener_lookup_server_address(const struct Listener *listener,
 
 void
 print_listener_config(FILE *file, const struct Listener *listener) {
-    char address[256];
+    char address[128];
 
     fprintf(file, "listener %s {\n",
             display_address(listener->address, address, sizeof(address)));
@@ -383,12 +526,17 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 }
 
 static void
-close_listener(struct ev_loop *loop, struct Listener * listener) {
+close_listener(struct ev_loop *loop, struct Listener *listener) {
+    if (listener->watcher.fd < 0)
+        return;
+
+    ev_timer_stop(loop, &listener->backoff_timer);
     ev_io_stop(loop, &listener->watcher);
     close(listener->watcher.fd);
+    listener_ref_put(listener);
 }
 
-void
+static void
 free_listener(struct Listener *listener) {
     if (listener == NULL)
         return;
@@ -397,7 +545,13 @@ free_listener(struct Listener *listener) {
     free(listener->fallback_address);
     free(listener->source_address);
     free(listener->table_name);
-    free_logger(listener->access_log);
+
+    table_ref_put(listener->table);
+    listener->table == NULL;
+
+    logger_ref_put(listener->access_log);
+    listener->access_log = NULL;
+
     free(listener);
 }
 
@@ -407,6 +561,36 @@ free_listeners(struct Listener_head *listeners) {
 
     while ((iter = SLIST_FIRST(listeners)) != NULL)
         remove_listener(listeners, iter);
+}
+
+/*
+ * Listener reference counting
+ *
+ * Since when reloading the configuration a listener with active connections
+ * could be removed and connections require a reference to to the listener on
+ * which they where received we need to allow listeners to linger outside the
+ * listeners list in the active configuration, and free them when their last
+ * connection closes.
+ *
+ * Accomplishing this with reference counting, each connection counts as a one
+ * reference, plus one for the active EV watchers and one for the listener
+ * being a member on a configurations listeners list.
+ */
+void
+listener_ref_put(struct Listener *listener) {
+    if (listener == NULL)
+        return;
+
+    assert(listener->reference_count > 0);
+    listener->reference_count--;
+    if (listener->reference_count == 0)
+        free_listener(listener);
+}
+
+struct Listener *
+listener_ref_get(struct Listener *listener) {
+    listener->reference_count++;
+    return listener;
 }
 
 static void

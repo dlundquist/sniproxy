@@ -26,9 +26,9 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> /* tolower */
 #include <sys/queue.h>
 #include <pcre.h>
+#include <assert.h>
 #include "backend.h"
 #include "address.h"
 #include "logger.h"
@@ -51,7 +51,7 @@ new_backend() {
 }
 
 int
-accept_backend_arg(struct Backend *backend, char *arg) {
+accept_backend_arg(struct Backend *backend, const char *arg) {
     if (backend->pattern == NULL) {
         backend->pattern = strdup(arg);
         if (backend->pattern == NULL) {
@@ -59,9 +59,6 @@ accept_backend_arg(struct Backend *backend, char *arg) {
             return -1;
         }
     } else if (backend->address == NULL) {
-        /* Store address in lower case */
-        for (char *c = arg; *c != '\0'; c++)
-            *c = tolower(*c);
 
         backend->address = new_address(arg);
         if (backend->address == NULL) {
@@ -91,23 +88,23 @@ add_backend(struct Backend_head *backends, struct Backend *backend) {
 
 int
 init_backend(struct Backend *backend) {
-    char address_buf[256];
-    const char *reerr;
-    int reerroffset;
-
     if (backend->pattern_re == NULL) {
+        const char *reerr;
+        int reerroffset;
+
         backend->pattern_re =
             pcre_compile(backend->pattern, 0, &reerr, &reerroffset, NULL);
         if (backend->pattern_re == NULL) {
-            err("Regex compilation failed: %s, offset %d",
-                    reerr, reerroffset);
+            err("Regex compilation of \"%s\" failed: %s, offset %d",
+                    backend->pattern, reerr, reerroffset);
             return 0;
         }
 
+        char address[128];
         debug("Parsed %s %s",
                 backend->pattern,
                 display_address(backend->address,
-                    address_buf, sizeof(address_buf)));
+                    address, sizeof(address)));
     }
 
     return 1;
@@ -122,17 +119,19 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
         name_len = 0;
     }
 
-    STAILQ_FOREACH(iter, head, entries)
+    STAILQ_FOREACH(iter, head, entries) {
+        assert(iter->pattern_re != NULL);
         if (pcre_exec(iter->pattern_re, NULL,
                     name, name_len, 0, 0, NULL, 0) >= 0)
             return iter;
+    }
 
     return NULL;
 }
 
 void
 print_backend_config(FILE *file, const struct Backend *backend) {
-    char address[256];
+    char address[128];
 
     fprintf(file, "\t%s %s\n",
             backend->pattern,
