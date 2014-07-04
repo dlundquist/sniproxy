@@ -69,7 +69,10 @@ start_binder() {
         close(sockets[1]);
         return;
     } else if (pid == 0) { /* child */
-        close(sockets[0]);
+        /* don't leak file descriptors to the child process */
+        for (int i = 0; i < sockets[1]; i++)
+            close(i);
+
         run_binder(sockets[1]);
         exit(0);
     } else { /* parent */
@@ -139,7 +142,6 @@ stop_binder() {
 static void
 run_binder(int sockfd) {
     int running = 1;
-
 
     while (running) {
         char buffer[256];
