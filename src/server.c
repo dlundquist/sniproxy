@@ -31,6 +31,7 @@
 #include "server.h"
 #include "listener.h"
 #include "connection.h"
+#include "binder.h"
 #include "resolv.h"
 
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
@@ -47,6 +48,8 @@ init_server(struct Config *c) {
 
     /* ignore SIGPIPE, or it will kill us */
     signal(SIGPIPE, SIG_IGN);
+
+    start_binder();
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 }
@@ -71,6 +74,7 @@ run_server() {
 
     free_connections(EV_DEFAULT);
     resolv_shutdown(EV_DEFAULT);
+    stop_binder();
 }
 
 static void

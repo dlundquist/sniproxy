@@ -35,15 +35,11 @@
 #include "logger.h"
 
 /*
- * binder is a child process we spawn before dropping privileges that is responable for creating new bound sockets to low ports
+ * binder is a child process we spawn before dropping privileges that is
+ * responsible for creating new bound sockets to low ports
  */
 
-
-static int binder_sock; /* socket to binder */
-static pid_t binder_pid;
-
-
-static void run_binder(int);
+static void binder_main(int);
 static int parse_ancillary_data(struct msghdr *);
 
 
@@ -51,6 +47,10 @@ struct binder_request {
     size_t address_len;
     struct sockaddr address[];
 };
+
+
+static int binder_sock = -1; /* socket to binder */
+static pid_t binder_pid = -1;
 
 
 void
@@ -67,13 +67,12 @@ start_binder() {
         err("fork: %s", strerror(errno));
         close(sockets[0]);
         close(sockets[1]);
-        return;
     } else if (pid == 0) { /* child */
         /* don't leak file descriptors to the child process */
         for (int i = 0; i < sockets[1]; i++)
             close(i);
 
-        run_binder(sockets[1]);
+        binder_main(sockets[1]);
         exit(0);
     } else { /* parent */
         close(sockets[1]);
@@ -138,12 +137,9 @@ stop_binder() {
 }
 
 
-/* This function is invoked right after the binder is forked */
 static void
-run_binder(int sockfd) {
-    int running = 1;
-
-    while (running) {
+binder_main(int sockfd) {
+    for (;;) {
         char buffer[256];
         int len = recv(sockfd, buffer, sizeof(buffer), 0);
         if (len < 0) {
@@ -152,8 +148,8 @@ run_binder(int sockfd) {
             goto error;
         } else if (len == 0) {
             /* socket was closed */
-            running = 0;
-            continue;
+            close(sockfd);
+            break;
         } else if (len < (int)sizeof(struct binder_request)) {
             memset(buffer, 0, sizeof(buffer));
             strncpy(buffer, "Incomplete error:", sizeof(buffer));
@@ -204,7 +200,7 @@ run_binder(int sockfd) {
         if (sendmsg(sockfd, &msg, 0) < 0) {
             memset(buffer, 0, sizeof(buffer));
             snprintf(buffer, sizeof(buffer), "send: %s", strerror(errno));
-            return;
+            goto error;
         }
 
         close(fd);
@@ -215,7 +211,8 @@ run_binder(int sockfd) {
 
         if (send(sockfd, buffer, strlen(buffer), 0) < 0) {
             err("send: %s", strerror(errno));
-            return;
+            close(sockfd);
+            break;
         }
     }
 }
@@ -235,4 +232,3 @@ parse_ancillary_data(struct msghdr *m) {
 
     return fd;
 }
-

@@ -32,6 +32,10 @@ script:
   - echo -e "user daemon\n\npidfile /var/run/sniproxy.pid\n\nerror_log {\n  syslog daemon\n  priority notice\n}\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
   - sudo service sniproxy start
   - sleep 1; test -e /var/run/sniproxy.pid && ps -up `cat /var/run/sniproxy.pid`
+  - echo "Testing config reload functionality"
+  - echo -e "user daemon\n\npidfile /var/run/sniproxy.pid\n\nerror_log {\n  syslog daemon\n  priority notice\n}\n\nlisten 80 {\n  proto http\n}\n\nlisten 81 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
+  - sudo kill -HUP `cat /var/run/sniproxy.pid`
+  - sudo netstat -lptn | egrep ':::81.+/sniproxy'
   - sudo service sniproxy stop
   - sudo apt-get remove sniproxy
   - echo "Rebuilding without DNS and rerunning unit tests"

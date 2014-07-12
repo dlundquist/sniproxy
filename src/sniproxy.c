@@ -39,7 +39,6 @@
 #include "sniproxy.h"
 #include "config.h"
 #include "server.h"
-#include "binder.h"
 #include "logger.h"
 
 
@@ -178,8 +177,6 @@ drop_perms(const char *username) {
 
     if (getuid() != 0)
         return;
-
-    start_binder();
 
     user = getpwnam(username);
     if (user == NULL)
