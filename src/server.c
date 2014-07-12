@@ -45,6 +45,16 @@ void
 init_server(struct Config *c) {
     config = c;
 
+    /* ignore SIGPIPE, or it will kill us */
+    signal(SIGPIPE, SIG_IGN);
+
+    init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
+}
+
+void
+run_server() {
+    ev_default_fork();
+
     ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
     ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);
     ev_signal_init(&sigint_watcher, signal_cb, SIGINT);
@@ -54,14 +64,6 @@ init_server(struct Config *c) {
     ev_signal_start(EV_DEFAULT, &sigint_watcher);
     ev_signal_start(EV_DEFAULT, &sigterm_watcher);
 
-    /* ignore SIGPIPE, or it will kill us */
-    signal(SIGPIPE, SIG_IGN);
-
-    init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
-}
-
-void
-run_server() {
     resolv_init(EV_DEFAULT);
     init_connections();
 
