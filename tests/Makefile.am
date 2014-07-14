@@ -39,7 +39,8 @@ tls_test_SOURCES = tls_test.c \
                    ../src/logger.c
 
 binder_test_SOURCES = binder_test.c \
-                      ../src/binder.c
+                      ../src/binder.c \
+					  ../src/logger.c
 
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c

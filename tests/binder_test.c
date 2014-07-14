@@ -13,7 +13,7 @@ int main() {
     int i;
 
     start_binder("binder_test");
-    for (i = 8080; i < 8084; i++)
+    for (i = 8080; i <= 8084; i++)
         test_binder(i);
 
     stop_binder();
@@ -54,6 +54,10 @@ test_binder(int port) {
         perror("listen:");
         exit(1);
     }
+
+    /* Test error handling: */
+    fd = bind_socket((struct sockaddr *)&addr, sizeof(addr));
+    assert(fd == -1);
 
     return 0;
 }
