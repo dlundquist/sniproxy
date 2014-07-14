@@ -42,12 +42,16 @@
 #include "logger.h"
 
 
+static const char *sniproxy_version = PACKAGE_VERSION;
+
+
 static void usage();
 static void perror_exit(const char *);
 static void daemonize(void);
 static void set_limits(int);
 static void drop_perms(const char* username);
 static void write_pidfile(const char *, pid_t);
+
 
 int
 main(int argc, char **argv) {
@@ -57,7 +61,7 @@ main(int argc, char **argv) {
     int max_nofiles = 65536;
     int opt;
 
-    while ((opt = getopt(argc, argv, "fc:n:")) != -1) {
+    while ((opt = getopt(argc, argv, "fc:n:V")) != -1) {
         switch (opt) {
             case 'c':
                 config_file = optarg;
@@ -68,6 +72,9 @@ main(int argc, char **argv) {
             case 'n':
                 max_nofiles = atoi(optarg);
                 break;
+            case 'V':
+                printf("sniproxy %s\n", sniproxy_version);
+                exit(EXIT_SUCCESS);
             default:
                 usage();
                 exit(EXIT_FAILURE);
