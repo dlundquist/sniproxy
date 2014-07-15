@@ -28,7 +28,11 @@
 #include <unistd.h>
 #include <string.h> /* memcpy() */
 #include <errno.h> /* errno */
+
+#ifndef __FreeBSD__
 #include <alloca.h>
+#endif /* __FreeBSD__ */
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "binder.h"

@@ -32,7 +32,11 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+
+#ifndef __FreeBSD__
 #include <alloca.h>
+#endif /* __FreeBSD__ */
+
 #include <assert.h>
 #include "buffer.h"
 #include "logger.h"

@@ -39,7 +39,11 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
+
+#ifndef __FreeBSD__
 #include <alloca.h>
+#endif /* __FreeBSD__ */
+
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"
