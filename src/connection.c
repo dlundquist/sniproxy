@@ -39,7 +39,11 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
+
+#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
+
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"

@@ -32,7 +32,11 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+
+#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
+
 #include <assert.h>
 #include "buffer.h"
 #include "logger.h"

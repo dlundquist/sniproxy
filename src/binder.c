@@ -28,7 +28,11 @@
 #include <unistd.h>
 #include <string.h> /* memcpy() */
 #include <errno.h> /* errno */
+
+#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "binder.h"
