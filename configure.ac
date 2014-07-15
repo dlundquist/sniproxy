@@ -12,8 +12,10 @@ AC_PROG_CC_C99
 # Required by automake < 1.14
 AM_PROG_CC_C_O
 
+
+
 # Checks for libraries.
-PKG_CHECK_MODULES([LIBEV], [libev],,
+PKG_CHECK_MODULES([LIBEV], [libev], HAVE_LIBEV=yes; AC_DEFINE(HAVE_LIBEV, 1),
 [AC_LIB_HAVE_LINKFLAGS(ev,, [#include <ev.h>], [ev_run(0,0);])
  if test x$ac_cv_libev = xyes; then
   AC_SUBST([LIBEV_LIBS], [$LIBEV])
@@ -24,7 +26,7 @@ PKG_CHECK_MODULES([LIBEV], [libev],,
  fi
 ])
 
-PKG_CHECK_MODULES([LIBPCRE], [libpcre],,
+PKG_CHECK_MODULES([LIBPCRE], [libpcre], HAVE_LIBPCRE=yes; AC_DEFINE(HAVE_LIBPCRE, 1),
 [AC_LIB_HAVE_LINKFLAGS(pcre,, [#include <pcre.h>], [pcre_exec(0,0,0,0,0,0,0,0);])
  if test x$ac_cv_libpcre = xyes; then
   AC_SUBST([LIBPCRE_LIBS], [$LIBPCRE])
@@ -42,13 +44,13 @@ AC_ARG_ENABLE([dns],
 AM_CONDITIONAL([DNS_ENABLED], [test "x$dns" = "xyes"])
 
 AS_IF([test "x$dns" = "xyes"],
- [PKG_CHECK_MODULES([LIBUDNS], [libudns],,
+ [PKG_CHECK_MODULES([LIBUDNS], [libudns], HAVE_LIBUDNS=yes; AC_DEFINE(HAVE_LIBUDNS, 1),
   [AC_LIB_HAVE_LINKFLAGS(udns,, [#include <udns.h>], [dns_init(0, 0);])
    AS_IF([test x$ac_cv_libudns = xyes], [AC_SUBST([LIBUDNS_LIBS], [$LIBUDNS])])
   ])
 ])
 
-PKG_CHECK_MODULES([LIBRT], [librt],,
+PKG_CHECK_MODULES([LIBRT], [librt], HAVE_LIBRT=yes; AC_DEFINE(HAVE_LIBRT, 1),
 [AC_LIB_HAVE_LINKFLAGS(rt,, [#include <time.h>], [clock_gettime(CLOCK_MONOTONIC, NULL);])
  if test x$ac_cv_librt = xyes; then
   AC_SUBST([LIBRT_LIBS], [$LIBRT])
