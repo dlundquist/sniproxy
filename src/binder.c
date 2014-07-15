@@ -34,6 +34,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include "binder.h"
 #include "logger.h"
