@@ -633,19 +633,27 @@ new_connection() {
     return con;
 }
 
-# define timespeccmp(a, b, CMP)                      \
-  (((a)->tv_sec == (b)->tv_sec) ?                    \
-   ((a)->tv_nsec CMP (b)->tv_nsec) :                 \
-   ((a)->tv_sec CMP (b)->tv_sec))
-# define timespecsub(a, b, result)                   \
-  do {                                               \
-    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;    \
-    (result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
-    if ((result)->tv_nsec < 0) {                     \
-      --(result)->tv_sec;                            \
-      (result)->tv_nsec += 1000000000;               \
-    }                                                \
-  } while (0)
+/*
+ * timespeccmp and timespecsub macros from OpenBSD sys/time.h
+ */
+#ifndef timespeccmp
+#define timespeccmp(a, b, CMP)                      \
+ (((a)->tv_sec == (b)->tv_sec) ?                    \
+  ((a)->tv_nsec CMP (b)->tv_nsec) :                 \
+  ((a)->tv_sec CMP (b)->tv_sec))
+#endif
+
+#ifndef timespecsub
+#define timespecsub(a, b, result)                   \
+ do {                                               \
+   (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;    \
+   (result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
+   if ((result)->tv_nsec < 0) {                     \
+     --(result)->tv_sec;                            \
+     (result)->tv_nsec += 1000000000;               \
+   }                                                \
+ } while (0)
+#endif
 
 static void
 log_connection(struct Connection *con) {
