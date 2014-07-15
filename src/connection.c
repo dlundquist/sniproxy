@@ -677,16 +677,21 @@ log_connection(struct Connection *con) {
 
 static void
 log_bad_request(struct Connection *con __attribute__((unused)), const char *req, size_t req_len, int parse_result) {
-    char *message = alloca(64 + 6 * req_len);
+    size_t message_len = 64 + 6 * req_len;
+    char *message = alloca(message_len);
     char *message_pos = message;
+    char *message_end = message + message_len;
 
-    message_pos += sprintf(message_pos, "parse_packet({");
+    message_pos += snprintf(message_pos, message_end - message_pos,
+                            "parse_packet({");
 
     for (size_t i = 0; i < req_len; i++)
-        message_pos += sprintf(message_pos, "0x%02hhx, ", (unsigned char)req[i]);
+        message_pos += snprintf(message_pos, message_end - message_pos,
+                                "0x%02hhx, ", (unsigned char)req[i]);
 
     message_pos -= 2; // Delete the trailing ', '
-    message_pos += sprintf(message_pos, "}, %ld, ...) = %d", req_len, parse_result);
+    message_pos += snprintf(message_pos, message_end - message_pos,
+                            "}, %ld, ...) = %d", req_len, parse_result);
     debug("%s", message);
 }
 
