@@ -1,6 +1,8 @@
 #!/bin/bash
 
-find . -name \*.\{gcno,gcda,gcov\} -delete
+find . -name \*.gcno -delete
+find . -name \*.gcda -delete
+find . -name \*.gcov -delete
 
 ./configure CFLAGS="-fprofile-arcs -ftest-coverage" && \
     make clean all check
