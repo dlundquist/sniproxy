@@ -213,25 +213,25 @@ address_compare(const struct Address *addr_1, const struct Address *addr_2) {
     if (addr_1 == NULL && addr_2 == NULL)
         return 0;
     if (addr_1 == NULL && addr_2 != NULL)
-        return 1;
-    if (addr_1 != NULL && addr_2 == NULL)
         return -1;
+    if (addr_1 != NULL && addr_2 == NULL)
+        return 1;
 
     if (addr_1->type < addr_2->type)
-        return 1;
-    if (addr_1->type > addr_2->type)
         return -1;
+    if (addr_1->type > addr_2->type)
+        return 1;
 
     int result = memcmp(addr_1->data, addr_2->data, MIN(addr_1->len, addr_2->len));
     if (result == 0 && addr_1->len < addr_2->len)
-        return 1;
-    if (result == 0 && addr_1->len > addr_2->len)
         return -1;
+    if (result == 0 && addr_1->len > addr_2->len)
+        return 1;
 
     if (result == 0 && addr_1->port < addr_2->port)
-        return 1;
-    if (result == 0 && addr_1->port > addr_2->port)
         return -1;
+    if (result == 0 && addr_1->port > addr_2->port)
+        return 1;
 
     return result;
 }

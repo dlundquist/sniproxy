@@ -64,28 +64,38 @@ int compare_address_strings(const char *a, const char *b) {
 
 int main() {
     /* using volatile variables so we can example core dumps */
-    struct Address *addr;
-    char buffer[255];
-    int port;
-
     for (volatile unsigned int i = 0; i < sizeof(good) / sizeof(struct Test); i++) {
-        addr = new_address(good[i].input);
+        int port;
+        char buffer[255];
+        struct Address *addr = new_address(good[i].input);
 
         assert(addr != NULL);
+        assert(address_compare(addr, addr) == 0);
+        assert(address_compare(NULL, addr) < 0);
+        assert(address_compare(addr, NULL) > 0);
+        assert(address_len(addr) > 0);
 
-        if (good[i].expected_type & TYPE_HOSTNAME && !address_is_hostname(addr)) {
-            fprintf(stderr, "Expected %s to be a hostname\n", buffer);
-            return 1;
-        }
-
-        if (good[i].expected_type & TYPE_SOCKADDR && !address_is_sockaddr(addr)) {
-            fprintf(stderr, "Expected %s to be a sockaddr\n", buffer);
-            return 1;
-        }
-
-        if (good[i].expected_type & TYPE_WILDCARD && !address_is_wildcard(addr)) {
-            fprintf(stderr, "Expected %s to be a wildcard\n", buffer);
-            return 1;
+        if (good[i].expected_type & TYPE_HOSTNAME) {
+            assert(address_is_hostname(addr));
+            assert(!address_is_sockaddr(addr));
+            assert(!address_is_wildcard(addr));
+            assert(address_hostname(addr) != NULL);
+            assert(address_sa(addr) == NULL);
+            assert(address_sa_len(addr) == 0);
+        } else if (good[i].expected_type & TYPE_SOCKADDR) {
+            assert(!address_is_hostname(addr));
+            assert(address_is_sockaddr(addr));
+            assert(!address_is_wildcard(addr));
+            assert(address_hostname(addr) == NULL);
+            assert(address_sa(addr) != NULL);
+            assert(address_sa_len(addr) > 0);
+        } else if (good[i].expected_type & TYPE_WILDCARD) {
+            assert(!address_is_hostname(addr));
+            assert(!address_is_sockaddr(addr));
+            assert(address_is_wildcard(addr));
+            assert(address_hostname(addr) == NULL);
+            assert(address_sa(addr) == NULL);
+            assert(address_sa_len(addr) == 0);
         }
 
         display_address(addr, buffer, sizeof(buffer));
@@ -95,7 +105,16 @@ int main() {
             return 1;
         }
 
+        assert(display_address(addr, NULL, 0) == NULL);
+
         port = address_port(addr);
+
+        if (good[i].port != port) {
+            fprintf(stderr, "address_port(%p) return %d, expected %d\n", addr, port, good[i].port);
+            return 1;
+        }
+
+        address_set_port(addr, port);
 
         if (good[i].port != port) {
             fprintf(stderr, "address_port(%p) return %d, expected %d\n", addr, port, good[i].port);
@@ -106,7 +125,7 @@ int main() {
     }
 
     for (volatile unsigned int i = 0; i < sizeof(bad) / sizeof(const char *); i++) {
-        addr = new_address(bad[i]);
+        struct Address *addr = new_address(bad[i]);
 
         if (addr != NULL) {
             fprintf(stderr, "Accepted bad hostname \"%s\"\n", bad[i]);
@@ -115,10 +134,34 @@ int main() {
     }
 
     assert(compare_address_strings("unix:/dev/log", "127.0.0.1") < 0);
+    assert(compare_address_strings("unix:/dev/log", "unix:/dev/logsocket") < 0);
     assert(compare_address_strings("0.0.0.0", "127.0.0.1") < 0);
     assert(compare_address_strings("127.0.0.1", "0.0.0.0") > 0);
     assert(compare_address_strings("127.0.0.1", "127.0.0.1") == 0);
     assert(compare_address_strings("127.0.0.1:80", "127.0.0.1:81") < 0);
+    assert(compare_address_strings("*:80", "*:81") < 0);
+    assert(compare_address_strings("*:81", "*:80") > 0);
+    assert(compare_address_strings("example.com", "example.net") < 0);
+    assert(compare_address_strings("example.net", "example.com") > 0);
+    assert(compare_address_strings("example.com", "example.com.net") < 0);
+    assert(compare_address_strings("example.com.net", "example.com") > 0);
+    assert(compare_address_strings("example.com", "example.com:80") < 0);
+    assert(compare_address_strings("example.com:80", "example.com") > 0);
+    assert(compare_address_strings(NULL, "example.com") < 0);
+    assert(compare_address_strings("example.com", NULL) > 0);
+    assert(compare_address_strings("example.com", "::") < 0);
+    assert(compare_address_strings("::", "example.com") > 0);
+    assert(compare_address_strings("0.0.0.0", "*") < 0);
+    assert(compare_address_strings("*", "0.0.0.0") > 0);
+
+    do {
+        struct Address *addr = new_address("*");
+
+        assert(addr != NULL);
+        assert(address_len(addr) > 0);
+
+        free(addr);
+    } while (0);
 
     return 0;
 }
