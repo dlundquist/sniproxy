@@ -130,8 +130,7 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     con->client.watcher.data = con;
     con->state = ACCEPTED;
     con->listener = listener_ref_get(listener);
-    if (clock_gettime(CLOCK_MONOTONIC, &con->established_timestamp) < 0)
-        err("clock_gettime() failed: %s", strerror(errno));
+    con->established_timestamp = ev_time();
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
