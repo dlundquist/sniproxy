@@ -547,7 +547,7 @@ free_listener(struct Listener *listener) {
     free(listener->table_name);
 
     table_ref_put(listener->table);
-    listener->table == NULL;
+    listener->table = NULL;
 
     logger_ref_put(listener->access_log);
     listener->access_log = NULL;
