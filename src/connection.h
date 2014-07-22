@@ -28,7 +28,6 @@
 
 #include <sys/socket.h>
 #include <sys/queue.h>
-#include <sys/time.h> /* struct timeval */
 #include <ev.h>
 #include "listener.h"
 #include "buffer.h"
@@ -56,7 +55,7 @@ struct Connection {
     const char *hostname; /* Requested hostname */
     size_t hostname_len;
     struct ResolvQuery *query_handle;
-    struct timespec established_timestamp;
+    ev_tstamp established_timestamp;
 
     TAILQ_ENTRY(Connection) entries;
 };

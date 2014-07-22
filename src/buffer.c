@@ -38,6 +38,7 @@
 #endif
 
 #include <assert.h>
+#include <ev.h>
 #include "buffer.h"
 #include "logger.h"
 
@@ -63,8 +64,8 @@ new_buffer(int size) {
     buf->head = 0;
     buf->tx_bytes = 0;
     buf->rx_bytes = 0;
-    buf->last_recv = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
-    buf->last_send = (struct timespec){.tv_sec = 0, .tv_nsec = 0};
+    buf->last_recv = ev_time();
+    buf->last_send = ev_time();
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
@@ -127,8 +128,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = recvmsg(sockfd, &msg, flags);
 
-    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_recv) < 0)
-        err("clock_gettime() failed: %s", strerror(errno));
+    buffer->last_recv = ev_time();
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
@@ -152,8 +152,7 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = sendmsg(sockfd, &msg, flags);
 
-    if (clock_gettime(CLOCK_MONOTONIC, &buffer->last_send) < 0)
-        err("clock_gettime() failed: %s", strerror(errno));
+    buffer->last_send = ev_time();
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);

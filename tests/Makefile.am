@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBRT_CFLAGS) $(LIBUDNS_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS)
 
 TESTS = http_test \
         tls_test \
@@ -45,7 +45,7 @@ binder_test_SOURCES = binder_test.c \
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
 
-buffer_test_LDADD = $(LIBRT_LIBS)
+buffer_test_LDADD = $(LIBEV_LIBS)
 
 address_test_SOURCES = address_test.c \
                       ../src/address.c
@@ -70,7 +70,7 @@ config_test_SOURCES = config_test.c \
                       ../src/tls.c \
                       ../src/http.c
 
-config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBRT_LIBS) $(LIBUDNS_LIBS)
+config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)
 
 resolv_test_SOURCES = resolv_test.c \
                       ../src/resolv.c \

@@ -633,39 +633,17 @@ new_connection() {
     return con;
 }
 
-/*
- * timespeccmp and timespecsub macros from OpenBSD sys/time.h
- */
-#ifndef timespeccmp
-#define timespeccmp(a, b, CMP)                      \
- (((a)->tv_sec == (b)->tv_sec) ?                    \
-  ((a)->tv_nsec CMP (b)->tv_nsec) :                 \
-  ((a)->tv_sec CMP (b)->tv_sec))
-#endif
-
-#ifndef timespecsub
-#define timespecsub(a, b, result)                   \
- do {                                               \
-   (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;    \
-   (result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
-   if ((result)->tv_nsec < 0) {                     \
-     --(result)->tv_sec;                            \
-     (result)->tv_nsec += 1000000000;               \
-   }                                                \
- } while (0)
-#endif
-
 static void
 log_connection(struct Connection *con) {
-    struct timespec duration;
+    ev_tstamp duration;
     char client_address[128];
     char listener_address[128];
     char server_address[128];
 
-    if (timespeccmp(&con->client.buffer->last_recv, &con->server.buffer->last_recv, >))
-        timespecsub(&con->client.buffer->last_recv, &con->established_timestamp, &duration);
+    if (con->client.buffer->last_recv > con->server.buffer->last_recv)
+        duration = con->established_timestamp - con->client.buffer->last_recv;
     else
-        timespecsub(&con->server.buffer->last_recv, &con->established_timestamp, &duration);
+        duration = con->established_timestamp - con->server.buffer->last_recv;
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
     display_address(con->listener->address, listener_address, sizeof(listener_address));
@@ -673,7 +651,7 @@ log_connection(struct Connection *con) {
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
-           "%s -> %s -> %s [%.*s] %ld/%ld bytes tx %ld/%ld bytes rx %ld.%03ld seconds",
+           "%s -> %s -> %s [%.*s] %ld/%ld bytes tx %ld/%ld bytes rx %1.3f seconds",
            client_address,
            listener_address,
            server_address,
@@ -683,8 +661,7 @@ log_connection(struct Connection *con) {
            con->server.buffer->rx_bytes,
            con->client.buffer->tx_bytes,
            con->client.buffer->rx_bytes,
-           duration.tv_sec,
-           duration.tv_nsec / 1000000);
+           duration);
 }
 
 static void

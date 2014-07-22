@@ -28,7 +28,7 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-#include <sys/time.h> /* struct timeval */
+#include <ev.h>
 
 
 struct Buffer {
@@ -36,8 +36,8 @@ struct Buffer {
     size_t size;
     size_t head;
     size_t len;
-    struct timespec last_recv;
-    struct timespec last_send;
+    ev_tstamp last_recv;
+    ev_tstamp last_send;
     size_t tx_bytes;
     size_t rx_bytes;
 };
