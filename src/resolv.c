@@ -41,6 +41,9 @@
 
 
 #ifndef HAVE_LIBUDNS
+/*
+ * If we do not have a DNS resolution library stub out module as no ops
+ */
 
 int
 resolv_init(struct ev_loop *loop) {
@@ -61,12 +64,17 @@ resolv_cancel(struct ResolvQuery *query_handle) {
 }
 
 #else
+/*
+ * Implement DNS resolution interface using libudns
+ */
 
 struct ResolvQuery {
     void (*client_cb)(struct Address *, void *);
     void (*client_free_cb)(void *);
     void *client_cb_data;
-    struct dns_query *query;
+    struct dns_query *queries[2];
+    size_t response_count;
+    struct Address **responses;
 };
 
 
@@ -76,8 +84,11 @@ static struct ev_timer resolv_timeout_watcher;
 
 static void resolv_sock_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_timeout_cb(struct ev_loop *, struct ev_timer *, int);
-static void dns_query_cb(struct dns_ctx *, struct dns_rr_a4 *, void *);
+static void dns_query_v4_cb(struct dns_ctx *, struct dns_rr_a4 *, void *);
+static void dns_query_v6_cb(struct dns_ctx *, struct dns_rr_a6 *, void *);
 static void dns_timer_setup_cb(struct dns_ctx *, int, void *);
+static void process_client_callback(struct ResolvQuery *);
+static inline int all_queries_are_null(struct ResolvQuery *);
 
 
 int
@@ -120,7 +131,8 @@ resolv_shutdown(struct ev_loop * loop) {
 }
 
 struct ResolvQuery *
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void (*client_free_cb)(void *), void *client_cb_data) {
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
+        void (*client_free_cb)(void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
     /*
@@ -134,17 +146,28 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), 
     cb_data->client_cb = client_cb;
     cb_data->client_free_cb = client_free_cb;
     cb_data->client_cb_data = client_cb_data;
+    memset(cb_data->queries, 0, sizeof(cb_data->queries));
+    cb_data->response_count = 0;
+    cb_data->responses = NULL;
 
-    /* Just resolving A records for now */
-    cb_data->query = dns_submit_a4(ctx,
+    /* Submit A and AAAA queries */
+    cb_data->queries[0] = dns_submit_a4(ctx,
             hostname, 0,
-            dns_query_cb, cb_data);
-    if (cb_data->query == NULL) {
+            dns_query_v4_cb, cb_data);
+    if (cb_data->queries[0] == NULL)
         err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+
+    cb_data->queries[1] = dns_submit_a6(ctx,
+            hostname, 0,
+            dns_query_v6_cb, cb_data);
+    if (cb_data->queries[1] == NULL)
+        err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+
+    if (all_queries_are_null(cb_data)) {
         if (cb_data->client_free_cb != NULL)
             cb_data->client_free_cb(cb_data->client_cb_data);
         free(cb_data);
-        return NULL;
+        cb_data = NULL;
     }
 
     return cb_data;
@@ -155,11 +178,17 @@ resolv_cancel(struct ResolvQuery *query_handle) {
     struct ResolvQuery *cb_data = (struct ResolvQuery *)query_handle;
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
-    dns_cancel(ctx, cb_data->query);
+    for (int i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++) {
+        if (cb_data->queries[i] != NULL) {
+            dns_cancel(ctx, cb_data->queries[i]);
+            free(cb_data->queries[i]);
+            cb_data->queries[i] = NULL;
+        }
+    }
 
-    free(cb_data->query);
     if (cb_data->client_free_cb != NULL)
         cb_data->client_free_cb(cb_data->client_cb_data);
+
     free(cb_data);
 }
 
@@ -178,31 +207,106 @@ resolv_sock_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
  * Wrapper for client callback we provide to udns
  */
 static void
-dns_query_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
+dns_query_v4_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
     struct ResolvQuery *cb_data = (struct ResolvQuery *)data;
-    struct Address *address = NULL;
 
     if (result == NULL) {
         info("resolv: %s\n", dns_strerror(dns_status(ctx)));
     } else if (result->dnsa4_nrr > 0) {
-        struct sockaddr_in sa = {
-            .sin_family = AF_INET,
-            .sin_port = 0,
-            .sin_addr = result->dnsa4_addr[0],
-        };
+        struct Address **new_responses = realloc(cb_data->responses,
+                (cb_data->response_count + result->dnsa4_nrr) *
+                    sizeof(struct Address *));
+        if (new_responses == NULL) {
+            err("Failed to allocate memory for additional DNS responses");
+        } else {
+            cb_data->responses = new_responses;
 
-        address = new_address_sa((struct sockaddr *)&sa, sizeof(sa));
-        if (address == NULL)
-            err("Failed to allocate memory for DNS query result address");
+            for (int i = 0; i < result->dnsa4_nrr; i++) {
+                struct sockaddr_in sa = {
+                    .sin_family = AF_INET,
+                    .sin_port = 0,
+                    .sin_addr = result->dnsa4_addr[i],
+                };
+
+                cb_data->responses[cb_data->response_count] =
+                        new_address_sa((struct sockaddr *)&sa, sizeof(sa));
+                if (cb_data->responses[cb_data->response_count] == NULL)
+                    err("Failed to allocate memory for DNS query result address");
+                else
+                    cb_data->response_count++;
+            }
+        }
     }
 
-    cb_data->client_cb(address, cb_data->client_cb_data);
+    free(result);
+    cb_data->queries[0] = NULL; /* mark A query as being completed */
 
+    /* Once all queries have completed, call client callback */
+    if (all_queries_are_null(cb_data))
+        return process_client_callback(cb_data);
+}
+
+static void
+dns_query_v6_cb(struct dns_ctx *ctx, struct dns_rr_a6 *result, void *data) {
+    struct ResolvQuery *cb_data = (struct ResolvQuery *)data;
+
+    if (result == NULL) {
+        info("resolv: %s\n", dns_strerror(dns_status(ctx)));
+    } else if (result->dnsa6_nrr > 0) {
+        struct Address **new_responses = realloc(cb_data->responses,
+                (cb_data->response_count + result->dnsa6_nrr) *
+                    sizeof(struct Address *));
+        if (new_responses == NULL) {
+            err("Failed to allocate memory for additional DNS responses");
+        } else {
+            cb_data->responses = new_responses;
+
+            for (int i = 0; i < result->dnsa6_nrr; i++) {
+                struct sockaddr_in6 sa = {
+                    .sin6_family = AF_INET6,
+                    .sin6_port = 0,
+                    .sin6_addr = result->dnsa6_addr[i],
+                };
+
+                cb_data->responses[cb_data->response_count] =
+                        new_address_sa((struct sockaddr *)&sa, sizeof(sa));
+                if (cb_data->responses[cb_data->response_count] == NULL)
+                    err("Failed to allocate memory for DNS query result address");
+                else
+                    cb_data->response_count++;
+            }
+        }
+    }
+
+    free(result);
+    cb_data->queries[1] = NULL; /* mark AAAA query as being completed */
+
+    /* Once all queries have completed, call client callback */
+    if (all_queries_are_null(cb_data))
+        return process_client_callback(cb_data);
+}
+
+/*
+ * Called once all queries have been completed
+ */
+static void
+process_client_callback(struct ResolvQuery *cb_data) {
+    struct Address *best_address = NULL;
+    char buffer[128];
+
+    /* TODO better algorithm */
+    if (cb_data->response_count >= 1)
+         best_address = cb_data->responses[0];
+
+    cb_data->client_cb(best_address, cb_data->client_cb_data);
+
+    for (int i = 0; i < cb_data->response_count; i++)
+        free(cb_data->responses[i]);
+
+    free(cb_data->responses);
     if (cb_data->client_free_cb != NULL)
         cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
-    free(result);
-    free(address);
 }
 
 /*
@@ -230,5 +334,15 @@ dns_timer_setup_cb(struct dns_ctx *ctx, int timeout, void *data) {
         ev_timer_set(&resolv_timeout_watcher, timeout, 0.0);
         ev_timer_start(loop, &resolv_timeout_watcher);
     }
+}
+
+static inline int
+all_queries_are_null(struct ResolvQuery *cb_data) {
+    int result = 1;
+
+    for (int i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++)
+        result = result && cb_data->queries[i] == NULL;
+
+    return result;
 }
 #endif
