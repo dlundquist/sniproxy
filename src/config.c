@@ -215,8 +215,10 @@ reload_config(struct Config *config, struct ev_loop *loop) {
     notice("reloading configuration from %s", config->filename);
 
     struct Config *new_config = init_config(config->filename);
-    if (new_config == NULL)
-        return err("failed to load %s", config->filename);
+    if (new_config == NULL) {
+        err("failed to reload %s", config->filename);
+        return;
+    }
 
     /* update access_log */
     logger_ref_put(config->access_log);
