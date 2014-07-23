@@ -35,6 +35,37 @@ sub worker($$$$) {
     exit 0;
 }
 
+sub connection_dump_files() {
+    my $dir = '/tmp';
+    opendir(my $dh, $dir)
+        or die("opendir(): $!");
+
+    my %files = map { $dir . '/' . $_ => 1 } grep { /^sniproxy-connections-.{6}$/ } readdir($dh);
+
+    closedir($dh);
+
+    return \%files;
+}
+
+sub dump_connections_worker($) {
+    my ($proxy_pid) = @_;
+
+    my $existing_dump_files = connection_dump_files();
+
+    while (kill('USR1', $proxy_pid)) {
+        # Sleep 100ms
+        select(undef, undef, undef, 0.25);
+
+        my @new_dump_files = grep { !$existing_dump_files->{$_} } keys connection_dump_files();
+
+        die "sniproxy didn't dump connections" unless @new_dump_files;
+
+        foreach my $dump_file (@new_dump_files) {
+            unlink $dump_file;
+        }
+    }
+    exit 0;
+}
 
 sub main {
     my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
@@ -50,6 +81,8 @@ sub main {
     # Wait for proxy to load and parse config
     wait_for_port($httpd_port);
     wait_for_port($proxy_port);
+
+    start_child('dump-connections-worker', \&dump_connections_worker, $proxy_pid);
 
     for (my $i = 0; $i < $workers; $i++) {
         start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
