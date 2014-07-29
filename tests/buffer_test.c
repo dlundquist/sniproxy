@@ -111,6 +111,7 @@ static void test3() {
 
 
     buffer_resize(buffer, 40);
+    assert(buffer_room(buffer) == 40 - sizeof(input));
 
     len = buffer_peek(buffer, output, sizeof(output));
     assert(len == sizeof(input));

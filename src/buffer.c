@@ -40,7 +40,6 @@
 #include <assert.h>
 #include <ev.h>
 #include "buffer.h"
-#include "logger.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -86,14 +85,11 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
     if (new_buffer == NULL)
         return -2;
 
-    if (buffer_peek(buf, new_buffer, new_size) != buf->len) {
-        err("failed to copy existing buffer contents into new buffer");
-        free(new_buffer);
-        return -3;
-    }
+    buffer_peek(buf, new_buffer, new_size);
 
     free(buf->buffer);
     buf->buffer = new_buffer;
+    buf->size = new_size;
     buf->head = 0;
 
     return buf->len;
