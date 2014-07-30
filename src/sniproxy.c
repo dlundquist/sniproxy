@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2011-2014, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,27 +35,37 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <signal.h>
 #include <errno.h>
-#include "sniproxy.h"
+#include <ev.h>
+#include "binder.h"
 #include "config.h"
-#include "server.h"
+#include "connection.h"
+#include "listener.h"
+#include "resolv.h"
 #include "logger.h"
 
 
-static const char *sniproxy_version = PACKAGE_VERSION;
-
-
 static void usage();
-static void perror_exit(const char *);
 static void daemonize(void);
+static void write_pidfile(const char *, pid_t);
 static void set_limits(int);
 static void drop_perms(const char* username);
-static void write_pidfile(const char *, pid_t);
+static void perror_exit(const char *);
+static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
+
+
+static const char *sniproxy_version = PACKAGE_VERSION;
+static const char *default_username = "daemon";
+static struct Config *config;
+static struct ev_signal sighup_watcher;
+static struct ev_signal sigusr1_watcher;
+static struct ev_signal sigint_watcher;
+static struct ev_signal sigterm_watcher;
 
 
 int
 main(int argc, char **argv) {
-    struct Config *config = NULL;
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
     int max_nofiles = 65536;
@@ -74,10 +84,10 @@ main(int argc, char **argv) {
                 break;
             case 'V':
                 printf("sniproxy %s\n", sniproxy_version);
-                exit(EXIT_SUCCESS);
+                return EXIT_SUCCESS;
             default:
                 usage();
-                exit(EXIT_FAILURE);
+                return EXIT_FAILURE;
         }
     }
 
@@ -85,10 +95,11 @@ main(int argc, char **argv) {
     if (config == NULL) {
         fprintf(stderr, "Unable to load %s\n", config_file);
         usage();
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    init_server(config);
+    /* ignore SIGPIPE, or it will kill us */
+    signal(SIGPIPE, SIG_IGN);
 
     if (background_flag) {
         if (config->pidfile != NULL)
@@ -96,26 +107,43 @@ main(int argc, char **argv) {
 
         daemonize();
 
+
         if (config->pidfile != NULL)
             write_pidfile(config->pidfile, getpid());
     }
 
+    start_binder();
+
     set_limits(max_nofiles);
 
-    /* Drop permissions only when we can */
-    drop_perms(config->user ? config->user : DEFAULT_USERNAME);
+    init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 
-    run_server();
+    /* Drop permissions only when we can */
+    drop_perms(config->user ? config->user : default_username);
+
+    ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
+    ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);
+    ev_signal_init(&sigint_watcher, signal_cb, SIGINT);
+    ev_signal_init(&sigterm_watcher, signal_cb, SIGTERM);
+    ev_signal_start(EV_DEFAULT, &sighup_watcher);
+    ev_signal_start(EV_DEFAULT, &sigusr1_watcher);
+    ev_signal_start(EV_DEFAULT, &sigint_watcher);
+    ev_signal_start(EV_DEFAULT, &sigterm_watcher);
+
+    resolv_init(EV_DEFAULT);
+
+    init_connections();
+
+    ev_run(EV_DEFAULT, 0);
+
+    free_connections(EV_DEFAULT);
+    resolv_shutdown(EV_DEFAULT);
 
     free_config(config);
 
-    return 0;
-}
+    stop_binder();
 
-static void
-perror_exit(const char *msg) {
-    perror(msg);
-    exit(EXIT_FAILURE);
+    return 0;
 }
 
 static void
@@ -159,6 +187,8 @@ daemonize(void) {
     umask(022);
     signal(SIGHUP, SIG_IGN);
 
+    ev_default_fork();
+
     return;
 }
 
@@ -180,12 +210,11 @@ set_limits(int max_nofiles) {
 
 static void
 drop_perms(const char *username) {
-    struct passwd *user;
-
+    /* check if we are already an unprivileged user */
     if (getuid() != 0)
         return;
 
-    user = getpwnam(username);
+    struct passwd *user = getpwnam(username);
     if (user == NULL)
         perror_exit("getpwnam()");
 
@@ -198,13 +227,17 @@ drop_perms(const char *username) {
 
     if (setuid(user->pw_uid) < 0)
         perror_exit("setuid()");
+}
 
-    return;
+static void
+perror_exit(const char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
 }
 
 static void
 usage() {
-    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>\n");
+    fprintf(stderr, "Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>] [-V]\n");
 }
 
 static void
@@ -218,4 +251,21 @@ write_pidfile(const char *path, pid_t pid) {
     fprintf(fp, "%d\n", pid);
 
     fclose(fp);
+}
+
+static void
+signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
+    if (revents & EV_SIGNAL) {
+        switch (w->signum) {
+            case SIGHUP:
+                reload_config(config, loop);
+                break;
+            case SIGUSR1:
+                print_connections();
+                break;
+            case SIGINT:
+            case SIGTERM:
+                ev_unloop(loop, EVUNLOOP_ALL);
+        }
+    }
 }
