@@ -68,6 +68,9 @@ AC_FUNC_STRTOD
 AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp],,
     AC_MSG_ERROR([required functions(s) not found]))
 
+# Enable large file support (so we can log more than 2GB)
+AC_SYS_LARGEFILE
+
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  tests/Makefile])
