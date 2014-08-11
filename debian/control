@@ -10,6 +10,7 @@ Vcs-Browser: https://github.com/dlundquist/sniproxy
 Package: sniproxy
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: logrotate
 Description: SNI Proxy
  Proxies incoming HTTP and TLS connections based on the hostname contained in
  the initial request. This enables HTTPS name based virtual hosting to separate
