@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.3.4
+Version: 0.3.5
 Release: 1%{?dist}
 Summary: Transparent TLS proxy
 
@@ -43,3 +43,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Aug 13 2014 Dustin Lundquist <dustin@null-ptr.net> 0.3.5-1
+- Configuration reloading on SIGHUP
+- SSL 2.0 connection handling: do not treat as an error, use fallback
+  address if configured.
+- Fix buffer_coalesce error
+- Spawn privileged child to bind sockets to privileged ports on reload
+- Add -V flag to return sniproxy version
+- Use libev for timestamps to improve portability
+- Include several for BSD compatibility
+- Large file support (for log files)

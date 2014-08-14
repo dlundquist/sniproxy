@@ -1,3 +1,16 @@
+sniproxy (0.3.5) unstable; urgency=medium
+
+  * Configuration reloading on SIGHUP
+  * SSL 2.0 connection handling: do not treat as an error, use fallback
+    address if configured.
+  * Fix buffer_coalesce error
+  * Spawn privileged child to bind sockets to privileged ports on reload
+  * Add -V flag to return sniproxy version
+  * Use libev for timestamps to improve portability
+  * Include several for BSD compatibility
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Wed, 13 Aug 2014 18:25:53 -0700
+
 sniproxy (0.3.4) unstable; urgency=medium
 
   * Add source address specification configuration option.
