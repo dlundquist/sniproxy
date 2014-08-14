@@ -63,8 +63,8 @@ new_buffer(int size) {
     buf->head = 0;
     buf->tx_bytes = 0;
     buf->rx_bytes = 0;
-    buf->last_recv = ev_time();
-    buf->last_send = ev_time();
+    buf->last_recv = ev_now(EV_DEFAULT);
+    buf->last_send = ev_now(EV_DEFAULT);
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
@@ -124,7 +124,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = recvmsg(sockfd, &msg, flags);
 
-    buffer->last_recv = ev_time();
+    buffer->last_recv = ev_now(EV_DEFAULT);
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
@@ -148,7 +148,7 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = sendmsg(sockfd, &msg, flags);
 
-    buffer->last_send = ev_time();
+    buffer->last_send = ev_now(EV_DEFAULT);
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);
