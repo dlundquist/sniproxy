@@ -2,6 +2,7 @@
 
 VERSION=0.3.4
 DEBIAN_VERSION=${VERSION}
+SPEC_VERSION=${VERSION}
 
 SOURCE_DIR=$(dirname $0)
 GIT_DIR=${SOURCE_DIR}/.git
@@ -18,11 +19,16 @@ if [ -d ${GIT_DIR} ]; then
 
             VERSION=${GIT_VERSION}
             # Debian versions for native packages can not contain hyphens
-            DEBIAN_VERSION=${VER}+git${REV}.${REF}
+            # nor additional periods
+            DEBIAN_VERSION=${VER}+git.${REV}.${REF}
+
+            # RPM versions can not contain hyphens
+            SPEC_VERSION=${VER}+git.${REV}.${REF}
         else
             # Release version (e.g. 0.3.5)
             VERSION=${GIT_VERSION}
             DEBIAN_VERSION=${VERSION}
+            SPEC_VERSION=${VERSION}
         fi
     fi
 fi
@@ -31,7 +37,7 @@ fi
 sed -i "s/^\(AC_INIT(\[sniproxy\], \[\)[^]]*\(.\+\)$/\1${VERSION}\2/" ${SOURCE_DIR}/configure.ac
 
 # Update redhat/sniproxy.spec with new version
-sed -i "s/^Version:\s\+[^ ]\+/Version: ${VERSION}/" ${SOURCE_DIR}/redhat/sniproxy.spec
+sed -i "s/^Version:\s\+[^ ]\+/Version: ${SPEC_VERSION}/" ${SOURCE_DIR}/redhat/sniproxy.spec
 
 # Update debian/changelog with new version
 debchange --newversion ${DEBIAN_VERSION} "New git revision"
