@@ -640,9 +640,9 @@ log_connection(struct Connection *con) {
     char server_address[128];
 
     if (con->client.buffer->last_recv > con->server.buffer->last_recv)
-        duration = con->established_timestamp - con->client.buffer->last_recv;
+        duration = con->client.buffer->last_recv - con->established_timestamp;
     else
-        duration = con->established_timestamp - con->server.buffer->last_recv;
+        duration = con->server.buffer->last_recv - con->established_timestamp;
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
     display_address(con->listener->address, listener_address, sizeof(listener_address));
