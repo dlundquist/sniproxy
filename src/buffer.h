@@ -42,11 +42,11 @@ struct Buffer {
     size_t rx_bytes;
 };
 
-struct Buffer *new_buffer(int);
+struct Buffer *new_buffer(int, struct ev_loop *);
 void free_buffer(struct Buffer *);
 
-ssize_t buffer_recv(struct Buffer *, int, int);
-ssize_t buffer_send(struct Buffer *, int, int);
+ssize_t buffer_recv(struct Buffer *, int, int, struct ev_loop *);
+ssize_t buffer_send(struct Buffer *, int, int, struct ev_loop *);
 ssize_t buffer_read(struct Buffer *, int);
 ssize_t buffer_write(struct Buffer *, int);
 ssize_t buffer_resize(struct Buffer *, size_t);

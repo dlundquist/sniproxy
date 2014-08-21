@@ -1,3 +1,4 @@
+#include <ev.h>
 #include "config.h"
 
 int main(int argc, char **argv) {
@@ -7,7 +8,7 @@ int main(int argc, char **argv) {
     if (argc >= 2)
         config_file = argv[1];
 
-    config = init_config(config_file);
+    config = init_config(config_file, EV_DEFAULT);
     if (config == NULL) {
         fprintf(stderr, "Failed to parse config\n");
         return 1;
@@ -15,7 +16,7 @@ int main(int argc, char **argv) {
 
     print_config(stdout, config);
 
-    free_config(config);
+    free_config(config, EV_DEFAULT);
 
     return 0;
 }

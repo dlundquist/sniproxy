@@ -150,7 +150,7 @@ static struct Keyword global_grammar[] = {
 
 
 struct Config *
-init_config(const char *filename) {
+init_config(const char *filename, struct ev_loop *loop) {
     struct Config *config = malloc(sizeof(struct Config));
     if (config == NULL) {
         err("%s: malloc", __func__);
@@ -167,7 +167,7 @@ init_config(const char *filename) {
     config->filename = strdup(filename);
     if (config->filename == NULL) {
         err("%s: strdup", __func__);
-        free_config(config);
+        free_config(config, loop);
         return NULL;
     }
 
@@ -175,7 +175,7 @@ init_config(const char *filename) {
     FILE *file = fopen(config->filename, "r");
     if (file == NULL) {
         err("%s: unable to open configuration file: %s", __func__, config->filename);
-        free_config(config);
+        free_config(config, loop);
         return NULL;
     }
 
@@ -188,7 +188,7 @@ init_config(const char *filename) {
         for (int i = 0; i < 5; i++)
             err("%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
 
-        free_config(config);
+        free_config(config, loop);
         config = NULL;
     }
 
@@ -198,13 +198,13 @@ init_config(const char *filename) {
 }
 
 void
-free_config(struct Config *config) {
+free_config(struct Config *config, struct ev_loop *loop) {
     free(config->filename);
     free(config->user);
     free(config->pidfile);
 
     logger_ref_put(config->access_log);
-    free_listeners(&config->listeners);
+    free_listeners(&config->listeners, loop);
     free_tables(&config->tables);
 
     free(config);
@@ -214,7 +214,7 @@ void
 reload_config(struct Config *config, struct ev_loop *loop) {
     notice("reloading configuration from %s", config->filename);
 
-    struct Config *new_config = init_config(config->filename);
+    struct Config *new_config = init_config(config->filename, loop);
     if (new_config == NULL) {
         err("failed to reload %s", config->filename);
         return;
@@ -229,7 +229,7 @@ reload_config(struct Config *config, struct ev_loop *loop) {
     listeners_reload(&config->listeners, &new_config->listeners,
             &config->tables, loop);
 
-    free_config(new_config);
+    free_config(new_config, loop);
 }
 
 void
