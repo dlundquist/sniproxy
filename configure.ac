@@ -73,6 +73,7 @@ AC_SYS_LARGEFILE
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
+                 man/Makefile
                  tests/Makefile])
 
 AC_OUTPUT

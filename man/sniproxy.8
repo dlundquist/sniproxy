@@ -1,0 +1,36 @@
+.TH SNIPROXY 8 "14 September 2014" "SNIProxy manual" "sniproxy"
+
+.SH NAME
+
+SNIProxy \- transparent session based TLS and HTTP proxy
+
+.SH SYNOPSIS
+
+\fBsniproxy\fR [ -\fBc\fR \fIconfig\fR ] [ -\fBf\fR ]
+[ -\fBn\fR \fIfile-descriptor-limit\fR ] [ -\fBV\fR ]
+
+.SH DESCRIPTION
+
+Proxies incoming HTTP and TLS connections based on the hostname contained in
+the initial request of the TCP session. This enables HTTPS name-based virtual
+hosting to separate backend servers without installing the private key on the
+proxy machine\&.
+
+.SH OPTIONS
+
+.TP
+-c \fIconfig\fR
+Specify configuration file to use. The default is /etc/sniproxy\&.conf\&.
+
+.TP
+-f
+Run in foreground. Do not daemonize or drop privileges\&.
+
+.TP
+-n \fIfile-descriptor-limit\fR
+Specify the maximum file descriptor resource limit\&. SNIProxy will attempt to
+set the maximum file descriptor limit to the value specified\&.
+
+.TP
+-V
+Print the version of SNIProxy and exit\&.

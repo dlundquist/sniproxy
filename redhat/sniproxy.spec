@@ -39,6 +39,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 %{_sbindir}/sniproxy
 %doc
+%{_mandir}/man8/sniproxy.8.gz
 
 
 
