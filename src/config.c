@@ -382,7 +382,7 @@ end_error_logger_stanza(struct Config *config __attribute__ ((unused)), struct L
     if (lb->filename != NULL && lb->syslog_facility == NULL)
         logger = new_file_logger(lb->filename);
     else if (lb->syslog_facility != NULL && lb->filename == NULL)
-        logger = new_syslog_logger(PACKAGE_NAME, lb->syslog_facility);
+        logger = new_syslog_logger(lb->syslog_facility);
     else
         err("Logger can not be both file logger and syslog logger");
 
@@ -409,7 +409,7 @@ end_global_access_logger_stanza(struct Config *config, struct LoggerBuilder *lb)
     if (lb->filename != NULL && lb->syslog_facility == NULL)
         logger = new_file_logger(lb->filename);
     else if (lb->syslog_facility != NULL && lb->filename == NULL)
-        logger = new_syslog_logger(PACKAGE_NAME, lb->syslog_facility);
+        logger = new_syslog_logger(lb->syslog_facility);
     else
         err("Logger can not be both file logger and syslog logger");
 
@@ -437,7 +437,7 @@ end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilde
     if (lb->filename != NULL && lb->syslog_facility == NULL)
         logger = new_file_logger(lb->filename);
     else if (lb->syslog_facility != NULL && lb->filename == NULL)
-        logger = new_syslog_logger(PACKAGE_NAME, lb->syslog_facility);
+        logger = new_syslog_logger(lb->syslog_facility);
     else
         err("Logger can not be both file logger and syslog logger");
 

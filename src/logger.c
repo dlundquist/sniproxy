@@ -31,43 +31,57 @@
 #include <syslog.h>
 #include <time.h>
 #include <assert.h>
+#include <sys/queue.h>
 #include "logger.h"
 
 struct Logger {
-    FILE *fd;
+    struct LogSink *sink;
     int priority;
     int facility;
-    const char *ident;
     int reference_count;
 };
 
+struct LogSink {
+    enum {
+        LOG_SINK_SYSLOG,
+        LOG_SINK_STDERR,
+        LOG_SINK_FILE
+    } type;
+    const char *filepath;
+
+    FILE *fd;
+    int reference_count;
+    SLIST_ENTRY(LogSink) entries;
+};
+
+
 static struct Logger *default_logger = NULL;
+static SLIST_HEAD(LogSink_head, LogSink) sinks = SLIST_HEAD_INITIALIZER(sinks);
 
 
 static void free_logger(struct Logger *);
-static struct Logger *new_fd_logger(FILE *);
 static void init_default_logger();
 static void vlog_msg(struct Logger *, int, const char *, va_list);
 static void free_at_exit();
 static int lookup_syslog_facility(const char *);
+static struct LogSink *obtain_stderr_sink();
+static struct LogSink *obtain_syslog_sink();
+static struct LogSink *obtain_file_sink(const char *);
+static struct LogSink *log_sink_ref_get(struct LogSink *);
+static void log_sink_ref_put(struct LogSink *);
+static void free_sink(struct LogSink *);
 
 
 struct Logger *
-new_syslog_logger(const char *ident, const char *facility) {
+new_syslog_logger(const char *facility) {
     struct Logger *logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
-        logger->fd = NULL;
+        logger->sink = obtain_syslog_sink();
         logger->priority = LOG_DEBUG;
         logger->facility = lookup_syslog_facility(facility);
-        logger->ident = NULL;
         logger->reference_count = 0;
-        if (ident != NULL) {
-            logger->ident = strdup(ident);
-            if (logger->ident == NULL) {
-                free(logger);
-                return NULL;
-            }
-        }
+
+        log_sink_ref_get(logger->sink);
     }
 
     return logger;
@@ -75,20 +89,24 @@ new_syslog_logger(const char *ident, const char *facility) {
 
 struct Logger *
 new_file_logger(const char *filepath) {
-    FILE *fd = fopen(filepath, "a");
-    if (fd == NULL) {
-        err("Failed to open new log file: %s", filepath);
-        return NULL;
-    }
-    setvbuf(fd, NULL, _IOLBF, 0);
+    struct Logger *logger = malloc(sizeof(struct Logger));
+    if (logger != NULL) {
+        logger->sink = obtain_file_sink(filepath);
+        logger->priority = LOG_DEBUG;
+        logger->facility = 0;
+        logger->reference_count = 0;
 
-    return new_fd_logger(fd);
+        log_sink_ref_get(logger->sink);
+    }
+
+    return logger;
 }
 
 void
 set_default_logger(struct Logger *new_logger) {
-    logger_ref_put(default_logger);
+    struct Logger *old_default_logger = default_logger;
     default_logger = logger_ref_get(new_logger);
+    logger_ref_put(old_default_logger);
 }
 
 void
@@ -120,10 +138,8 @@ free_logger(struct Logger *logger) {
     if (logger == NULL)
         return;
 
-    if (logger->fd) {
-        fclose(logger->fd);
-        logger->fd = NULL;
-    }
+    log_sink_ref_put(logger->sink);
+    logger->sink = NULL;
 
     free(logger);
 }
@@ -193,22 +209,6 @@ debug(const char *format, ...) {
     va_end(args);
 }
 
-static struct Logger *
-new_fd_logger(FILE *fd) {
-    assert(fd != NULL);
-
-    struct Logger *logger = malloc(sizeof(struct Logger));
-    if (logger != NULL) {
-        logger->fd = fd;
-        logger->priority = LOG_DEBUG;
-        logger->facility = 0;
-        logger->ident = NULL;
-        logger->reference_count = 0;
-    }
-
-    return logger;
-}
-
 static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
     char buffer[1024];
@@ -222,23 +222,29 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
     if (priority > logger->priority)
         return;
 
-    if (logger->fd) {
-        /* file logger */
+    if (logger->sink->type == LOG_SINK_SYSLOG) {
+        vsyslog(logger->facility|logger->priority, format, args);
+    } else {
         time_t t = time(NULL);
         struct tm *tmp = localtime(&t);
         size_t len = strftime(buffer, sizeof(buffer), "%F %T ", tmp);
         vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
-        fprintf(logger->fd, "%s\n", buffer);
-    } else {
-        openlog(logger->ident, LOG_PID, logger->facility);
-        vsyslog(priority, format, args);
-        closelog();
+        fprintf(logger->sink->fd, "%s\n", buffer);
     }
 }
 
 static void
 init_default_logger() {
-    struct Logger *logger = new_fd_logger(stderr);
+    struct Logger *logger = malloc(sizeof(struct Logger));
+    if (logger != NULL) {
+        logger->sink = obtain_stderr_sink();
+        logger->priority = LOG_DEBUG;
+        logger->facility = 0;
+        logger->reference_count = 0;
+
+        log_sink_ref_get(logger->sink);
+    }
+
     if (logger == NULL)
         return;
 
@@ -283,4 +289,132 @@ lookup_syslog_facility(const char *facility) {
 
     /* fall back value */
     return LOG_USER;
+}
+
+static struct LogSink *
+obtain_stderr_sink() {
+    struct LogSink *sink;
+
+    SLIST_FOREACH(sink, &sinks, entries) {
+        if (sink->type == LOG_SINK_STDERR)
+            return sink;
+    }
+
+    sink = malloc(sizeof(struct LogSink));
+    if (sink != NULL) {
+        sink->type = LOG_SINK_STDERR;
+        sink->filepath = NULL;
+        sink->fd = stderr;
+        sink->reference_count = 0;
+
+        SLIST_INSERT_HEAD(&sinks, sink, entries);
+    }
+
+    return sink;
+}
+
+static struct LogSink *
+obtain_syslog_sink() {
+    struct LogSink *sink;
+
+    SLIST_FOREACH(sink, &sinks, entries) {
+        if (sink->type == LOG_SINK_SYSLOG)
+            return sink;
+    }
+
+    sink = malloc(sizeof(struct LogSink));
+    if (sink != NULL) {
+        sink->type = LOG_SINK_SYSLOG;
+        sink->filepath = NULL;
+        sink->fd = NULL;
+        sink->reference_count = 0;
+
+        openlog(PACKAGE_NAME, LOG_PID, 0);
+
+        SLIST_INSERT_HEAD(&sinks, sink, entries);
+    }
+
+    return sink;
+}
+
+static struct LogSink *
+obtain_file_sink(const char *filepath) {
+    struct LogSink *sink;
+
+    if (filepath == NULL)
+        return NULL;
+
+    SLIST_FOREACH(sink, &sinks, entries) {
+        if (sink->type == LOG_SINK_FILE &&
+                strcmp(sink->filepath, filepath) == 0)
+            return sink;
+    }
+
+
+    FILE *fd = fopen(filepath, "a");
+    if (fd == NULL) {
+        err("Failed to open new log file: %s", filepath);
+        return NULL;
+    }
+    setvbuf(fd, NULL, _IOLBF, 0);
+
+
+    sink = malloc(sizeof(struct LogSink));
+    if (sink != NULL) {
+        sink->type = LOG_SINK_FILE;
+        sink->filepath = strdup(filepath);
+        sink->fd = fd;
+        sink->reference_count = 0;
+
+        SLIST_INSERT_HEAD(&sinks, sink, entries);
+    }
+
+    return sink;
+}
+
+static struct LogSink *
+log_sink_ref_get(struct LogSink *sink) {
+    if (sink != NULL)
+        sink->reference_count++;
+
+    return sink;
+}
+
+static void
+log_sink_ref_put(struct LogSink *sink) {
+    if (sink == NULL)
+        return;
+
+    assert(sink->reference_count > 0);
+    sink->reference_count--;
+    if (sink->reference_count == 0)
+        free_sink(sink);
+}
+
+static void
+free_sink(struct LogSink *sink) {
+    if (sink == NULL)
+        return;
+
+    SLIST_REMOVE(&sinks, sink, LogSink, entries);
+
+    switch(sink->type) {
+        case LOG_SINK_SYSLOG:
+            closelog();
+            break;
+        case LOG_SINK_STDERR:
+            fflush(sink->fd);
+            sink->fd == NULL;
+            break;
+        case LOG_SINK_FILE:
+            fclose(sink->fd);
+            sink->fd == NULL;
+            free((char *)sink->filepath);
+            sink->filepath = NULL;
+            break;
+        default:
+            assert(0);
+    }
+
+    free(sink);
 }
