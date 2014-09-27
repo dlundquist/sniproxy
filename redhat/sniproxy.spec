@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.3.5
+Version: 0.3.6
 Release: 1%{?dist}
 Summary: Transparent TLS proxy
 
@@ -44,6 +44,18 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Sep 26 2014 Dustin Lundquist <dustin@null-ptr.net> 0.3.6-1
+- Improve logging:
+  Fix negative connection duration in access log
+  Include log rotate script
+  Reopen log files on SIGHUP
+  Share file handle to same log file between listeners
+  Avoid unnecessary reconnection to syslog socket
+  Cache timestamp string for current second
+- Man page
+- Packaging improvements:
+  passes lintian and rpm-lint
+
 * Wed Aug 13 2014 Dustin Lundquist <dustin@null-ptr.net> 0.3.5-1
 - Configuration reloading on SIGHUP
 - SSL 2.0 connection handling: do not treat as an error, use fallback

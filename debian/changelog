@@ -1,3 +1,18 @@
+sniproxy (0.3.6) unstable; urgency=medium
+
+  * Improve logging:
+    Fix negative connection duration in access log
+    Include log rotate script
+    Reopen log files on SIGHUP
+    Share file handle to same log file between listeners
+    Avoid unnecessary reconnection to syslog socket
+    Cache timestamp string for current second
+  * Man page
+  * Packaging improvements:
+    passes lintian and rpm-lint
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Fri, 26 Sep 2014 19:52:38 -0700
+
 sniproxy (0.3.5) unstable; urgency=medium
 
   * Configuration reloading on SIGHUP
