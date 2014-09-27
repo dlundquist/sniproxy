@@ -258,6 +258,7 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
     if (revents & EV_SIGNAL) {
         switch (w->signum) {
             case SIGHUP:
+                reopen_loggers();
                 reload_config(config, loop);
                 break;
             case SIGUSR1:

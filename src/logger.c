@@ -108,6 +108,23 @@ new_file_logger(const char *filepath) {
 }
 
 void
+reopen_loggers() {
+    struct LogSink *sink;
+
+    SLIST_FOREACH(sink, &sinks, entries) {
+        if (sink->type == LOG_SINK_SYSLOG) {
+            closelog();
+            openlog(PACKAGE_NAME, LOG_PID, 0);
+        } else if (sink->type == LOG_SINK_FILE) {
+            sink->fd = freopen(sink->filepath, "a", sink->fd);
+            if (sink->fd == NULL)
+                err("failed to reopen log file %s: %s",
+                        sink->filepath, strerror(errno));
+        }
+    }
+}
+
+void
 set_default_logger(struct Logger *new_logger) {
     struct Logger *old_default_logger = default_logger;
     default_logger = logger_ref_get(new_logger);
@@ -236,7 +253,8 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
         vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
         buffer[sizeof(buffer) - 1] = '\0'; /* ensure buffer null terminated */
 
-        fprintf(logger->sink->fd, "%s\n", buffer);
+        if (logger->sink->fd != NULL)
+            fprintf(logger->sink->fd, "%s\n", buffer);
     }
 }
 

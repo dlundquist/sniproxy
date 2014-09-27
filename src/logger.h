@@ -43,6 +43,7 @@ void set_default_logger(struct Logger *);
 void set_logger_priority(struct Logger *, int);
 struct Logger *logger_ref_get(struct Logger *);
 void logger_ref_put(struct Logger *);
+void reopen_loggers();
 
 /* Shorthand to log to global error log */
 void fatal(const char *, ...)
