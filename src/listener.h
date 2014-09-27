@@ -61,8 +61,8 @@ int accept_listener_bad_request_action(struct Listener *, char *);
 void add_listener(struct Listener_head *, struct Listener *);
 void init_listeners(struct Listener_head *, const struct Table_head *, struct ev_loop *);
 void listeners_reload(struct Listener_head *, struct Listener_head *, const struct Table_head *, struct ev_loop *);
-void remove_listener(struct Listener_head *, struct Listener *);
-void free_listeners(struct Listener_head *);
+void remove_listener(struct Listener_head *, struct Listener *, struct ev_loop *);
+void free_listeners(struct Listener_head *, struct ev_loop *);
 
 int valid_listener(const struct Listener *);
 struct Address *listener_lookup_server_address(const struct Listener *,

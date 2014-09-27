@@ -37,12 +37,13 @@ struct Logger;
 #define LOG_INFO    6
 #define LOG_DEBUG   7
 
-struct Logger *new_syslog_logger(const char *indent, const char *facility);
+struct Logger *new_syslog_logger(const char *facility);
 struct Logger *new_file_logger(const char *filepath);
 void set_default_logger(struct Logger *);
 void set_logger_priority(struct Logger *, int);
 struct Logger *logger_ref_get(struct Logger *);
 void logger_ref_put(struct Logger *);
+void reopen_loggers();
 
 /* Shorthand to log to global error log */
 void fatal(const char *, ...)

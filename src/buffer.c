@@ -51,7 +51,7 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 
 struct Buffer *
-new_buffer(int size) {
+new_buffer(int size, struct ev_loop *loop) {
     struct Buffer *buf;
 
     buf = malloc(sizeof(struct Buffer));
@@ -63,8 +63,8 @@ new_buffer(int size) {
     buf->head = 0;
     buf->tx_bytes = 0;
     buf->rx_bytes = 0;
-    buf->last_recv = ev_now(EV_DEFAULT);
-    buf->last_send = ev_now(EV_DEFAULT);
+    buf->last_recv = ev_now(loop);
+    buf->last_send = ev_now(loop);
     buf->buffer = malloc(buf->size);
     if (buf->buffer == NULL) {
         free(buf);
@@ -105,7 +105,7 @@ free_buffer(struct Buffer *buf) {
 }
 
 ssize_t
-buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
+buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
     ssize_t bytes;
     struct iovec iov[2];
     struct msghdr msg;
@@ -124,7 +124,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = recvmsg(sockfd, &msg, flags);
 
-    buffer->last_recv = ev_now(EV_DEFAULT);
+    buffer->last_recv = ev_now(loop);
 
     if (bytes > 0)
         advance_write_position(buffer, bytes);
@@ -133,7 +133,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags) {
 }
 
 ssize_t
-buffer_send(struct Buffer *buffer, int sockfd, int flags) {
+buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
     ssize_t bytes;
     struct iovec iov[2];
     struct msghdr msg;
@@ -148,7 +148,7 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags) {
 
     bytes = sendmsg(sockfd, &msg, flags);
 
-    buffer->last_send = ev_now(EV_DEFAULT);
+    buffer->last_send = ev_now(loop);
 
     if (bytes > 0)
         advance_read_position(buffer, bytes);

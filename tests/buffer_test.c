@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <ev.h>
 #include "buffer.h"
 
 static void test1() {
@@ -11,7 +12,7 @@ static void test1() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(200);
+    buffer = new_buffer(200, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
@@ -50,7 +51,7 @@ static void test2() {
     char output[sizeof(input)];
     int len, i = 0;
 
-    buffer = new_buffer(200);
+    buffer = new_buffer(200, EV_DEFAULT);
     assert(buffer != NULL);
 
     while (i < 180) {
@@ -99,7 +100,7 @@ static void test3() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(200);
+    buffer = new_buffer(200, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
@@ -126,7 +127,7 @@ static void test4() {
     struct Buffer *buffer;
     int read_fd, write_fd;
 
-    buffer = new_buffer(4096);
+    buffer = new_buffer(4096, EV_DEFAULT);
 
     read_fd = open("/dev/zero", O_RDONLY);
     if (read_fd < 0) {

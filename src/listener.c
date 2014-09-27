@@ -345,9 +345,9 @@ add_listener(struct Listener_head *listeners, struct Listener *listener) {
 }
 
 void
-remove_listener(struct Listener_head *listeners, struct Listener *listener) {
+remove_listener(struct Listener_head *listeners, struct Listener *listener, struct ev_loop *loop) {
     SLIST_REMOVE(listeners, listener, Listener, entries);
-    close_listener(EV_DEFAULT, listener);
+    close_listener(loop, listener);
     listener_ref_put(listener);
 }
 
@@ -556,11 +556,11 @@ free_listener(struct Listener *listener) {
 }
 
 void
-free_listeners(struct Listener_head *listeners) {
+free_listeners(struct Listener_head *listeners, struct ev_loop *loop) {
     struct Listener *iter;
 
     while ((iter = SLIST_FIRST(listeners)) != NULL)
-        remove_listener(listeners, iter);
+        remove_listener(listeners, iter, loop);
 }
 
 /*

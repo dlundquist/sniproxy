@@ -91,7 +91,7 @@ main(int argc, char **argv) {
         }
     }
 
-    config = init_config(config_file);
+    config = init_config(config_file, EV_DEFAULT);
     if (config == NULL) {
         fprintf(stderr, "Unable to load %s\n", config_file);
         usage();
@@ -139,7 +139,7 @@ main(int argc, char **argv) {
     free_connections(EV_DEFAULT);
     resolv_shutdown(EV_DEFAULT);
 
-    free_config(config);
+    free_config(config, EV_DEFAULT);
 
     stop_binder();
 
@@ -258,6 +258,7 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
     if (revents & EV_SIGNAL) {
         switch (w->signum) {
             case SIGHUP:
+                reopen_loggers();
                 reload_config(config, loop);
                 break;
             case SIGUSR1:
