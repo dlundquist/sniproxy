@@ -57,6 +57,10 @@ struct LogSink {
 
 static struct Logger *default_logger = NULL;
 static SLIST_HEAD(LogSink_head, LogSink) sinks = SLIST_HEAD_INITIALIZER(sinks);
+static struct {
+    time_t when;
+    char string[32];
+} timestamp_cache = { .when = 0, .string = {'\0'} };
 
 
 static void free_logger(struct Logger *);
@@ -64,6 +68,7 @@ static void init_default_logger();
 static void vlog_msg(struct Logger *, int, const char *, va_list);
 static void free_at_exit();
 static int lookup_syslog_facility(const char *);
+static const char *timestamp(char *, size_t);
 static struct LogSink *obtain_stderr_sink();
 static struct LogSink *obtain_syslog_sink();
 static struct LogSink *obtain_file_sink(const char *);
@@ -225,10 +230,12 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
     if (logger->sink->type == LOG_SINK_SYSLOG) {
         vsyslog(logger->facility|logger->priority, format, args);
     } else {
-        time_t t = time(NULL);
-        struct tm *tmp = localtime(&t);
-        size_t len = strftime(buffer, sizeof(buffer), "%F %T ", tmp);
+        timestamp(buffer, sizeof(buffer));
+        size_t len = strlen(buffer);
+
         vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
+        buffer[sizeof(buffer) - 1] = '\0'; /* ensure buffer null terminated */
+
         fprintf(logger->sink->fd, "%s\n", buffer);
     }
 }
@@ -417,4 +424,29 @@ free_sink(struct LogSink *sink) {
     }
 
     free(sink);
+}
+
+static const char *
+timestamp(char *dst, size_t dst_len) {
+    /* TODO change to ev_now() */
+    time_t now = time(NULL);
+
+    if (now != timestamp_cache.when) {
+#ifdef RFC3339_TIMESTAMP
+        struct tm *tmp = gmtime(&now);
+        strftime(timestamp_cache.string, sizeof(timestamp_cache.string),
+                "%FT%TZ ", tmp);
+#else
+        struct tm *tmp = localtime(&now);
+        strftime(timestamp_cache.string, sizeof(timestamp_cache.string),
+                "%F %T ", tmp);
+#endif
+
+        timestamp_cache.when = now;
+    }
+
+    if (dst != NULL)
+        strncpy(dst, timestamp_cache.string, dst_len);
+
+    return timestamp_cache.string;
 }
