@@ -82,6 +82,10 @@ new_syslog_logger(const char *facility) {
     struct Logger *logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
         logger->sink = obtain_syslog_sink();
+        if (logger->sink == NULL) {
+            free(logger);
+            return NULL;
+        }
         logger->priority = LOG_DEBUG;
         logger->facility = lookup_syslog_facility(facility);
         logger->reference_count = 0;
@@ -97,6 +101,10 @@ new_file_logger(const char *filepath) {
     struct Logger *logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
         logger->sink = obtain_file_sink(filepath);
+        if (logger->sink == NULL) {
+            free(logger);
+            return NULL;
+        }
         logger->priority = LOG_DEBUG;
         logger->facility = 0;
         logger->reference_count = 0;
@@ -263,6 +271,10 @@ init_default_logger() {
     struct Logger *logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
         logger->sink = obtain_stderr_sink();
+        if (logger->sink == NULL) {
+            free(logger);
+            return;
+        }
         logger->priority = LOG_DEBUG;
         logger->facility = 0;
         logger->reference_count = 0;

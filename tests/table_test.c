@@ -23,11 +23,13 @@ int main() {
 static void
 test_empty_table() {
     struct Table *table = new_table();
+    assert(table != NULL);
 
     table_ref_get(table);
 
     const char *name = "table_name";
     accept_table_arg(table, name);
+    assert(table->name != NULL);
     assert(strcmp(name, table->name) == 0);
     assert(name != table->name);
 
@@ -41,6 +43,7 @@ test_empty_table() {
 static void
 append_entry(struct Table *table, const char *pattern, const char *address) {
     struct Backend *backend = new_backend();
+    assert(backend != NULL);
     accept_backend_arg(backend, pattern);
     accept_backend_arg(backend, address);
     assert(strcmp(pattern, backend->pattern) == 0);
@@ -52,11 +55,13 @@ append_entry(struct Table *table, const char *pattern, const char *address) {
 static void
 test_single_entry_table() {
     struct Table *table = new_table();
+    assert(table != NULL);
 
     table_ref_get(table);
 
     const char *name = "table_name";
     accept_table_arg(table, name);
+    assert(table->name != NULL);
     assert(strcmp(name, table->name) == 0);
     assert(name != table->name);
 
@@ -74,6 +79,7 @@ test_single_entry_table() {
 static void
 add_new_table(struct Table_head *tables, const char *name, const char **entries) {
     struct Table *table = new_table();
+    assert(table != NULL);
 
     accept_table_arg(table, name);
     assert(table->name != NULL);

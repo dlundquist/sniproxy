@@ -106,7 +106,8 @@ new_address(const char *hostname_or_ip) {
             ip_buf[len] = '\0';
 
             struct Address *addr = new_address(ip_buf);
-            address_set_port(addr, port_num);
+            if (addr != NULL)
+                address_set_port(addr, port_num);
 
             return addr;
         }
