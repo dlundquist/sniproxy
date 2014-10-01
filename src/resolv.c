@@ -25,11 +25,13 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <ev.h>
+#include <errno.h>
 #ifdef HAVE_LIBUDNS
 #include <udns.h>
 #endif
@@ -84,6 +86,9 @@ resolv_init(struct ev_loop *loop) {
     dns_init(ctx, 1);
 
     int sockfd = dns_sock(ctx);
+    if (sockfd < 0)
+        fatal("Failed to open DNS resolver socket: %s",
+                strerror(errno));
 
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
