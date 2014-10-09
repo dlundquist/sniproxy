@@ -1,7 +1,7 @@
 Name: sniproxy
 Version: 0.3.6
 Release: 1%{?dist}
-Summary: Transparent TLS proxy
+Summary: Transparent TLS and HTTP layer 4 proxy with SNI support
 
 Group: System Environment/Daemons
 License: BSD
@@ -13,8 +13,9 @@ BuildRequires: autoconf, automake, curl, libev-devel, pcre-devel, perl, gettext-
 
 %description
 Proxies incoming HTTP and TLS connections based on the hostname contained in
-the initial request. This enables HTTPS name based virtual hosting to separate
-backend servers without the installing the private key on the proxy machine.
+the initial request of the TCP session. This enables HTTPS name-based virtual
+hosting to separate backend servers without installing the private key on the
+proxy machine.
 
 
 %prep
