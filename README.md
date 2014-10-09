@@ -2,8 +2,9 @@ SNI Proxy
 =========
 
 Proxies incoming HTTP and TLS connections based on the hostname contained in
-the initial request. This enables HTTPS name-based virtual hosting to separate
-backend servers without installing the private key on the proxy machine.
+the initial request of the TCP session. This enables HTTPS name-based virtual
+hosting to separate backend servers without installing the private key on the
+proxy machine.
 
 News
 ----
@@ -22,10 +23,11 @@ Features
 Usage
 -----
 
-    Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>]
+    Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>] [-V]
         -c  configuration file, defaults to /etc/sniproxy.conf
         -f  run in foreground, do not drop privileges
         -n  specify file descriptor limit
+        -V  print the version of SNIProxy and exit
 
 
 Installation
@@ -59,21 +61,13 @@ This is the preferred installation method on recent Debian based distributions:
 
     sudo dpkg -i ../sniproxy_<version>_<arch>.deb
 
-***Note on Upgrading***
-
-The version of sniproxy is not automatically updated after each commit, so if
-you are upgrading to a later version, the version number of the sniproxy package
-may not have actually changed. This may cause issues with the upgrade process.
-It is recommended you uninstall `sudo apt-get remove sniproxy` then reinstall
-the new version.
-
 **Building Fedora/RedHat package**
 
 This is the preferred installation method for modern Fedora based distributions.
 
 1. Install required packages
 
-        sudo yum install rpm-build autoconf automake curl libev-devel pcre-devel perl pkgconfig udns-devel
+        sudo yum install autoconf automake curl gettext-devel libev-devel pcre-devel perl pkgconfig rpm-build udns-devel
 
 2. Build a distribution tarball:
 
@@ -88,9 +82,9 @@ This is the preferred installation method for modern Fedora based distributions.
         sudo yum install ../sniproxy-<version>.<arch>.rpm
 
 I've used Scientific Linux 6 a fair amount, but I prefer Debian based
-distributions. I do not test building RPMs frequently (SL6 doesn't have a
-libev-devel package). This build process may not follow the current Fedora
-packaging standards, and may not even work.
+distributions. RPM builds are tested in Travis-CI on Ubuntu, but not natively.
+This build process may not follow the current Fedora packaging standards, and
+may not even work.
 
 
 Configuration Syntax
@@ -136,7 +130,8 @@ UDNS uses a single UDP socket for all queries, so it is recommended you use a
 local caching DNS resolver (with a single socket each DNS query is protected by
 spoofing by a single 16 bit query ID, which makes it relatively easy to spoof).
 
-UDNS is currently not available in Debian stable, but a package can be easily built from the Debian testing or Ubuntu source packages:
+UDNS is currently not available in Debian stable, but a package can be easily
+built from the Debian testing or Ubuntu source packages:
 
     mkdir udns_packaging
     cd udns_packaging
