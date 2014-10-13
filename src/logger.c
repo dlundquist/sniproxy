@@ -441,11 +441,11 @@ free_sink(struct LogSink *sink) {
             break;
         case LOG_SINK_STDERR:
             fflush(sink->fd);
-            sink->fd == NULL;
+            sink->fd = NULL;
             break;
         case LOG_SINK_FILE:
             fclose(sink->fd);
-            sink->fd == NULL;
+            sink->fd = NULL;
             free((char *)sink->filepath);
             sink->filepath = NULL;
             break;
