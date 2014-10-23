@@ -51,15 +51,15 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-    sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config
+        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config
 
 2. Build a Debian package
 
-    dpkg-buildpackage
+        dpkg-buildpackage
 
 3. Install the resulting package
 
-    sudo dpkg -i ../sniproxy_<version>_<arch>.deb
+        sudo dpkg -i ../sniproxy_<version>_<arch>.deb
 
 **Building Fedora/RedHat package**
 
