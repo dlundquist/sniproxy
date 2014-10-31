@@ -55,7 +55,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 2. Build a Debian package
 
-        dpkg-buildpackage
+        ./autogen && dpkg-buildpackage
 
 3. Install the resulting package
 
