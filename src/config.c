@@ -180,10 +180,10 @@ init_config(const char *filename, struct ev_loop *loop) {
     }
 
     if (parse_config(config, file, global_grammar) <= 0) {
-        uint64_t whence = ftell(file);
+        intmax_t whence = ftell(file);
         char buffer[256];
 
-        err("error parsing %s at %ld near:", filename, whence);
+        err("error parsing %s at %jd near:", filename, whence);
         fseek(file, -20, SEEK_CUR);
         for (int i = 0; i < 5; i++)
             err("%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
