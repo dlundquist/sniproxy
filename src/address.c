@@ -117,6 +117,7 @@ new_address(const char *hostname_or_ip) {
     if (strcmp("*", hostname_or_ip) == 0) {
         struct Address *addr = malloc(sizeof(struct Address));
         if (addr != NULL) {
+            memset(addr, 0, sizeof(struct Address));
             addr->type = WILDCARD;
             address_set_port(addr, 0);
         }
@@ -161,6 +162,7 @@ new_address(const char *hostname_or_ip) {
         struct Address *addr = malloc(
                 offsetof(struct Address, data) + len + 1);
         if (addr != NULL) {
+            memset(addr, 0, offsetof(struct Address, data) + len + 1);
             addr->type = HOSTNAME;
             addr->port = 0;
             addr->len = len;
@@ -184,6 +186,7 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
 
     addr = malloc(offsetof(struct Address, data) + sa_len);
     if (addr != NULL) {
+        memset(addr, 0, offsetof(struct Address, data) + sa_len);
         addr->type = SOCKADDR;
         addr->len = sa_len;
         memcpy(addr->data, sa, sa_len);
@@ -223,19 +226,21 @@ address_compare(const struct Address *addr_1, const struct Address *addr_2) {
     if (addr_1->type > addr_2->type)
         return 1;
 
-    int addr1_len = address_len(addr_1);
-    int addr2_len = address_len(addr_2);
+    int addr1_len = addr_1->len;
+    int addr2_len = addr_2->len;
     int result = memcmp(addr_1->data, addr_2->data, MIN(addr1_len, addr2_len));
 
-    if (result == 0 && addr1_len < addr2_len)
-        return -1;
-    if (result == 0 && addr1_len > addr2_len)
-        return 1;
+    if (result == 0) { /* they match, find a tie breaker */
+        if (addr1_len < addr2_len)
+            return -1;
+        if (addr1_len > addr2_len)
+            return 1;
 
-    if (result == 0 && addr_1->port < addr_2->port)
-        return -1;
-    if (result == 0 && addr_1->port > addr_2->port)
-        return 1;
+        if (addr_1->port < addr_2->port)
+            return -1;
+        if (addr_1->port > addr_2->port)
+            return 1;
+    }
 
     return result;
 }
