@@ -162,7 +162,6 @@ new_address(const char *hostname_or_ip) {
         struct Address *addr = malloc(
                 offsetof(struct Address, data) + len + 1);
         if (addr != NULL) {
-            memset(addr, 0, offsetof(struct Address, data) + len + 1);
             addr->type = HOSTNAME;
             addr->port = 0;
             addr->len = len;
@@ -186,7 +185,6 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
 
     addr = malloc(offsetof(struct Address, data) + sa_len);
     if (addr != NULL) {
-        memset(addr, 0, offsetof(struct Address, data) + sa_len);
         addr->type = SOCKADDR;
         addr->len = sa_len;
         memcpy(addr->data, sa, sa_len);
