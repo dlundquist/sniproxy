@@ -63,7 +63,7 @@ int compare_address_strings(const char *a, const char *b) {
 }
 
 int main() {
-    /* using volatile variables so we can example core dumps */
+    /* using volatile variables so we can examine core dumps */
     for (volatile unsigned int i = 0; i < sizeof(good) / sizeof(struct Test); i++) {
         int port;
         char buffer[255];
