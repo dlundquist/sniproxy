@@ -135,6 +135,7 @@ int main() {
 
     assert(compare_address_strings("unix:/dev/log", "127.0.0.1") < 0);
     assert(compare_address_strings("unix:/dev/log", "unix:/dev/logsocket") < 0);
+    assert(compare_address_strings("example.co", "example.com") != 0);
     assert(compare_address_strings("0.0.0.0", "127.0.0.1") < 0);
     assert(compare_address_strings("127.0.0.1", "0.0.0.0") > 0);
     assert(compare_address_strings("127.0.0.1", "127.0.0.1") == 0);
