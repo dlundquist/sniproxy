@@ -223,10 +223,13 @@ address_compare(const struct Address *addr_1, const struct Address *addr_2) {
     if (addr_1->type > addr_2->type)
         return 1;
 
-    int result = memcmp(addr_1->data, addr_2->data, MIN(addr_1->len, addr_2->len));
-    if (result == 0 && addr_1->len < addr_2->len)
+    int addr1_len = address_len(addr_1);
+    int addr2_len = address_len(addr_2);
+    int result = memcmp(addr_1->data, addr_2->data, MIN(addr1_len, addr2_len));
+
+    if (result == 0 && addr1_len < addr2_len)
         return -1;
-    if (result == 0 && addr_1->len > addr_2->len)
+    if (result == 0 && addr1_len > addr2_len)
         return 1;
 
     if (result == 0 && addr_1->port < addr_2->port)
