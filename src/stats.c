@@ -162,7 +162,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(connection->input)) {
-        ssize_t bytes_received = buffer_recv(connection->input, w->fd, 0);
+        ssize_t bytes_received = buffer_recv(connection->input, w->fd, 0, loop);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("recv(): %s, closing stats connection",
                     strerror(errno));
@@ -181,7 +181,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(connection->output)) {
-        ssize_t bytes_transmitted = buffer_send(connection->output, w->fd, 0);
+        ssize_t bytes_transmitted = buffer_send(connection->output, w->fd, 0, loop);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(): %s, closing stats connection",
                     strerror(errno));
