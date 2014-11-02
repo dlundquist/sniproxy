@@ -145,8 +145,8 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         ev_io_init(&connection->watcher, connection_cb, sockfd, EV_READ | EV_WRITE);
         connection->watcher.data = connection;
 
-        connection->input = new_buffer(256);
-        connection->output = new_buffer(16 * 1024);
+        connection->input = new_buffer(256, loop);
+        connection->output = new_buffer(16 * 1024, loop);
 
         ev_io_start(loop, &connection->watcher);
     }
