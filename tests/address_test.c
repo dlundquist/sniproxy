@@ -63,7 +63,7 @@ int compare_address_strings(const char *a, const char *b) {
 }
 
 int main() {
-    /* using volatile variables so we can example core dumps */
+    /* using volatile variables so we can examine core dumps */
     for (volatile unsigned int i = 0; i < sizeof(good) / sizeof(struct Test); i++) {
         int port;
         char buffer[255];
@@ -135,6 +135,7 @@ int main() {
 
     assert(compare_address_strings("unix:/dev/log", "127.0.0.1") < 0);
     assert(compare_address_strings("unix:/dev/log", "unix:/dev/logsocket") < 0);
+    assert(compare_address_strings("example.co", "example.com") != 0);
     assert(compare_address_strings("0.0.0.0", "127.0.0.1") < 0);
     assert(compare_address_strings("127.0.0.1", "0.0.0.0") > 0);
     assert(compare_address_strings("127.0.0.1", "127.0.0.1") == 0);
