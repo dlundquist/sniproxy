@@ -44,6 +44,7 @@ struct StatsConnection {
     struct ev_io watcher;
     struct Buffer *input;
     struct Buffer *output;
+    struct ev_cleanup destructor;
 
     /* we need to maintain the state of
      * our iteration, since connection list
@@ -61,6 +62,9 @@ struct StatsConnection {
 
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
+static void free_connection_cb(struct ev_loop *, struct ev_cleanup *, int);
+static void free_connection(struct ev_loop *, struct StatsConnection *);
+static struct StatsConnection *new_connection(struct ev_loop *);
 
 
 struct StatsListener *
@@ -117,9 +121,11 @@ init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
+
     listener->watcher.data = listener;
 
     ev_io_start(loop, &listener->watcher);
+
 }
 
 void
@@ -127,8 +133,34 @@ free_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     ev_io_stop(loop, &listener->watcher);
 
     close(listener->watcher.fd);
-    free(listener->watcher.data);
+
     free(listener);
+}
+
+static struct StatsConnection *
+new_connection(struct ev_loop *loop) {
+    struct StatsConnection *connection = malloc(sizeof(struct StatsConnection));
+    if (connection == NULL)
+        return NULL;
+
+    connection->input = new_buffer(256, loop);
+    if (connection->input == NULL) {
+        free(connection);
+        return NULL;
+    }
+
+    connection->output = new_buffer(16 * 1024, loop);
+    if (connection->output == NULL) {
+        free(connection->input);
+        free(connection);
+        return NULL;
+    }
+
+    ev_cleanup_init(&connection->destructor, free_connection_cb);
+    connection->destructor.data = connection;
+    ev_cleanup_start(loop, &connection->destructor);
+
+    return connection;
 }
 
 static void
@@ -139,7 +171,7 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         int flags = fcntl(sockfd, F_GETFL, 0);
         fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
-        struct StatsConnection *connection = malloc(sizeof(struct StatsConnection));
+        struct StatsConnection *connection = new_connection(loop);
         if (connection == NULL) {
             err("%s failed to allocate memory for new stats connection", __func__);
             return;
@@ -147,11 +179,26 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         ev_io_init(&connection->watcher, connection_cb, sockfd, EV_READ | EV_WRITE);
         connection->watcher.data = connection;
 
-        connection->input = new_buffer(256, loop);
-        connection->output = new_buffer(16 * 1024, loop);
-
         ev_io_start(loop, &connection->watcher);
     }
+}
+
+static void
+free_connection_cb(struct ev_loop *loop __attribute__((unused)), struct ev_cleanup *w, int revents __attribute__((unused))) {
+    struct StatsConnection *connection = (struct StatsConnection *)w->data;
+
+    notice("%s(%p, %p, %d)\n", __func__, loop, w, revents);
+
+    free_connection(loop, connection);
+}
+
+static void
+free_connection(struct ev_loop *loop, struct StatsConnection *connection) {
+    ev_cleanup_stop(loop, &connection->destructor);
+
+    free(connection->input);
+    free(connection->output);
+    free(connection);
 }
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
@@ -171,10 +218,14 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
             ev_io_stop(loop, &connection->watcher);
             close(w->fd);
+            free_connection(loop, connection);
+            return;
             revents = 0; /* Clear revents so we don't try to send */
         } else if (bytes_received == 0) { /* peer closed socket */
             ev_io_stop(loop, &connection->watcher);
             close(w->fd);
+            free_connection(loop, connection);
+            return;
             revents = 0;
         }
     }
@@ -194,6 +245,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
             ev_io_stop(loop, &connection->watcher);
             close(w->fd);
+            free_connection(loop, connection);
+            return;
         }
     }
 
