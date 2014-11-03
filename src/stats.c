@@ -134,6 +134,7 @@ free_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
 
     close(listener->watcher.fd);
 
+    free(listener->address);
     free(listener);
 }
 
