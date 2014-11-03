@@ -141,7 +141,7 @@ main(int argc, char **argv) {
 
     ev_run(EV_DEFAULT, 0);
 
-    free(stats);
+    free_stats_listener(stats, EV_DEFAULT);
     free_connections(EV_DEFAULT);
     resolv_shutdown(EV_DEFAULT);
 

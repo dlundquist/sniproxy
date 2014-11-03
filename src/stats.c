@@ -123,10 +123,11 @@ init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
 }
 
 void
-close_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
+free_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     ev_io_stop(loop, &listener->watcher);
 
     close(listener->watcher.fd);
+    free(listener);
 }
 
 static void
@@ -176,6 +177,10 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             revents = 0;
         }
     }
+
+    char local_buffer[4096];
+    size_t length = snprintf(local_buffer, sizeof(local_buffer), "%s\n", "Hello World");
+    buffer_push(connection->output, local_buffer, length);
 
     // TODO parse request
 

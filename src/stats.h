@@ -35,6 +35,6 @@ struct StatsListener;
 
 struct StatsListener *new_stats_listener(const char *);
 void init_stats_listener(struct StatsListener *, struct ev_loop *);
-void close_stats_listener(struct StatsListener *, struct ev_loop *);
+void free_stats_listener(struct StatsListener *, struct ev_loop *);
 
 #endif
