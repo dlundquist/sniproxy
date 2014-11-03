@@ -43,8 +43,8 @@ struct Address {
         WILDCARD,
     } type;
 
-    size_t len;
-    uint16_t port;
+    size_t len;     /* length of data */
+    uint16_t port;  /* for hostname and wildcard */
     char data[];
 };
 
@@ -117,8 +117,8 @@ new_address(const char *hostname_or_ip) {
     if (strcmp("*", hostname_or_ip) == 0) {
         struct Address *addr = malloc(sizeof(struct Address));
         if (addr != NULL) {
-            memset(addr, 0, sizeof(struct Address));
             addr->type = WILDCARD;
+            addr->len = 0;
             address_set_port(addr, 0);
         }
         return addr;
