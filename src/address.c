@@ -425,15 +425,14 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
 int
 is_numeric(const char *s) {
     char *p;
-    int n;
 
     if (s == NULL || *s == '\0')
         return 0;
 
-    n = strtod(s, &p);
+    int n = strtod(s, &p);
+    (void)n; /* unused */
 
-    return n ^ n || /* to suppress unused return value of strtod() */
-        *p == '\0'; /* to check entire string was numeric */
+    return *p == '\0'; /* entire string was numeric */
 }
 
 static int
