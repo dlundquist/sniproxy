@@ -65,11 +65,12 @@ void
 init_listeners(struct Listener_head *listeners,
         const struct Table_head *tables, struct ev_loop *loop) {
     struct Listener *iter;
+    char address[128];
 
     SLIST_FOREACH(iter, listeners, entries) {
         if (init_listener(iter, tables, loop) < 0) {
-            err("Failed to initialize listener");
-            print_listener_config(stderr, iter);
+            err("Failed to initialize listener %s",
+                    display_address(iter->address, address, sizeof(address)));
             exit(1);
         }
     }
