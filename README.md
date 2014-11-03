@@ -87,11 +87,17 @@ This build process may not follow the current Fedora packaging standards, and
 may not even work.
 
 ***Building on OS X with Homebrew***
+
 1. install dependencies.
+
         brew install libev pcre udns autoconf automake gettext libtool
-2. Read the warning about gettext and force link it so autogen.sh works.
+
+2. Read the warning about gettext and force link it so autogen.sh works. We need the GNU gettext for the macro `AC_LIB_HAVE_LINKFLAGS` which isn't present in the default OS X package.
+
         brew link --force gettext
+
 3. Make it so
+
         ./autogen && ./configure && make
 
 OS X support is a best effort, and isn't a primary target platform.
