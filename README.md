@@ -55,7 +55,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 2. Build a Debian package
 
-        ./autogen && dpkg-buildpackage
+        ./autogen.sh && dpkg-buildpackage
 
 3. Install the resulting package
 
@@ -71,7 +71,7 @@ This is the preferred installation method for modern Fedora based distributions.
 
 2. Build a distribution tarball:
 
-        ./autogen && ./configure && make dist
+        ./autogen.sh && ./configure && make dist
 
 3. Build a RPM package
 
@@ -98,7 +98,7 @@ may not even work.
 
 3. Make it so
 
-        ./autogen && ./configure && make
+        ./autogen.sh && ./configure && make
 
 OS X support is a best effort, and isn't a primary target platform.
 
