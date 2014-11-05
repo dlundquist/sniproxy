@@ -130,7 +130,8 @@ main(int argc, char **argv) {
     ev_signal_start(EV_DEFAULT, &sigint_watcher);
     ev_signal_start(EV_DEFAULT, &sigterm_watcher);
 
-    resolv_init(EV_DEFAULT);
+    resolv_init(EV_DEFAULT, config->resolver.nameservers,
+            config->resolver.search, config->resolver.mode);
 
     init_connections();
 

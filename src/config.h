@@ -34,6 +34,11 @@ struct Config {
     char *filename;
     char *user;
     char *pidfile;
+    struct ResolverConfig {
+        char **nameservers;
+        char **search;
+        int mode;
+    } resolver;
     struct Logger *access_log;
     struct Listener_head listeners;
     struct Table_head tables;

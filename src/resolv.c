@@ -46,7 +46,7 @@
  */
 
 int
-resolv_init(struct ev_loop *loop) {
+resolv_init(struct ev_loop *loop, char **nameservers, char **search_domains, int mode) {
     return 0;
 }
 
@@ -55,7 +55,8 @@ resolv_shutdown(struct ev_loop *loop) {
 }
 
 struct ResolvQuery *
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *), void (*client_free_cb)(void *), void *client_cb_data) {
+resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
+        void (*client_free_cb)(void *), void *client_cb_data) {
     return NULL;
 }
 
@@ -80,6 +81,11 @@ struct ResolvQuery {
 
 static struct ev_io resolv_io_watcher;
 static struct ev_timer resolv_timeout_watcher;
+static const int MODE_IPV4_ONLY = 0;
+static const int MODE_IPV6_ONLY = 1;
+static const int MODE_IPV4_FIRST = 2;
+static const int MODE_IPV6_FIRST = 3;
+static int resolv_mode = 0;
 
 
 static void resolv_sock_cb(struct ev_loop *, struct ev_io *, int);
@@ -89,14 +95,31 @@ static void dns_query_v6_cb(struct dns_ctx *, struct dns_rr_a6 *, void *);
 static void dns_timer_setup_cb(struct dns_ctx *, int, void *);
 static void process_client_callback(struct ResolvQuery *);
 static inline int all_queries_are_null(struct ResolvQuery *);
+static struct Address *choose_ipv4_first(struct ResolvQuery *);
+static struct Address *choose_ipv6_first(struct ResolvQuery *);
+static struct Address *choose_any(struct ResolvQuery *);
 
 
 int
-resolv_init(struct ev_loop *loop) {
+resolv_init(struct ev_loop *loop, char **nameservers, char **search, int mode) {
     struct dns_ctx *ctx = &dns_defctx;
-    dns_init(ctx, 1);
+    if (nameservers == NULL) {
+        /* Nameservers not specified, use system resolver config */
+        dns_init(ctx, 0);
+    } else {
+        dns_reset(ctx);
 
-    int sockfd = dns_sock(ctx);
+        for (char *server = *nameservers; server != NULL; server++)
+            dns_add_serv(ctx, server);
+
+        if (search != NULL)
+            for (char *domain = *search; domain != NULL; domain++)
+                dns_add_srch(ctx, domain);
+    }
+
+    resolv_mode = mode;
+
+    int sockfd = dns_open(ctx);
     if (sockfd < 0)
         fatal("Failed to open DNS resolver socket: %s",
                 strerror(errno));
@@ -151,17 +174,21 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
     cb_data->responses = NULL;
 
     /* Submit A and AAAA queries */
-    cb_data->queries[0] = dns_submit_a4(ctx,
-            hostname, 0,
-            dns_query_v4_cb, cb_data);
-    if (cb_data->queries[0] == NULL)
-        err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+    if (resolv_mode != MODE_IPV6_ONLY) {
+        cb_data->queries[0] = dns_submit_a4(ctx,
+                hostname, 0,
+                dns_query_v4_cb, cb_data);
+        if (cb_data->queries[0] == NULL)
+            err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+    };
 
-    cb_data->queries[1] = dns_submit_a6(ctx,
-            hostname, 0,
-            dns_query_v6_cb, cb_data);
-    if (cb_data->queries[1] == NULL)
-        err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+    if (resolv_mode != MODE_IPV4_ONLY) {
+        cb_data->queries[1] = dns_submit_a6(ctx,
+                hostname, 0,
+                dns_query_v6_cb, cb_data);
+        if (cb_data->queries[1] == NULL)
+            err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
+    }
 
     if (all_queries_are_null(cb_data)) {
         if (cb_data->client_free_cb != NULL)
@@ -294,9 +321,12 @@ process_client_callback(struct ResolvQuery *cb_data) {
     struct Address *best_address = NULL;
     char buffer[128];
 
-    /* TODO better algorithm */
-    if (cb_data->response_count >= 1)
-         best_address = cb_data->responses[0];
+    if (resolv_mode == MODE_IPV4_FIRST)
+        best_address = choose_ipv4_first(cb_data);
+    else if (resolv_mode == MODE_IPV6_FIRST)
+        best_address = choose_ipv6_first(cb_data);
+    else
+        best_address = choose_any(cb_data);
 
     cb_data->client_cb(best_address, cb_data->client_cb_data);
 
@@ -307,6 +337,34 @@ process_client_callback(struct ResolvQuery *cb_data) {
     if (cb_data->client_free_cb != NULL)
         cb_data->client_free_cb(cb_data->client_cb_data);
     free(cb_data);
+}
+
+static struct Address *
+choose_ipv4_first(struct ResolvQuery *cb_data) {
+    for (int i = 0; i < cb_data->response_count; i++)
+        if (address_is_sockaddr(cb_data->responses[i]) &&
+                address_sa(cb_data->responses[i])->sa_family == AF_INET)
+            return cb_data->responses[i];
+
+    return choose_any(cb_data);;
+}
+
+static struct Address *
+choose_ipv6_first(struct ResolvQuery *cb_data) {
+    for (int i = 0; i < cb_data->response_count; i++)
+        if (address_is_sockaddr(cb_data->responses[i]) &&
+                address_sa(cb_data->responses[i])->sa_family == AF_INET6)
+            return cb_data->responses[i];
+
+    return choose_any(cb_data);;
+}
+
+static struct Address *
+choose_any(struct ResolvQuery *cb_data) {
+    if (cb_data->response_count >= 1)
+        return cb_data->responses[0];
+
+    return NULL;
 }
 
 /*
