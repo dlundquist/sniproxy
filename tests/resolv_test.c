@@ -39,7 +39,7 @@ int main() {
     struct ev_timer timeout_watcher;
     struct ev_timer init_watcher;
 
-    resolv_init(loop);
+    resolv_init(loop, NULL, NULL, 0);
 
     ev_timer_init(&init_watcher, &test_init_cb, 0.0, 0.0);
     ev_timer_start(loop, &init_watcher);
