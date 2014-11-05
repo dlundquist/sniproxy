@@ -22,7 +22,7 @@ script:
   - bash -c "cd tests && ./bind_source_test valgrind --leak-check=full --error-exitcode=1"
   - bash -c "cd tests && ./reload_test valgrind --leak-check=full --error-exitcode=1"
   - echo "Testing Debian package build"
-  - dpkg-buildpackage
+  - dpkg-buildpackage -us -uc
   - echo "Testing RPM package build"
   - make dist
   - rpmbuild --define "_sourcedir `pwd`" -ba --nodeps redhat/sniproxy.spec
