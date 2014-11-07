@@ -49,6 +49,15 @@ static int accept_logger_priority(struct LoggerBuilder *, char *);
 static int end_error_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_global_access_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_listener_access_logger_stanza(struct Listener *, struct LoggerBuilder *);
+static struct ResolverConfig *new_resolver_config();
+static int accept_resolver_nameserver(struct ResolverConfig *, char *);
+static int accept_resolver_search(struct ResolverConfig *, char *);
+static int accept_resolver_mode(struct ResolverConfig *, char *);
+static int end_resolver_stanza(struct Config *, struct ResolverConfig *);
+static size_t string_vector_len(char **);
+static int append_to_string_vector(char ***, const char *);
+static void free_string_vector(char **);
+static void print_resolver_config(FILE *, struct ResolverConfig *);
 
 
 static struct Keyword logger_stanza_grammar[] = {
@@ -68,6 +77,24 @@ static struct Keyword logger_stanza_grammar[] = {
             NULL,
             NULL},
     { NULL, NULL, NULL, NULL, NULL },
+};
+
+struct Keyword resolver_stanza_grammar[] = {
+    { "nameserver",
+            NULL,
+            (int(*)(void *, char *))accept_resolver_nameserver,
+            NULL,
+            NULL},
+    { "search",
+            NULL,
+            (int(*)(void *, char *))accept_resolver_search,
+            NULL,
+            NULL},
+    { "mode",
+            NULL,
+            (int(*)(void *, char *))accept_resolver_mode,
+            NULL,
+            NULL},
 };
 
 struct Keyword listener_stanza_grammar[] = {
@@ -123,6 +150,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_pidfile,
             NULL,
             NULL},
+    { "resolver",
+            (void *(*)())new_resolver_config,
+            NULL,
+            resolver_stanza_grammar,
+            (int(*)(void *, void *))end_resolver_stanza},
     { "error_log",
             (void *(*)())new_logger_builder,
             NULL,
@@ -148,6 +180,13 @@ static struct Keyword global_grammar[] = {
     { NULL, NULL, NULL, NULL, NULL }
 };
 
+static const char *resolver_mode_names[] = {
+    "ipv4_only",
+    "ipv6_only",
+    "ipv4_first",
+    "ipv6_first",
+};
+
 
 struct Config *
 init_config(const char *filename, struct ev_loop *loop) {
@@ -161,6 +200,9 @@ init_config(const char *filename, struct ev_loop *loop) {
     config->user = NULL;
     config->pidfile = NULL;
     config->access_log = NULL;
+    config->resolver.nameservers = NULL;
+    config->resolver.search = NULL;
+    config->resolver.mode = 0;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -202,6 +244,11 @@ free_config(struct Config *config, struct ev_loop *loop) {
     free(config->filename);
     free(config->user);
     free(config->pidfile);
+
+    free_string_vector(config->resolver.nameservers);
+    config->resolver.nameservers = NULL;
+    free_string_vector(config->resolver.search);
+    config->resolver.search = NULL;
 
     logger_ref_put(config->access_log);
     free_listeners(&config->listeners, loop);
@@ -245,6 +292,8 @@ print_config(FILE *file, struct Config *config) {
 
     if (config->pidfile)
         fprintf(file, "pidfile %s\n\n", config->pidfile);
+
+    print_resolver_config(file, &config->resolver);
 
     SLIST_FOREACH(listener, &config->listeners, entries) {
         print_listener_config(file, listener);
@@ -456,4 +505,120 @@ end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilde
     free((char *)lb->syslog_facility);
     free(lb);
     return 1;
+}
+
+static struct ResolverConfig *
+new_resolver_config() {
+    struct ResolverConfig *resolver = malloc(sizeof(struct ResolverConfig));
+
+    if (resolver != NULL) {
+        resolver->nameservers = NULL;
+        resolver->search = NULL;
+        resolver->mode = 0;
+    }
+
+    return resolver;
+}
+
+static size_t
+string_vector_len(char **vector) {
+    size_t len = 0;
+    while (vector != NULL && *vector++ != NULL)
+        len++;
+
+    return len;
+}
+
+static int
+append_to_string_vector(char ***vector_ptr, const char *string) {
+    char **vector = NULL;
+    if (vector_ptr != NULL)
+        vector = *vector_ptr;
+
+    size_t len = string_vector_len(vector);
+    vector = realloc(vector, (len + 2) * sizeof(char *));
+    if (vector == NULL) {
+        err("%s: realloc", __func__);
+        return -1;
+    }
+
+    *vector_ptr = vector;
+
+    vector[len] = strdup(string);
+    if (vector[len] == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
+    vector[len + 1] = NULL;
+
+    return 1;
+}
+
+static void
+free_string_vector(char **vector) {
+    for (int i = 0; vector != NULL && vector[i] != NULL; i++) {
+        free(vector[i]);
+        vector[i] = NULL;
+    }
+
+    free(vector);
+}
+
+static int
+accept_resolver_nameserver(struct ResolverConfig *resolver, char *nameserver) {
+    /* Validate address is a valid IP */
+    struct Address *ns_address = new_address(nameserver);
+    if (!address_is_sockaddr(ns_address)) {
+        free(ns_address);
+        return -1;
+    }
+    free(ns_address);
+
+    return append_to_string_vector(&resolver->nameservers, nameserver);
+}
+
+static int
+accept_resolver_search(struct ResolverConfig *resolver, char *search) {
+    struct Address *search_address = new_address(search);
+    if (!address_is_hostname(search_address)) {
+        free(search_address);
+        return -1;
+    }
+    free(search_address);
+
+    return append_to_string_vector(&resolver->search, search);
+}
+
+static int
+accept_resolver_mode(struct ResolverConfig *resolver, char *mode) {
+    for (int i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
+        if (strncasecmp(resolver_mode_names[i], mode, strlen(mode)) == 0) {
+            resolver->mode = i;
+            return 1;
+        }
+
+    return -1;
+}
+
+static int
+end_resolver_stanza(struct Config *config, struct ResolverConfig *resolver) {
+    config->resolver = *resolver;
+    free(resolver);
+
+    return 1;
+}
+
+static void
+print_resolver_config(FILE *file, struct ResolverConfig *resolver) {
+    fprintf(file, "resolver {\n");
+
+    for (int i = 0; resolver->nameservers != NULL && resolver->nameservers[i] != NULL; i++)
+        fprintf(file, "\tnameserver %s\n", resolver->nameservers[i]);
+
+    for (int i = 0; resolver->search != NULL && resolver->search[i] != NULL; i++)
+        fprintf(file, "\tsearch %s\n", resolver->search[i]);
+
+    fprintf(file, "\tmode %s\n", resolver_mode_names[resolver->mode]);
+
+    fprintf(file, "}\n\n");
 }
