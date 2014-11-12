@@ -118,9 +118,7 @@ main(int argc, char **argv) {
     set_limits(max_nofiles);
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
-    /* Fix Me */
-    struct StatsListener* stats = new_stats_listener("127.0.0.1:4000");
-    init_stats_listener(stats, EV_DEFAULT);
+    init_stats_listeners(&config->stats_listeners, EV_DEFAULT);
 
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : default_username);
@@ -141,7 +139,7 @@ main(int argc, char **argv) {
 
     ev_run(EV_DEFAULT, 0);
 
-    free_stats_listener(stats, EV_DEFAULT);
+    free_stats_listeners(&config->stats_listeners, EV_DEFAULT);
     free_connections(EV_DEFAULT);
     resolv_shutdown(EV_DEFAULT);
 

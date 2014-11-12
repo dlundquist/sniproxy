@@ -29,6 +29,7 @@
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
+#include "stats.h"
 
 
 struct LoggerBuilder {
@@ -58,6 +59,7 @@ static size_t string_vector_len(char **);
 static int append_to_string_vector(char ***, const char *);
 static void free_string_vector(char **);
 static void print_resolver_config(FILE *, struct ResolverConfig *);
+static int end_stats_listener_stanza(struct Config *, struct StatsListener *);
 
 
 static struct Keyword logger_stanza_grammar[] = {
@@ -172,6 +174,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_listener_arg,
             listener_stanza_grammar,
             (int(*)(void *, void *))end_listener_stanza},
+    { "stats",
+            (void *(*)())new_stats_listener,
+            (int(*)(void *, char *))accept_stats_listener_arg,
+            NULL,
+            (int(*)(void *, void *))end_stats_listener_stanza},
     { "table",
             (void *(*)())new_table,
             (int(*)(void *, char *))accept_table_arg,
@@ -204,6 +211,7 @@ init_config(const char *filename, struct ev_loop *loop) {
     config->resolver.search = NULL;
     config->resolver.mode = 0;
     SLIST_INIT(&config->listeners);
+    SLIST_INIT(&config->stats_listeners);
     SLIST_INIT(&config->tables);
 
     config->filename = strdup(filename);
@@ -282,6 +290,7 @@ reload_config(struct Config *config, struct ev_loop *loop) {
 void
 print_config(FILE *file, struct Config *config) {
     struct Listener *listener = NULL;
+    struct StatsListener *stats_listener = NULL;
     struct Table *table = NULL;
 
     if (config->filename)
@@ -297,6 +306,11 @@ print_config(FILE *file, struct Config *config) {
 
     SLIST_FOREACH(listener, &config->listeners, entries) {
         print_listener_config(file, listener);
+    }
+
+    SLIST_FOREACH(stats_listener, &config->stats_listeners, entries) {
+        /* TODO */
+        /* print_stats_listener_config(file, stats_listener); */
     }
 
     SLIST_FOREACH(table, &config->tables, entries) {
@@ -340,6 +354,14 @@ end_listener_stanza(struct Config *config, struct Listener *listener) {
     }
 
     add_listener(&config->listeners, listener);
+
+    return 1;
+}
+
+static int
+end_stats_listener_stanza(struct Config *config, struct StatsListener *stats_listener) {
+
+    SLIST_INSERT_HEAD(&config->stats_listeners, stats_listener, entries);
 
     return 1;
 }

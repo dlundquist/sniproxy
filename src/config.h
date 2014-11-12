@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include "table.h"
 #include "listener.h"
+#include "stats.h"
 
 struct Config {
     char *filename;
@@ -41,6 +42,7 @@ struct Config {
     } resolver;
     struct Logger *access_log;
     struct Listener_head listeners;
+    struct Stats_head stats_listeners;
     struct Table_head tables;
 };
 

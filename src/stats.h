@@ -30,11 +30,16 @@
 #include "address.h"
 #include "table.h"
 
-struct StatsListener;
-
+SLIST_HEAD(Stats_head, StatsListener);
+struct StatsListener {
+    struct Address *address;
+    struct ev_io watcher;
+    SLIST_ENTRY(StatsListener) entries;
+};
 
 struct StatsListener *new_stats_listener(const char *);
-void init_stats_listener(struct StatsListener *, struct ev_loop *);
+int accept_stats_listener_arg(struct StatsListener *listener, char *arg);
+int init_stats_listener(struct StatsListener *, struct ev_loop *);
 void free_stats_listener(struct StatsListener *, struct ev_loop *);
 
 #endif
