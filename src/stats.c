@@ -29,16 +29,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ev.h>
+#include <sys/queue.h>
+
 #include "stats.h"
 #include "address.h"
 #include "buffer.h"
 #include "logger.h"
-
-
-struct StatsListener {
-    struct Address *address;
-    struct ev_io watcher;
-};
 
 struct StatsConnection {
     struct ev_io watcher;
@@ -68,29 +64,29 @@ static struct StatsConnection *new_connection(struct ev_loop *);
 
 
 struct StatsListener *
-new_stats_listener(const char *address) {
-    struct StatsListener *listener = malloc(sizeof(struct StatsListener));
+new_stats_listener() {
+    struct StatsListener *listener = calloc(1, sizeof(struct StatsListener));
     if (listener == NULL) {
         err("%s failed to allocate memory for listener", __func__);
-        return NULL;
-    }
-
-    listener->address = new_address(address);
-    if (listener->address == NULL) {
-        err("%s invalid address", __func__);
-        free(listener);
         return NULL;
     }
 
     return listener;
 }
 
-void
+static int
 init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
-    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+    const struct sockaddr* sock_addr = address_sa(listener->address);
+
+    if (sock_addr == NULL) {
+        err("Failed to parse sock address\n");
+        return -1;
+    }
+
+    int sockfd = socket(sock_addr->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("%s failed to create socket: %s", __func__, strerror(errno));
-        return;
+        return sockfd;
     }
 
     int on = 1;
@@ -104,17 +100,17 @@ init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
                 display_address(listener->address, address, sizeof(address)),
                 strerror(errno));
         close(sockfd);
-        return;
+        return result;
     }
 
-    listen(sockfd, SOMAXCONN);
+    result = listen(sockfd, SOMAXCONN);
     if (result < 0) {
         char address[128];
         err("%s failed to listener on socket to %s: %s", __func__,
                 display_address(listener->address, address, sizeof(address)),
                 strerror(errno));
         close(sockfd);
-        return;
+        return result;
     }
 
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -125,10 +121,10 @@ init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     listener->watcher.data = listener;
 
     ev_io_start(loop, &listener->watcher);
-
+    return 1;
 }
 
-void
+static void
 free_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     ev_io_stop(loop, &listener->watcher);
 
@@ -263,5 +259,57 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         ev_io_stop(loop, w);
         ev_io_set(w, w->fd, events);
         ev_io_start(loop, w);
+    }
+}
+
+int
+accept_stats_listener_arg(struct StatsListener *listener, char *arg) {
+    if (listener->address == NULL && !is_numeric(arg)) {
+        listener->address = new_address(arg);
+
+        if (listener->address == NULL ||
+                !address_is_sockaddr(listener->address)) {
+            err("Invalid listener argument %s", arg);
+            return -1;
+        }
+    } else if (listener->address == NULL && is_numeric(arg)) {
+        listener->address = new_address("[::]");
+
+        if (listener->address == NULL ||
+                !address_is_sockaddr(listener->address)) {
+            err("Unable to initialize default address");
+            return -1;
+        }
+
+        address_set_port(listener->address, atoi(arg));
+    } else if (address_port(listener->address) == 0 && is_numeric(arg)) {
+        address_set_port(listener->address, atoi(arg));
+    } else {
+        err("Invalid listener argument %s", arg);
+    }
+
+    return 1;
+}
+
+void
+free_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
+    struct StatsListener *iter;
+
+    SLIST_FOREACH(iter, stats_listeners, entries) {
+        free_stats_listener(iter, loop);
+    }
+}
+
+void
+init_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
+    struct StatsListener *iter;
+    char address[128];
+
+    SLIST_FOREACH(iter, stats_listeners, entries) {
+        if (init_stats_listener(iter, loop) < 0) {
+            err("Failed to initialize listener %s",
+                    display_address(iter->address, address, sizeof(address)));
+            exit(1);
+        }
     }
 }

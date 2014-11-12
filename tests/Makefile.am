@@ -10,7 +10,7 @@ TESTS = http_test \
         functional_test \
         bad_request_test \
         slow_client_test \
-		fallback_test \
+        fallback_test \
         reload_test \
         connection_reset_test \
         bind_source_test \
@@ -41,7 +41,7 @@ tls_test_SOURCES = tls_test.c \
 
 binder_test_SOURCES = binder_test.c \
                       ../src/binder.c \
-					  ../src/logger.c
+                      ../src/logger.c
 
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
@@ -69,7 +69,9 @@ config_test_SOURCES = config_test.c \
                       ../src/resolv.c \
                       ../src/resolv.h \
                       ../src/tls.c \
-                      ../src/http.c
+                      ../src/http.c \
+                      ../src/stats.h \
+                      ../src/stats.c
 
 config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)
 
