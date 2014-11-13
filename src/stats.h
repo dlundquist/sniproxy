@@ -37,7 +37,7 @@ struct StatsListener {
     SLIST_ENTRY(StatsListener) entries;
 };
 
-struct StatsListener *new_stats_listener(const char *);
+struct StatsListener *new_stats_listener();
 int accept_stats_listener_arg(struct StatsListener *listener, char *arg);
 
 void init_stats_listeners(struct Stats_head *, struct ev_loop *);

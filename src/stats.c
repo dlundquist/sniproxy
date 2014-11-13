@@ -64,17 +64,10 @@ static struct StatsConnection *new_connection(struct ev_loop *);
 
 
 struct StatsListener *
-new_stats_listener(const char *address) {
-    struct StatsListener *listener = malloc(sizeof(struct StatsListener));
+new_stats_listener() {
+    struct StatsListener *listener = calloc(1, sizeof(struct StatsListener));
     if (listener == NULL) {
         err("%s failed to allocate memory for listener", __func__);
-        return NULL;
-    }
-
-    listener->address = new_address(address);
-    if (listener->address == NULL) {
-        err("%s invalid address", __func__);
-        free(listener);
         return NULL;
     }
 
