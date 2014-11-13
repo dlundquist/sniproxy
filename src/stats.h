@@ -39,7 +39,7 @@ struct StatsListener {
 
 struct StatsListener *new_stats_listener(const char *);
 int accept_stats_listener_arg(struct StatsListener *listener, char *arg);
-int init_stats_listener(struct StatsListener *, struct ev_loop *);
-void free_stats_listener(struct StatsListener *, struct ev_loop *);
 
+void init_stats_listeners(struct Stats_head *, struct ev_loop *);
+void free_stats_listeners(struct Stats_head *, struct ev_loop *);
 #endif

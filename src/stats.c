@@ -62,20 +62,6 @@ static void free_connection_cb(struct ev_loop *, struct ev_cleanup *, int);
 static void free_connection(struct ev_loop *, struct StatsConnection *);
 static struct StatsConnection *new_connection(struct ev_loop *);
 
-void
-init_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
-    struct StatsListener *iter;
-    char address[128];
-
-    SLIST_FOREACH(iter, stats_listeners, entries) {
-        if (init_stats_listener(iter, loop) < 0) {
-            err("Failed to initialize listener %s",
-                    display_address(iter->address, address, sizeof(address)));
-            exit(1);
-        }
-    }
-}
-
 
 struct StatsListener *
 new_stats_listener(const char *address) {
@@ -95,7 +81,7 @@ new_stats_listener(const char *address) {
     return listener;
 }
 
-int
+static int
 init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     const struct sockaddr* sock_addr = address_sa(listener->address);
 
@@ -142,10 +128,10 @@ init_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     listener->watcher.data = listener;
 
     ev_io_start(loop, &listener->watcher);
-    return 0;
+    return 1;
 }
 
-void
+static void
 free_stats_listener(struct StatsListener *listener, struct ev_loop *loop) {
     ev_io_stop(loop, &listener->watcher);
 
@@ -314,11 +300,26 @@ accept_stats_listener_arg(struct StatsListener *listener, char *arg) {
     return 1;
 }
 
-void free_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
+void
+free_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
     struct StatsListener *iter;
     char address[128];
 
     SLIST_FOREACH(iter, stats_listeners, entries) {
         free_stats_listener(iter, loop);
+    }
+}
+
+void
+init_stats_listeners(struct Stats_head *stats_listeners, struct ev_loop *loop) {
+    struct StatsListener *iter;
+    char address[128];
+
+    SLIST_FOREACH(iter, stats_listeners, entries) {
+        if (init_stats_listener(iter, loop) < 0) {
+            err("Failed to initialize listener %s",
+                    display_address(iter->address, address, sizeof(address)));
+            exit(1);
+        }
     }
 }
