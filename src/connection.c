@@ -238,6 +238,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         } else if (bytes_received == 0) { /* peer closed socket */
             close_socket(con, loop);
             revents = 0;
+        } else {
+            con->listener->stats.bytes_received += bytes_received;
         }
     }
 
@@ -249,6 +251,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
                     strerror(errno));
 
             close_socket(con, loop);
+        } else {
+            con->listener->stats.bytes_transmitted += bytes_transmitted;
         }
     }
 
