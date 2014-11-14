@@ -47,6 +47,11 @@ struct Listener {
     struct ev_timer backoff_timer;
     struct Table *table;
     SLIST_ENTRY(Listener) entries;
+
+    struct {
+        size_t bytes_transmitted;
+        size_t bytes_received;
+    } stats;
 };
 
 
