@@ -65,7 +65,7 @@ void
 init_listeners(struct Listener_head *listeners,
         const struct Table_head *tables, struct ev_loop *loop) {
     struct Listener *iter;
-    char address[128];
+    char address[ADDRESS_BUFFER_SIZE];
 
     SLIST_FOREACH(iter, listeners, entries) {
         if (init_listener(iter, tables, loop) < 0) {
@@ -85,7 +85,7 @@ listeners_reload(struct Listener_head *existing_listeners,
 
     while (iter_existing != NULL || iter_new != NULL) {
         int compare_result;
-        char address[128];
+        char address[ADDRESS_BUFFER_SIZE];
 
         if (iter_existing == NULL)
             compare_result = 1;
@@ -301,7 +301,7 @@ accept_listener_source_address(struct Listener *listener, char *source) {
         return 0;
     }
     if (address_port(listener->source_address) != 0) {
-        char address[256];
+        char address[ADDRESS_BUFFER_SIZE];
         err("Source address on listener %s set to non zero port, "
                 "this prevents multiple connection to each backend server.",
                 display_address(listener->address, address, sizeof(address)));
@@ -390,6 +390,7 @@ valid_listener(const struct Listener *listener) {
 
 static int
 init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
+    char address[ADDRESS_BUFFER_SIZE];
     struct Table *table = table_lookup(tables, listener->table_name);
     if (table == NULL) {
         err("Table \"%s\" not defined", listener->table_name);
@@ -423,14 +424,12 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         sockfd = bind_socket(address_sa(listener->address),
                 address_sa_len(listener->address));
         if (sockfd < 0) {
-            char address[128];
             err("binder failed to bind to %s",
                 display_address(listener->address, address, sizeof(address)));
             close(sockfd);
             return -3;
         }
     } else if (result < 0) {
-        char address[128];
         err("bind %s failed: %s",
             display_address(listener->address, address, sizeof(address)),
             strerror(errno));
@@ -509,7 +508,7 @@ listener_lookup_server_address(const struct Listener *listener,
 
 void
 print_listener_config(FILE *file, const struct Listener *listener) {
-    char address[128];
+    char address[ADDRESS_BUFFER_SIZE];
 
     fprintf(file, "listener %s {\n",
             display_address(listener->address, address, sizeof(address)));
@@ -607,7 +606,7 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ) {
         int result = accept_connection(listener, loop);
         if (result == 0 && (errno == EMFILE || errno == ENFILE)) {
-            char address_buf[256];
+            char address_buf[ADDRESS_BUFFER_SIZE];
             int backoff_time = 2;
 
             err("File descriptor limit reached! "

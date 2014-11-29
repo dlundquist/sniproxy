@@ -62,7 +62,7 @@ static int valid_hostname(const char *);
 struct Address *
 new_address(const char *hostname_or_ip) {
     struct sockaddr_storage sa;
-    char ip_buf[256];
+    char ip_buf[ADDRESS_BUFFER_SIZE];
     char *port;
     size_t len;
 

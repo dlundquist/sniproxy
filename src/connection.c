@@ -635,9 +635,9 @@ new_connection(struct ev_loop *loop) {
 static void
 log_connection(struct Connection *con) {
     ev_tstamp duration;
-    char client_address[128];
-    char listener_address[128];
-    char server_address[128];
+    char client_address[ADDRESS_BUFFER_SIZE];
+    char listener_address[ADDRESS_BUFFER_SIZE];
+    char server_address[ADDRESS_BUFFER_SIZE];
 
     if (con->client.buffer->last_recv > con->server.buffer->last_recv)
         duration = con->client.buffer->last_recv - con->established_timestamp;

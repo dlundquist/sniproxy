@@ -319,7 +319,6 @@ dns_query_v6_cb(struct dns_ctx *ctx, struct dns_rr_a6 *result, void *data) {
 static void
 process_client_callback(struct ResolvQuery *cb_data) {
     struct Address *best_address = NULL;
-    char buffer[128];
 
     if (resolv_mode == MODE_IPV4_FIRST)
         best_address = choose_ipv4_first(cb_data);

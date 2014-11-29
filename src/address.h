@@ -30,6 +30,12 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
+/*
+ * Define size of address buffers for display_address() calls to
+ * be large enough for the maximum domain name and a 5 digit port
+ */
+#define ADDRESS_BUFFER_SIZE 262
+
 struct Address;
 
 struct Address *new_address(const char *);

@@ -100,7 +100,7 @@ init_backend(struct Backend *backend) {
             return 0;
         }
 
-        char address[128];
+        char address[ADDRESS_BUFFER_SIZE];
         debug("Parsed %s %s",
                 backend->pattern,
                 display_address(backend->address,
@@ -131,7 +131,7 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
 
 void
 print_backend_config(FILE *file, const struct Backend *backend) {
-    char address[128];
+    char address[ADDRESS_BUFFER_SIZE];
 
     fprintf(file, "\t%s %s\n",
             backend->pattern,
