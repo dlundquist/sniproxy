@@ -476,7 +476,13 @@ listener_lookup_server_address(const struct Listener *listener,
     if (address_is_wildcard(addr)) {
         new_addr = new_address(name);
         if (new_addr == NULL) {
-            warn("Invalid hostname %.*s", (int)name_len, name);
+            warn("Invalid hostname %.*s in client request",
+                    (int)name_len, name);
+
+            return listener->fallback_address;
+        } else if (address_is_sockaddr(new_addr)) {
+            warn("Refusing to proxy to socket address literal %.*s in request",
+                    (int)name_len, name);
 
             return listener->fallback_address;
         }
