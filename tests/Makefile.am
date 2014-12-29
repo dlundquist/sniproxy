@@ -68,7 +68,9 @@ config_test_SOURCES = config_test.c \
                       ../src/resolv.c \
                       ../src/resolv.h \
                       ../src/tls.c \
-                      ../src/http.c
+                      ../src/http.c \
+                      ../src/stats.h \
+                      ../src/stats.c
 
 config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)
 
