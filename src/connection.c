@@ -31,7 +31,6 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <time.h>
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
