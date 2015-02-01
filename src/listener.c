@@ -105,7 +105,9 @@ listeners_reload(struct Listener_head *existing_listeners,
             SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
             add_listener(existing_listeners, new_listener);
             init_listener(new_listener, tables, loop);
-            listener_ref_put(new_listener); // -1 for removing from new_listeners
+
+            /* -1 for removing from new_listeners */
+            listener_ref_put(new_listener);
         } else if (compare_result == 0) {
             notice ("Listener %s updated.",
                     display_address(iter_existing->address,
@@ -125,7 +127,9 @@ listeners_reload(struct Listener_head *existing_listeners,
 
             SLIST_REMOVE(existing_listeners, removed_listener, Listener, entries);
             close_listener(loop, removed_listener);
-            listener_ref_put(removed_listener); // -1 for removing from existing_listeners
+
+            /* -1 for removing from existing_listeners */
+            listener_ref_put(removed_listener);
         }
     }
 }

@@ -508,7 +508,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     int result = connect(sockfd,
             (struct sockaddr *)&con->server.addr,
             con->server.addr_len);
-    // TODO retry connect in EADDRNOTAVAIL case
+    /* TODO retry connect in EADDRNOTAVAIL case */
     if (result < 0 && errno != EINPROGRESS) {
         close(sockfd);
         char server[INET6_ADDRSTRLEN + 8];
@@ -677,7 +677,7 @@ log_bad_request(struct Connection *con __attribute__((unused)), const char *req,
         message_pos += snprintf(message_pos, message_end - message_pos,
                                 "0x%02hhx, ", (unsigned char)req[i]);
 
-    message_pos -= 2; // Delete the trailing ', '
+    message_pos -= 2;/* Delete the trailing ', ' */
     message_pos += snprintf(message_pos, message_end - message_pos,
                             "}, %ld, ...) = %d", req_len, parse_result);
     debug("%s", message);
