@@ -27,7 +27,7 @@ script:
   - make dist
   - rpmbuild --define "_sourcedir `pwd`" -ba --nodeps redhat/sniproxy.spec
   - echo "Testing Debian package installation, configuration, and usage"
-  - lintian ../sniproxy_*_`dpkg --print-architecture`.deb
+  - lintian --suppress-tags debian-changelog-file-contains-invalid-email-address ../sniproxy_*_`dpkg --print-architecture`.deb
   - sudo dpkg -i ../sniproxy_*_`dpkg --print-architecture`.deb
   - sudo perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/sniproxy
   - echo -e "user daemon\n\npidfile /var/run/sniproxy.pid\n\nerror_log {\n  syslog daemon\n  priority notice\n}\n\nlisten 80 {\n  proto http\n}\n\ntable {\n  localhost *\n}" | sudo tee /etc/sniproxy.conf
