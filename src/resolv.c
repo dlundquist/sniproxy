@@ -109,12 +109,12 @@ resolv_init(struct ev_loop *loop, char **nameservers, char **search, int mode) {
     } else {
         dns_reset(ctx);
 
-        for (char *server = *nameservers; server != NULL; server++)
-            dns_add_serv(ctx, server);
+        for (int i = 0; nameservers[i] != NULL; i++)
+            dns_add_serv(ctx, nameservers[i]);
 
         if (search != NULL)
-            for (char *domain = *search; domain != NULL; domain++)
-                dns_add_srch(ctx, domain);
+            for (int i = 0; search[i] != NULL; i++)
+                dns_add_srch(ctx, search[i]);
     }
 
     resolv_mode = mode;

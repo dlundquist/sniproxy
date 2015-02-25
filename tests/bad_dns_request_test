@@ -81,9 +81,6 @@ sub http_client_abort($$) {
 sub proxy {
     my $config = shift;
 
-    # Use an RFC1166 documentation prefix IP address as the nameserver
-    # this should be not respond to DNS queries in any environment
-    $ENV{'NAMESERVERS'} = "192.0.2.99";
     exec(@_, '../src/sniproxy', '-f', '-c', $config);
 }
 
@@ -109,6 +106,12 @@ sub make_wildcard_config($) {
     # Write out a test config file
     print $fh <<END;
 # Minimal test configuration
+
+resolver {
+    # Use an RFC1166 documentation prefix IP address as the nameserver
+    # this should be not respond to DNS queries in any environment
+    nameserver 192.0.2.99
+}
 
 listen 127.0.0.1 $proxy_port {
     proto http
