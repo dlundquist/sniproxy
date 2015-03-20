@@ -95,6 +95,7 @@ struct Keyword resolver_stanza_grammar[] = {
             (int(*)(void *, char *))accept_resolver_mode,
             NULL,
             NULL},
+    { NULL, NULL, NULL, NULL, NULL },
 };
 
 struct Keyword listener_stanza_grammar[] = {
