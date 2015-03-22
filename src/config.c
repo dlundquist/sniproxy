@@ -161,13 +161,11 @@ static struct Keyword global_grammar[] = {
             NULL,
             logger_stanza_grammar,
             (int(*)(void *, void *))end_error_logger_stanza},
-/*
- * { "access_log",
- *          (void *(*)())new_logger_builder,
- *          NULL,
- *          logger_stanza_grammar,
- *          (int(*)(void *, void *))end_global_access_logger_stanza},
- */
+    { "access_log",
+            (void *(*)())new_logger_builder,
+            NULL,
+            logger_stanza_grammar,
+            (int(*)(void *, void *))end_global_access_logger_stanza},
     { "listener",
             (void *(*)())new_listener,
             (int(*)(void *, char *))accept_listener_arg,
@@ -236,6 +234,16 @@ init_config(const char *filename, struct ev_loop *loop) {
     }
 
     fclose(file);
+
+    /* Listeners without access logger defined used global access log */
+    if (config->access_log != NULL) {
+        struct Listener *listener;
+        SLIST_FOREACH(listener, &config->listeners, entries) {
+            if (listener->access_log == NULL) {
+                listener->access_log = logger_ref_get(config->access_log);
+            }
+        }
+    }
 
     return(config);
 }
