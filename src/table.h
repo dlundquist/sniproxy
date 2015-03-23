@@ -31,7 +31,6 @@
 #include "backend.h"
 #include "address.h"
 
-#define TABLE_NAME_LEN 20
 
 SLIST_HEAD(Table_head, Table);
 
@@ -46,18 +45,15 @@ struct Table {
 
 struct Table *new_table();
 int accept_table_arg(struct Table *, const char *);
-void add_table(struct Table_head *, struct Table *);
 struct Table *table_lookup(const struct Table_head *, const char *);
 const struct Address *table_lookup_server_address(const struct Table *,
                                                   const char *, size_t);
+void add_table_backend(struct Table *, struct Backend *);
+void remove_table_backend(struct Table *, struct Backend *);
 void reload_tables(struct Table_head *, struct Table_head *);
-void print_table_config(FILE *, struct Table *);
-int valid_table(struct Table *);
-void init_table(struct Table *);
+void print_table_config(FILE *, const struct Table *);
 void table_ref_put(struct Table *);
 struct Table *table_ref_get(struct Table *);
-void tables_reload(struct Table_head *, struct Table_head *);
-
-void free_tables(struct Table_head *);
+void free_table(struct Table *);
 
 #endif

@@ -261,7 +261,11 @@ free_config(struct Config *config, struct ev_loop *loop) {
 
     logger_ref_put(config->access_log);
     free_listeners(&config->listeners, loop);
-    free_tables(&config->tables);
+    for (struct Table *iter = SLIST_FIRST(&config->tables); iter != NULL;
+            iter = SLIST_FIRST(&config->tables)) {
+        SLIST_REMOVE_HEAD(&config->tables, entries);
+        table_ref_put(iter);
+    }
 
     free(config);
 }
@@ -357,7 +361,8 @@ static int
 end_table_stanza(struct Config *config, struct Table *table) {
     /* TODO check table */
 
-    add_table(&config->tables, table);
+    table_ref_get(table);
+    SLIST_INSERT_HEAD(&config->tables, table, entries);
 
     return 1;
 }
@@ -366,7 +371,7 @@ static int
 end_backend(struct Table *table, struct Backend *backend) {
     /* TODO check backend */
 
-    add_backend(&table->backends, backend);
+    add_table_backend(table, backend);
 
     return 1;
 }

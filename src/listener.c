@@ -166,8 +166,6 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
             table_lookup(tables, existing_listener->table_name);
 
     if (new_table != NULL) {
-        init_table(new_table);
-
         table_ref_put(existing_listener->table);
         existing_listener->table = table_ref_get(new_table);
 
@@ -409,7 +407,6 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         err("Table \"%s\" not defined", listener->table_name);
         return -1;
     }
-    init_table(table);
     listener->table = table_ref_get(table);
 
     /* If no port was specified on the fallback address, inherit the address

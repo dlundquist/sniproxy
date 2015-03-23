@@ -34,9 +34,6 @@
 #include "logger.h"
 
 
-static void free_backend(struct Backend *);
-
-
 struct Backend *
 new_backend() {
     struct Backend *backend;
@@ -82,11 +79,6 @@ accept_backend_arg(struct Backend *backend, const char *arg) {
     }
 
     return 1;
-}
-
-void
-add_backend(struct Backend_head *backends, struct Backend *backend) {
-    STAILQ_INSERT_TAIL(backends, backend, entries);
 }
 
 int
@@ -142,12 +134,6 @@ print_backend_config(FILE *file, const struct Backend *backend) {
 }
 
 void
-remove_backend(struct Backend_head *head, struct Backend *backend) {
-    STAILQ_REMOVE(head, backend, Backend, entries);
-    free_backend(backend);
-}
-
-static void
 free_backend(struct Backend *backend) {
     if (backend == NULL)
         return;

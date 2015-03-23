@@ -34,17 +34,9 @@
 #include "logger.h"
 
 
-static void free_table(struct Table *);
-
-
 static inline struct Backend *
 table_lookup_backend(const struct Table *table, const char *name, size_t name_len) {
     return lookup_backend(&table->backends, name, name_len);
-}
-
-static inline void __attribute__((unused))
-remove_table_backend(struct Table *table, struct Backend *backend) {
-    remove_backend(&table->backends, backend);
 }
 
 
@@ -81,28 +73,16 @@ accept_table_arg(struct Table *table, const char *arg) {
     return 1;
 }
 
-
 void
-add_table(struct Table_head *tables, struct Table *table) {
-    table_ref_get(table);
-    SLIST_INSERT_HEAD(tables, table, entries);
-}
-
-void init_table(struct Table *table) {
-    struct Backend *iter;
-
-    STAILQ_FOREACH(iter, &table->backends, entries)
-        init_backend(iter);
+add_table_backend(struct Table *table, struct Backend *backend) {
+    init_backend(backend);
+    STAILQ_INSERT_TAIL(&table->backends, backend, entries);
 }
 
 void
-free_tables(struct Table_head *tables) {
-    struct Table *iter;
-
-    while ((iter = SLIST_FIRST(tables)) != NULL) {
-        SLIST_REMOVE_HEAD(tables, entries);
-        table_ref_put(iter);
-    }
+remove_table_backend(struct Table *table, struct Backend *backend) {
+    STAILQ_REMOVE(&table->backends, backend, Backend, entries);
+    free_backend(backend);
 }
 
 struct Table *
@@ -119,12 +99,6 @@ table_lookup(const struct Table_head *tables, const char *name) {
     }
 
     return NULL;
-}
-
-void
-remove_table(struct Table_head *tables, struct Table *table) {
-    SLIST_REMOVE(tables, table, Table, entries);
-    table_ref_put(table);
 }
 
 const struct Address *
@@ -167,9 +141,6 @@ reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
     while ((iter = SLIST_FIRST(new_tables)) != NULL) {
         SLIST_REMOVE_HEAD(new_tables, entries);
 
-        /* Initialize table regular expressions */
-        init_table(iter);
-
         struct Table *existing = table_lookup(tables, iter->name);
         if (existing) {
             /* Swap table contents */
@@ -177,14 +148,15 @@ reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
             existing->backends = iter->backends;
             iter->backends = temp;
         } else {
-            add_table(tables, iter);
+            table_ref_get(iter);
+            SLIST_INSERT_HEAD(tables, iter, entries);
         }
         table_ref_put(iter);
     }
 }
 
 void
-print_table_config(FILE *file, struct Table *table) {
+print_table_config(FILE *file, const struct Table *table) {
     struct Backend *backend;
 
     if (table->name == NULL)
@@ -198,7 +170,7 @@ print_table_config(FILE *file, struct Table *table) {
     fprintf(file, "}\n\n");
 }
 
-static void
+void
 free_table(struct Table *table) {
     struct Backend *iter;
 
@@ -206,7 +178,7 @@ free_table(struct Table *table) {
         return;
 
     while ((iter = STAILQ_FIRST(&table->backends)) != NULL)
-        remove_backend(&table->backends, iter);
+        remove_table_backend(table, iter);
 
     free(table->name);
     free(table);

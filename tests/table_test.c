@@ -12,6 +12,7 @@ static void append_entry(struct Table *, const char *, const char *);
 static void add_new_table(struct Table_head *, const char *, const char **);
 static void test_add_table();
 static int count_tables(const struct Table_head *);
+static void free_tables(struct Table_head *);
 
 
 int main() {
@@ -49,7 +50,7 @@ append_entry(struct Table *table, const char *pattern, const char *address) {
     assert(strcmp(pattern, backend->pattern) == 0);
     assert(pattern != backend->pattern);
 
-    add_backend(&table->backends, backend);
+    add_table_backend(table, backend);
 }
 
 static void
@@ -66,8 +67,6 @@ test_single_entry_table() {
     assert(name != table->name);
 
     append_entry(table, "^example\\.com$", "192.0.2.10");
-
-    init_table(table);
 
     const char *server_query = "example.com";
     assert(table_lookup_server_address(table, server_query,
@@ -91,7 +90,8 @@ add_new_table(struct Table_head *tables, const char *name, const char **entries)
         entries += 2;
     }
 
-    add_table(tables, table);
+    table_ref_get(table);
+    SLIST_INSERT_HEAD(tables, table, entries);
 }
 
 static int
@@ -103,6 +103,15 @@ count_tables(const struct Table_head *tables) {
         count++;
 
     return count;
+}
+
+static void
+free_tables(struct Table_head *tables) {
+    for (struct Table *iter = SLIST_FIRST(tables); iter != NULL;
+            iter = SLIST_FIRST(tables)) {
+        SLIST_REMOVE_HEAD(tables, entries);
+        table_ref_put(iter);
+    }
 }
 
 static void
