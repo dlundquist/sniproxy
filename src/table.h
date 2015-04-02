@@ -26,10 +26,7 @@
 #ifndef TABLE_H
 #define TABLE_H
 
-#include <stdio.h>
 #include <sys/queue.h>
-#include "backend.h"
-#include "address.h"
 
 
 SLIST_HEAD(Table_head, Table);
@@ -39,9 +36,18 @@ struct Table {
 
     /* Runtime fields */
     int reference_count;
-    struct Backend_head backends;
+    struct Backend *backends;
+    size_t backend_count;
     SLIST_ENTRY(Table) entries;
 };
+
+struct Backend {
+    char *pattern;
+    int is_wildcard;
+    char *rev_pattern;
+    struct Address *address;
+};
+
 
 struct Table *new_table();
 int accept_table_arg(struct Table *, const char *);

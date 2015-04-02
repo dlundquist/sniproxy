@@ -29,15 +29,11 @@
 #include <errno.h>
 #include <assert.h>
 #include "table.h"
-#include "backend.h"
 #include "address.h"
 #include "logger.h"
 
 
-static inline struct Backend *
-table_lookup_backend(const struct Table *table, const char *name, size_t name_len) {
-    return lookup_backend(&table->backends, name, name_len);
-}
+static int backend_compare(const struct Backend *, const char *, size_t);
 
 
 struct Table *
@@ -73,18 +69,6 @@ accept_table_arg(struct Table *table, const char *arg) {
     return 1;
 }
 
-void
-add_table_backend(struct Table *table, struct Backend *backend) {
-    init_backend(backend);
-    STAILQ_INSERT_TAIL(&table->backends, backend, entries);
-}
-
-void
-remove_table_backend(struct Table *table, struct Backend *backend) {
-    STAILQ_REMOVE(&table->backends, backend, Backend, entries);
-    free_backend(backend);
-}
-
 struct Table *
 table_lookup(const struct Table_head *tables, const char *name) {
     struct Table *iter;
@@ -103,15 +87,18 @@ table_lookup(const struct Table_head *tables, const char *name) {
 
 const struct Address *
 table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
-    struct Backend *b;
+    /*
+     * Binary search of backends by reserved hostname for prefix globbing
+     */
+    char *rev_name = strnduprev(name, name_len);
 
-    b = table_lookup_backend(table, name, name_len);
-    if (b == NULL) {
-        info("No match found for %.*s", (int)name_len, name);
-        return NULL;
+    int start = 0
+    int end = table->backend_count;
+    for (start < end) {
+        int middle = (start + end) / 2;
     }
 
-    return b->address;
+
 }
 
 void
@@ -199,4 +186,44 @@ struct Table *
 table_ref_get(struct Table *table) {
     table->reference_count++;
     return table;
+}
+
+/*
+ * Reverse a string
+ */
+static char *
+strrev(char *s) {
+    size_t len = strlen(s);
+
+    for (int i = 0; i < len / 2; i++) {
+        char tmp = s[i];
+        s[i] = s[len - i - 1];
+        s[len - i - 1] = tmp;
+    }
+
+    return s;
+}
+
+static char *
+strnduprev(const char *s, size_t n) {
+    char *result = strndup(s, n);
+
+    if (result != NULL)
+        strrev(result);
+
+    return result;
+}
+
+static int
+backend_compare(const struct Backend *backend, const char *rev_name) {
+    assert(backend);
+    assert(backend->rev_pattern);
+    assert(rev_name);
+
+    if (backend->is_wildcard) {
+        size_t pattern_len = strlen(backend->rev_pattern);
+        return strncasecmp(backend->rev_pattern, rev_name, pattern_len);
+    } else {
+        return strcasecmp(backend->rev_pattern, rev_name);
+    }
 }
