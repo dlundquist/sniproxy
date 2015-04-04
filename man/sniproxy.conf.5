@@ -1,0 +1,177 @@
+.TH SNIPROXY.CONF 5 "22 March 2015" "SNIProxy manual" "sniproxy"
+
+.SH NAME
+
+sniproxy.conf - sniproxy configuration file
+
+.SH SYNOPSIS
+
+/etc/sniproxy.conf
+
+.SH DESCRIPTION
+
+/etc/sniproxy.conf is the configuration file for sniproxy. Statements are
+separated by either a new line or semi-colon. Lines starting with \&# are
+comments. The configuration is broken down into stanzas delimited by curly
+braces. Characters may be escaped using \&\\. Configuration directives may may
+be shorted as long as they are unambiguous e.g. user daemon instead of username
+daemon.
+
+.SS USERNAME
+
+.PP
+.nf
+username daemon
+.fi
+.PP
+
+Specify the user sniproxy will run as. When sniproxy is launched as super user,
+it will drop permissions to this user.
+
+.SS PIDFILE
+
+.PP
+.nf
+pidfile /var/run/sniproxy.pid
+.fi
+.PP
+
+Specify the path to the pid file, the directory much be writeable by the user
+sniproxy runs as.
+
+.SS ERROR_LOG
+
+.PP
+.nf
+error_log {
+    syslog daemon
+    priority notice
+}
+.fi
+.PP
+
+Specify how error messages should be handled. Messages can be either logged to
+syslog using the syslog directive specifies that logs should to a given syslog
+facility. Alternatively the filename directive may be specified to log to file,
+these two options are mutually exclusive. The priority directive indicates what
+severity of messages should be logged.
+
+.SS ACCESS_LOG
+
+.PP
+.nf
+access_log {
+    filename /var/log/sniproxy/access.log
+}
+.fi
+.PP
+
+Specify how connections should be logged, may be overridden in a specific
+listener. Connections are logged after both the client and server have sockets
+have been closed. The syslog and priority directive may be used here as in
+error_log.
+
+.SS RESOLVER
+
+.PP
+.nf
+resolver {
+    nameserver 127.0.0.1
+    mode ipv6_first
+}
+.fi
+.PP
+
+Specify how DNS queries should be resolved, this is only required if using
+hostnames as addresses in the configuration or using wildcard backends.  If not
+specified the IPv4 only queries will be preformed using the system default name
+servers.
+
+Four modes are supported:
+
+ipv4_only: query for any A records, use the first A record returned
+(following CNAME records).
+
+ipv6_only: query for any AAAA records, use the first AAAA record returned
+(following CNAME records).
+
+ipv4_first: query for both A and AAAA records, wait for both queries to complete,
+use the first A record if any, otherwise use the first AAAA record.
+
+ipv6_first: query for both A and AAAA records, wait for both queries to complete,
+use the first AAAA record if any, otherwise use the first A record.
+
+It is strongly recommended to use a local name server, since a single socket is
+reused for all DNS queries and thus the UDP port number is predictable leaving
+the query only protected from spoofed replies by the 16 bit query ID.
+Additionally since no internal DNS caching is performed a local resolver can
+improve performance.
+
+.SS LISTENER
+
+.PP
+.nf
+listener 192.0.2.10:80 {
+    protocol http
+    table http_hosts
+    fallback 192.0.2.100:80
+    bad_requests log
+    source 192.0.2.10
+
+    access_log {
+        filename /var/log/sniproxy/http_access.log
+    }
+}
+.fi
+.PP
+
+Define a listening address to accept new connections from clients on. Addresses
+may be specified as an IPv4 literal followed by a TCP port number, and IPv6
+literal followed by a TCP port number, a bare TCP port number or a unix socket
+path prefixed with 'unix:'.
+
+Protocol defines how the client request should be parsed to obtain the
+requested hostname, two protocols are supported http and tls.
+
+Table specifies the name of the table used to lookup which server to forward
+the connection to based on the hostname extracted from the initial client
+request. If no table directive is specified the default, unnamed, table will be
+used.
+
+The fallback directive specifies a server to be used if the client request can
+not be parsed or a server can not be found in the table for the hostname
+specified.
+
+The bad_requests directive allows logging the contents of the client request if
+it is not parsable, this is useful for debugging.
+
+The source directive allows specifying a specified address to bind to before
+connecting to the backend server. In most cases it is better to omit this
+option and allow the operating system to select the outgoing address
+automatically. Do not include a port number in this address, doing so will
+limit the proxy to one simultaneous to each server at time.
+
+The access log configuration may be overridden on each listener.
+
+.SS TABLE
+
+.PP
+.nf
+table http_hosts {
+    ^example\\.com$ 192.0.2.101
+    ^example\\.net$ 192.0.2.102
+    ^example\\.org$ 192.0.2.103
+}
+.fi
+.PP
+
+Tables define how to map each hostname to a backend server. Each request's
+hostname is matched against entries in the table in order, until a match is
+found and that server is used. The server address may be either IP, an IP and
+port, a unix socket path, a hostname or '*'. If no port is specified, the port
+of the listener which connection was received on will be used.
+
+
+.SH "SEE ALSO"
+.PP
+\fBsniproxy\fR(8)
