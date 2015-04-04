@@ -10,6 +10,9 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(new);
 our $VERSION = '0.01';
 
+
+my $count = 0;
+
 # This represents the sizes of chunks of our responses
 my $responses = [
     [ 20 ],
@@ -19,9 +22,35 @@ my $responses = [
     [ 20, 1, 1, 1, 1, 1, 1, 200 ],
 ];
 
+sub default_response_generator {
+    $count ++;
+
+    return sub($) {
+        my $sock = shift;
+
+        my @chunks = @{$responses->[$count % scalar @{$responses}]};
+        my $content_length = 0;
+        map { $content_length += $_ } @chunks;
+
+        print $sock "HTTP/1.1 200 OK\r\n";
+        print $sock "Server: TestHTTPD/$VERSION\r\n";
+        print $sock "Content-Type: text/plain\r\n";
+        print $sock "Content-Length: $content_length\r\n";
+        print $sock "Connection: close\r\n";
+        print $sock "\r\n";
+
+        # Return data in chunks specified in responses
+        while (my $length = shift @chunks) {
+            print $sock 'X' x $length;
+            $sock->flush();
+            Time::HiRes::usleep(100) if @chunks;
+        }
+    };
+}
+
 sub httpd {
     my $port = shift;
-    my $count = 0;
+    my $responder_generator = shift || \&default_response_generator;
 
     my $server = IO::Socket::INET->new(Listen    => Socket::SOMAXCONN(),
                                        Proto     => 'tcp',
@@ -33,37 +62,22 @@ sub httpd {
     $SIG{CHLD} = 'IGNORE';
 
     while(my $client = $server->accept()) {
-        $count ++;
+        my $responder = $responder_generator->();
 
         my $pid = fork();
         next if $pid; # Parent
         die "fork: $!" unless defined $pid;
 
         # Child
-        my @chunks = @{$responses->[$count % scalar @{$responses}]};
-        my $content_length = 0;
-        map { $content_length += $_ } @chunks;
-
+        #
+        # Read HTTP request
         while (my $line = $client->getline()) {
             # Wait for blank line indicating the end of the request
             last if $line eq "\r\n";
         }
 
         # Assume a GET request
-
-        print $client "HTTP/1.1 200 OK\r\n";
-        print $client "Server: TestHTTPD/$VERSION\r\n";
-        print $client "Content-Type: text/plain\r\n";
-        print $client "Content-Length: $content_length\r\n";
-        print $client "Connection: close\r\n";
-        print $client "\r\n";
-
-        # Return data in chunks specified in responses
-        while (my $length = shift @chunks) {
-            print $client 'X' x $length;
-            $client->flush();
-            Time::HiRes::usleep(100) if @chunks;
-        }
+        $responder->($client);
 
         $client->close();
         exit 0;
