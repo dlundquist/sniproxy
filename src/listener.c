@@ -259,31 +259,35 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
         err("Duplicate fallback address: %s", fallback);
         return 0;
     }
-    listener->fallback_address = new_address(fallback);
-    if (listener->fallback_address == NULL) {
+    struct Address *fallback_address = new_address(fallback);
+    if (fallback_address == NULL) {
         err("Unable to parse fallback address: %s", fallback);
         return 0;
-    }
+    } else if (address_is_sockaddr(fallback_address)) {
+        listener->fallback_address = fallback_address;
+        return 1;
+    } else if (address_is_hostname(fallback_address)) {
 #ifndef HAVE_LIBUDNS
-    if (!address_is_sockaddr(listener->fallback_address)) {
         err("Only fallback socket addresses permitted when compiled without libudns");
-        free(listener->fallback_address);
-        listener->fallback_address = NULL;
+        free(fallback_address);
         return 0;
-    }
+#else
+        warn("Using hostname as fallback address is strongly discouraged");
+        listener->fallback_address = fallback_address;
+        return 1;
 #endif
-    if (address_is_wildcard(listener->fallback_address)) {
-        free(listener->fallback_address);
-        listener->fallback_address = NULL;
+    } else if (address_is_wildcard(fallback_address)) {
         /* The wildcard functionality requires successfully parsing the
          * hostname from the client's request, if we couldn't find the
          * hostname and are using a fallback address it doesn't make
          * much sense to configure it as a wildcard. */
         err("Wildcard address prohibited as fallback address");
+        free(fallback_address);
+        return 0;
+    } else {
+        fatal("Unexpected fallback address type");
         return 0;
     }
-
-    return 1;
 }
 
 int
