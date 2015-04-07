@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.3.6
+Version: 0.4.0
 Release: 1%{?dist}
 Summary: Transparent TLS and HTTP layer 4 proxy with SNI support
 
@@ -46,6 +46,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Apr 7 2015 Dustin Lundquist <dustin@null-ptr.net> 0.4.0-1
+- Improve DNS resolver:
+  Support for AAAA records
+  Configuration options
+- Global access log
+- Man page for sniproxy.conf
+- Reject IP literals as hostnames for wildcard backends
+
 * Fri Sep 26 2014 Dustin Lundquist <dustin@null-ptr.net> 0.3.6-1
 - Improve logging:
   Fix negative connection duration in access log
