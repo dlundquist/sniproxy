@@ -40,6 +40,7 @@ struct Address;
 
 struct Address *new_address(const char *);
 struct Address *new_address_sa(const struct sockaddr *, socklen_t);
+struct Address *copy_address(const struct Address *);
 size_t address_len(const struct Address *);
 int address_compare(const struct Address *, const struct Address *);
 int address_is_hostname(const struct Address *);

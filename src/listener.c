@@ -465,51 +465,56 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     return sockfd;
 }
 
+/*
+ * Allocate a new server address trying:
+ *      1. lookup name in table for hostname or socket address
+ *      2. lookup name in table for a wildcard address, then create a new
+ *         address based on the request hostname (if valid)
+ *      3. use the fallback address
+ */
 struct Address *
 listener_lookup_server_address(const struct Listener *listener,
         const char *name, size_t name_len) {
-    struct Address *new_addr = NULL;
     const struct Address *addr =
         table_lookup_server_address(listener->table, name, name_len);
+    if (addr == NULL) {
+        if (listener->fallback_address)
+            addr = listener->fallback_address;
+        else
+            return NULL;
+    }
 
-    if (addr == NULL)
-        addr = listener->fallback_address;
-
-    if (addr == NULL)
-        return NULL;
-
-    int port = address_port(addr);
+    struct Address *new_addr = NULL;
 
     if (address_is_wildcard(addr)) {
         new_addr = new_address(name);
         if (new_addr == NULL) {
             warn("Invalid hostname %.*s in client request",
                     (int)name_len, name);
-
-            return listener->fallback_address;
         } else if (address_is_sockaddr(new_addr)) {
             warn("Refusing to proxy to socket address literal %.*s in request",
                     (int)name_len, name);
 
-            return listener->fallback_address;
+            free(new_addr);
+            new_addr = NULL;
+        } else if (address_port(addr) != 0) {
+            /* We created a valid new_addr,
+             * use the port from wildcard address if present */
+            address_set_port(new_addr, address_port(addr));
         }
-
-        if (port != 0)
-            address_set_port(new_addr, port);
     } else {
-        size_t len = address_len(addr);
-        new_addr = malloc(len);
-        if (new_addr == NULL) {
-            err("%s: malloc", __func__);
-
-            return listener->fallback_address;
-        }
-
-        memcpy(new_addr, addr, len);
+        new_addr = copy_address(addr);
     }
 
-    if (port == 0)
-        address_set_port(new_addr, address_port(listener->address));
+    if (new_addr == NULL && listener->fallback_address)
+        new_addr = copy_address(listener->fallback_address);
+
+    if (new_addr) {
+        /* we successfully allocate a new address,
+         * use the listeners port if we don't have one already */
+        if (address_port(new_addr) == 0)
+            address_set_port(new_addr, address_port(listener->address));
+    }
 
     return new_addr;
 }

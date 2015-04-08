@@ -396,12 +396,14 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
     } else if (address_is_hostname(server_address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
+        free(server_address);
         abort_connection(con);
         return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
+            free(server_address);
             abort_connection(con);
             return;
         }
@@ -409,13 +411,12 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         cb_data->address = server_address;
         cb_data->loop = loop;
 
-        con->query_handle = resolv_query(address_hostname(server_address), resolv_cb,
-            (void (*)(void *))free_resolv_cb_data, cb_data);
+        con->query_handle = resolv_query(address_hostname(server_address),
+                resolv_cb, (void (*)(void *))free_resolv_cb_data, cb_data);
 
         con->state = RESOLVING;
 #endif
-    } else {
-        assert(address_is_sockaddr(server_address));
+    } else if (address_is_sockaddr(server_address)) {
         con->server.addr_len = address_sa_len(server_address);
         assert(con->server.addr_len <= sizeof(con->server.addr));
         memcpy(&con->server.addr, address_sa(server_address),
@@ -424,6 +425,9 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         free(server_address);
 
         con->state = RESOLVED;
+    } else {
+        /* invalid address type */
+        assert(0);
     }
 }
 

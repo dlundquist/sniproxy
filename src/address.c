@@ -194,6 +194,17 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
     return addr;
 }
 
+struct Address *
+copy_address(const struct Address *addr) {
+    size_t len = address_len(addr);
+    struct Address *new_addr = malloc(len);
+
+    if (new_addr != NULL)
+        memcpy(new_addr, addr, len);
+
+    return new_addr;
+}
+
 size_t
 address_len(const struct Address *addr) {
     switch (addr->type) {
