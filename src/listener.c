@@ -469,6 +469,7 @@ struct Address *
 listener_lookup_server_address(const struct Listener *listener,
         const char *name, size_t name_len) {
     struct Address *new_addr = NULL;
+    short set_to_fallback = 0;
     const struct Address *addr =
         table_lookup_server_address(listener->table, name, name_len);
 
@@ -485,30 +486,37 @@ listener_lookup_server_address(const struct Listener *listener,
         if (new_addr == NULL) {
             warn("Invalid hostname %.*s in client request",
                     (int)name_len, name);
-
-            return listener->fallback_address;
+            set_to_fallback = 1;
         } else if (address_is_sockaddr(new_addr)) {
             warn("Refusing to proxy to socket address literal %.*s in request",
                     (int)name_len, name);
-
-            return listener->fallback_address;
+            set_to_fallback = 1;
         }
 
-        if (port != 0)
+        if (!set_to_fallback && port != 0)
             address_set_port(new_addr, port);
     } else {
         size_t len = address_len(addr);
         new_addr = malloc(len);
         if (new_addr == NULL) {
             err("%s: malloc", __func__);
-
-            return listener->fallback_address;
+            set_to_fallback = 1;
         }
 
         memcpy(new_addr, addr, len);
     }
 
-    if (port == 0)
+    if (set_to_fallback) {
+        size_t len = address_len(listener->fallback_address);
+        new_addr = malloc(len);
+        if (new_addr == NULL) {
+            err("%s: malloc", __func__);
+            return NULL;
+        }
+        memcpy(new_addr, listener->fallback_address, len);
+    }
+    
+    if (!set_to_fallback && port == 0)
         address_set_port(new_addr, address_port(listener->address));
 
     return new_addr;
