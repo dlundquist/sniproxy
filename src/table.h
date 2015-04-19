@@ -54,8 +54,6 @@ int accept_table_arg(struct Table *, const char *);
 struct Table *table_lookup(const struct Table_head *, const char *);
 const struct Address *table_lookup_server_address(const struct Table *,
                                                   const char *, size_t);
-void add_table_backend(struct Table *, struct Backend *);
-void remove_table_backend(struct Table *, struct Backend *);
 void reload_tables(struct Table_head *, struct Table_head *);
 void print_table_config(FILE *, const struct Table *);
 void table_ref_put(struct Table *);

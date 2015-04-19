@@ -33,7 +33,9 @@
 #include "logger.h"
 
 
-static int backend_compare(const struct Backend *, const char *, size_t);
+static char *strrev(char *);
+static char *strnduprev(const char *, size_t);
+static int backend_compare(const struct Backend *, const char *);
 
 
 struct Table *
@@ -48,7 +50,6 @@ new_table() {
 
     table->name = NULL;
     table->reference_count = 0;
-    STAILQ_INIT(&table->backends);
 
     return table;
 }
@@ -69,6 +70,9 @@ accept_table_arg(struct Table *table, const char *arg) {
     return 1;
 }
 
+/*
+ * Find a table by name
+ */
 struct Table *
 table_lookup(const struct Table_head *tables, const char *name) {
     struct Table *iter;
@@ -85,6 +89,9 @@ table_lookup(const struct Table_head *tables, const char *name) {
     return NULL;
 }
 
+/*
+ * Find address by hostname
+ */
 const struct Address *
 table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
     /*
@@ -92,10 +99,19 @@ table_lookup_server_address(const struct Table *table, const char *name, size_t 
      */
     char *rev_name = strnduprev(name, name_len);
 
-    int start = 0
-    int end = table->backend_count;
-    for (start < end) {
-        int middle = (start + end) / 2;
+    while (strcmp(rev_name, "") != 0) {
+        info("table_lookup_server_address: rev_name = %s", rev_name)
+
+
+
+
+
+        char *dot = strrchr(rev_name, '.');
+        if (dot) {
+            strcpy(dot, ".*");
+        } else {
+            strcpy(rev_name, "*");
+        }
     }
 
 
@@ -131,9 +147,7 @@ reload_tables(struct Table_head *tables, struct Table_head *new_tables) {
         struct Table *existing = table_lookup(tables, iter->name);
         if (existing) {
             /* Swap table contents */
-            struct Backend_head temp = existing->backends;
-            existing->backends = iter->backends;
-            iter->backends = temp;
+            // TODO
         } else {
             table_ref_get(iter);
             SLIST_INSERT_HEAD(tables, iter, entries);
@@ -151,9 +165,6 @@ print_table_config(FILE *file, const struct Table *table) {
     else
         fprintf(file, "table %s {\n", table->name);
 
-    STAILQ_FOREACH(backend, &table->backends, entries) {
-        print_backend_config(file, backend);
-    }
     fprintf(file, "}\n\n");
 }
 
@@ -164,8 +175,7 @@ free_table(struct Table *table) {
     if (table == NULL)
         return;
 
-    while ((iter = STAILQ_FIRST(&table->backends)) != NULL)
-        remove_table_backend(table, iter);
+    // TODO free backends
 
     free(table->name);
     free(table);

@@ -5,8 +5,6 @@ sbin_PROGRAMS = sniproxy
 sniproxy_SOURCES = sniproxy.c \
                    address.c \
                    address.h \
-                   backend.c \
-                   backend.h \
                    binder.c \
                    binder.h \
                    buffer.c \

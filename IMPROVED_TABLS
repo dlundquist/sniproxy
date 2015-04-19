@@ -1,0 +1,33 @@
+
+
+table:
+    backends[]
+
+backend:
+    pattern
+    address
+
+
+Goal: better than linear search time of backends
+
+    * binary search -- problematic with wildcards
+    * binary search, reversed hostnames, fallback to domain suffix
+
+
+    example table:
+        *                   192.0.2.10
+        moc.*               192.0.2.11
+        moc.elpmaxe.*       192.0.2.12
+        moc.elpmaxe.mail    192.0.2.13
+        moc.elpmaxe.www     192.0.2.14
+
+
+    for i in label_count..0:
+        reversed_hostname = hostname.reverse.split('.')[0..i].join('.')
+        if i < label_count:
+            reversed_hostname += '.*'
+
+        match = binary_search(reversed_hostname, table.entries, include_wilcards=(i == label_count))
+        if match:
+            return match
+    return None
