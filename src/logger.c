@@ -128,6 +128,8 @@ reopen_loggers() {
             if (sink->fd == NULL)
                 err("failed to reopen log file %s: %s",
                         sink->filepath, strerror(errno));
+            else
+                setvbuf(sink->fd, NULL, _IOLBF, 0);
         }
     }
 }
