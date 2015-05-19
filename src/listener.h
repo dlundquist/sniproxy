@@ -49,6 +49,8 @@ struct Listener {
     SLIST_ENTRY(Listener) entries;
 
     struct {
+        ev_tstamp created;
+        ev_tstamp last_accept;
         size_t active_connections;
         size_t total_connections;
         size_t bytes_transmitted;
