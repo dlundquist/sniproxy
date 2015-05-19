@@ -106,6 +106,7 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
         err("new_connection failed");
         return 0;
     }
+    con->listener = listener_ref_get(listener);
 
 #ifdef HAVE_ACCEPT4
     int sockfd = accept4(listener->watcher.fd,
@@ -137,12 +138,14 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
     con->client.watcher.data = con;
     con->state = ACCEPTED;
-    con->listener = listener_ref_get(listener);
     con->established_timestamp = ev_now(loop);
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
     ev_io_start(loop, client_watcher);
+
+    con->listener->stats.active_connections++;
+    con->listener->stats.total_connections++;
 
     return 1;
 }
@@ -720,6 +723,8 @@ static void
 free_connection(struct Connection *con) {
     if (con == NULL)
         return;
+
+    con->listener->stats.active_connections--;
 
     listener_ref_put(con->listener);
     free_buffer(con->client.buffer);
