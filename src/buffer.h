@@ -54,6 +54,8 @@ size_t buffer_peek(const struct Buffer *, void *, size_t);
 size_t buffer_coalesce(struct Buffer *, const void **);
 size_t buffer_pop(struct Buffer *, void *, size_t);
 size_t buffer_push(struct Buffer *, const void *, size_t);
+size_t buffer_sprintf(struct Buffer *, const char *, ...)
+    __attribute__ ((format (printf, 2, 3)));
 static inline size_t buffer_size(const struct Buffer *b) {
     return b->size;
 }

@@ -167,6 +167,17 @@ static void test_buffer_coalesce() {
     len = buffer_coalesce(buffer, NULL);
 }
 
+static void test_sprintf() {
+    struct Buffer *buffer;
+
+    buffer = new_buffer(4096, EV_DEFAULT);
+
+    buffer_sprintf(buffer, "formatted output %016x, %s, %d\n", 0xdeadbeef, "foo bar", 42);
+
+    assert(buffer_len(buffer) == 24 + 16 + 7);
+}
+
+
 int main() {
     test1();
 
@@ -177,4 +188,6 @@ int main() {
     test4();
 
     test_buffer_coalesce();
+
+    test_sprintf();
 }
