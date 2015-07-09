@@ -192,14 +192,24 @@ buffer_write(struct Buffer *buffer, int fd) {
     return bytes;
 }
 
+/*
+ * Coalesce a buffer into a single continuous region, optionally returning a
+ * to that region
+ *
+ * Returns the size of the buffer contents
+ */
 size_t
 buffer_coalesce(struct Buffer *buffer, const void **dst) {
-    if ((buffer->head + buffer->len) % buffer->size > buffer->head) {
+    size_t buffer_tail = (buffer->head + buffer->len) % buffer->size;
+
+    if (buffer_tail <= buffer->head) {
+        /* buffer not wrapped */
         if (dst != NULL)
             *dst = &buffer->buffer[buffer->head];
 
         return buffer->len;
     } else {
+        /* buffer wrapped */
         size_t len = buffer->len;
         char *temp = alloca(len);
 
