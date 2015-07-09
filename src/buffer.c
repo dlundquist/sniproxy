@@ -194,6 +194,8 @@ buffer_write(struct Buffer *buffer, int fd) {
 
 size_t
 buffer_coalesce(struct Buffer *buffer, const void **dst) {
+    if (buffer->len == 0) return 0;
+    
     if ((buffer->head + buffer->len) % buffer->size > buffer->head) {
         if (dst != NULL)
             *dst = &buffer->buffer[buffer->head];
