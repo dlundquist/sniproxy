@@ -149,6 +149,24 @@ static void test4() {
     free_buffer(buffer);
 }
 
+static void test_buffer_coalesce() {
+    struct Buffer *buffer;
+    char input[] = "Test buffer resizing.";
+    char output[sizeof(input)];
+    int len;
+
+    buffer = new_buffer(4096, EV_DEFAULT);
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == sizeof(output));
+    assert(buffer_len(buffer) == 0);
+    assert(buffer->head != 0);
+
+    len = buffer_coalesce(buffer, NULL);
+}
+
 int main() {
     test1();
 
@@ -157,4 +175,6 @@ int main() {
     test3();
 
     test4();
+
+    test_buffer_coalesce();
 }
