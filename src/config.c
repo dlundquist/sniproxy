@@ -236,7 +236,7 @@ init_config(const char *filename, struct ev_loop *loop) {
     fclose(file);
 
     /* Listeners without access logger defined used global access log */
-    if (config->access_log != NULL) {
+    if (config != NULL && config->access_log != NULL) {
         struct Listener *listener;
         SLIST_FOREACH(listener, &config->listeners, entries) {
             if (listener->access_log == NULL) {
