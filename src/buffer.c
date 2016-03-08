@@ -194,7 +194,7 @@ buffer_write(struct Buffer *buffer, int fd) {
 
 /*
  * Coalesce a buffer into a single continuous region, optionally returning a
- * to that region
+ * pointer to that region.
  *
  * Returns the size of the buffer contents
  */
