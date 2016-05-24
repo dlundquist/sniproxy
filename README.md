@@ -51,7 +51,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config fakeroot
+        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config fakeroot devscripts
 
 2. Build a Debian package
 
