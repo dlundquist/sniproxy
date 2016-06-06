@@ -45,6 +45,9 @@
 #include "resolv.h"
 #include "logger.h"
 
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
 
 static void usage();
 static void daemonize(void);
@@ -63,6 +66,7 @@ static struct ev_signal sigusr1_watcher;
 static struct ev_signal sigint_watcher;
 static struct ev_signal sigterm_watcher;
 
+lua_State *lua_state;
 
 int
 main(int argc, char **argv) {
@@ -117,6 +121,14 @@ main(int argc, char **argv) {
     set_limits(max_nofiles);
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
+
+    lua_state = luaL_newstate();
+    luaL_openlibs(lua_state);
+
+    if(luaL_dofile(lua_state, "./sniproxy.lua")) {
+        fprintf(stderr, "lua dofile error: %s\n", lua_isstring(lua_state, -1) ? lua_tostring(lua_state, -1) : "unknown error");
+        return EXIT_FAILURE;
+    }
 
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : default_username);
