@@ -11,10 +11,8 @@ sniproxy_SOURCES = sniproxy.c \
                    binder.h \
                    buffer.c \
                    buffer.h \
-                   cfg_parser.c \
-                   cfg_parser.h \
+                   cfg_parser.y \
                    cfg_tokenizer.c \
-                   cfg_tokenizer.h \
                    config.c \
                    config.h \
                    connection.c \

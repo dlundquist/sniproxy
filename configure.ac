@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.60])
-AC_INIT([sniproxy], [0.4.0])
+AC_INIT([sniproxy], [0.4.0+git.10.gf4bc05d])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
@@ -12,6 +12,8 @@ AC_GNU_SOURCE
 AC_PROG_CC_C99
 # Required by automake < 1.14
 AM_PROG_CC_C_O
+AM_PROG_LEX
+AC_PROG_YACC
 
 
 # Checks for libraries.

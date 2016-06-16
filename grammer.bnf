@@ -1,0 +1,61 @@
+# TODO EoL handling
+
+config ::= stanza stmt_end config
+         | epsilon
+
+stmt_end ::= ";"
+           | "\n"
+           | "EOF"
+
+stanza ::= "username" VALUE
+         | "pidfile" VALUE
+         | "resolver" "{" resolver_stmts "}"
+         | "error_log" "{" log_stmts "}"
+         | "access_log" "{" log_stmts "}
+         | "listener" VALUE "{" listener_stmts "}"
+         | "listener" VALUE VALUE "{" listener_stmts "}"
+         | "table" VALUE "{" table_stmts "}"
+         | "table" "{" table_stmts "}"
+
+resolver_stmts ::= resolver_stmt stmt_end resolver_stmts
+                 | resolver_stmt
+                 | epsilon
+
+resolver_stmt ::= "nameserver" nameservers
+                | "search" search_domains
+                | "mode" VALUE
+
+nameservers ::= VALUE nameservers
+              | epsilon
+
+search_domains ::= VALUE search_domains
+                 | epsilon
+
+log_stmts ::= log_stmt stmt_end log_stmts
+            | log_stmt
+            | epslion
+
+log_stmt ::= "filename" VALUE
+           | "syslog" VALUE
+           | "priority" VALUE
+
+listener_stmts ::= listener_stmt stmt_end listener_stmts
+                 | listener_stmt
+                 | epslion
+
+listener_stmt ::= "protocol" VALUE
+                | "table" VALUE
+                | "fallback" VALUE
+                | "source" VALUE
+                | "access_log" VALUE
+                | "access_log" "{" log_stmts "}"
+                | "bad_requests" VALUE
+
+table_stmts ::= table_stmt stmt_end table_stmts
+              | table_stmt
+              | epsilon
+
+table_stmt ::= VALUE
+             | VALUE VALUE
+             | VALUE VALUE VALUE
+
