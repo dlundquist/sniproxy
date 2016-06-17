@@ -241,8 +241,7 @@ static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
     char buffer[1024];
 
-    if (default_logger == NULL)
-        init_default_logger();
+    init_default_logger();
 
     if (logger == NULL)
         return;
@@ -266,7 +265,12 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
 
 static void
 init_default_logger() {
-    struct Logger *logger = malloc(sizeof(struct Logger));
+    struct Logger *logger = NULL;
+
+    if (default_logger != NULL)
+        return;
+
+    logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
         logger->sink = obtain_stderr_sink();
         if (logger->sink == NULL) {
