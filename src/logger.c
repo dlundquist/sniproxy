@@ -243,8 +243,6 @@ debug(const char *format, ...) {
 
 static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
-    char buffer[1024];
-
     init_default_logger();
 
     if (logger == NULL)
@@ -255,15 +253,16 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
 
     if (logger->sink->type == LOG_SINK_SYSLOG) {
         vsyslog(logger->facility|logger->priority, format, args);
-    } else {
+    } else if (logger->sink->fd != NULL) {
+        char buffer[1024];
+
         timestamp(buffer, sizeof(buffer));
         size_t len = strlen(buffer);
 
         vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
         buffer[sizeof(buffer) - 1] = '\0'; /* ensure buffer null terminated */
 
-        if (logger->sink->fd != NULL)
-            fprintf(logger->sink->fd, "%s\n", buffer);
+        fprintf(logger->sink->fd, "%s\n", buffer);
     }
 }
 
