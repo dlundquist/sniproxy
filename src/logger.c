@@ -57,10 +57,6 @@ struct LogSink {
 
 static struct Logger *default_logger = NULL;
 static SLIST_HEAD(LogSink_head, LogSink) sinks = SLIST_HEAD_INITIALIZER(sinks);
-static struct {
-    time_t when;
-    char string[32];
-} timestamp_cache = { .when = 0, .string = {'\0'} };
 
 
 static void free_logger(struct Logger *);
@@ -462,6 +458,10 @@ static const char *
 timestamp(char *dst, size_t dst_len) {
     /* TODO change to ev_now() */
     time_t now = time(NULL);
+    static struct {
+        time_t when;
+        char string[32];
+    } timestamp_cache = { .when = 0, .string = {'\0'} };
 
     if (now != timestamp_cache.when) {
 #ifdef RFC3339_TIMESTAMP
