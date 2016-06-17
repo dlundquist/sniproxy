@@ -133,12 +133,16 @@ reopen_loggers() {
 void
 set_default_logger(struct Logger *new_logger) {
     struct Logger *old_default_logger = default_logger;
+
+    assert(new_logger != NULL);
     default_logger = logger_ref_get(new_logger);
     logger_ref_put(old_default_logger);
 }
 
 void
 set_logger_priority(struct Logger *logger, int priority) {
+    assert(logger != NULL);
+    assert(priority >= LOG_EMERG && priority <= LOG_DEBUG);
     logger->priority = priority;
 }
 
