@@ -57,10 +57,6 @@ struct LogSink {
 
 static struct Logger *default_logger = NULL;
 static SLIST_HEAD(LogSink_head, LogSink) sinks = SLIST_HEAD_INITIALIZER(sinks);
-static struct {
-    time_t when;
-    char string[32];
-} timestamp_cache = { .when = 0, .string = {'\0'} };
 
 
 static void free_logger(struct Logger *);
@@ -137,12 +133,16 @@ reopen_loggers() {
 void
 set_default_logger(struct Logger *new_logger) {
     struct Logger *old_default_logger = default_logger;
+
+    assert(new_logger != NULL);
     default_logger = logger_ref_get(new_logger);
     logger_ref_put(old_default_logger);
 }
 
 void
 set_logger_priority(struct Logger *logger, int priority) {
+    assert(logger != NULL);
+    assert(priority >= LOG_EMERG && priority <= LOG_DEBUG);
     logger->priority = priority;
 }
 
@@ -189,6 +189,8 @@ void
 fatal(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_CRIT, format, args);
     va_end(args);
@@ -200,6 +202,8 @@ void
 err(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_ERR, format, args);
     va_end(args);
@@ -208,6 +212,8 @@ err(const char *format, ...) {
 void
 warn(const char *format, ...) {
     va_list args;
+
+    init_default_logger();
 
     va_start(args, format);
     vlog_msg(default_logger, LOG_WARNING, format, args);
@@ -218,6 +224,8 @@ void
 notice(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_NOTICE, format, args);
     va_end(args);
@@ -226,6 +234,8 @@ notice(const char *format, ...) {
 void
 info(const char *format, ...) {
     va_list args;
+
+    init_default_logger();
 
     va_start(args, format);
     vlog_msg(default_logger, LOG_INFO, format, args);
@@ -236,6 +246,8 @@ void
 debug(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_DEBUG, format, args);
     va_end(args);
@@ -243,34 +255,34 @@ debug(const char *format, ...) {
 
 static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
-    char buffer[1024];
-
-    if (default_logger == NULL)
-        init_default_logger();
-
-    if (logger == NULL)
-        return;
+    assert(logger != NULL);
 
     if (priority > logger->priority)
         return;
 
     if (logger->sink->type == LOG_SINK_SYSLOG) {
         vsyslog(logger->facility|logger->priority, format, args);
-    } else {
+    } else if (logger->sink->fd != NULL) {
+        char buffer[1024];
+
         timestamp(buffer, sizeof(buffer));
         size_t len = strlen(buffer);
 
         vsnprintf(buffer + len, sizeof(buffer) - len, format, args);
         buffer[sizeof(buffer) - 1] = '\0'; /* ensure buffer null terminated */
 
-        if (logger->sink->fd != NULL)
-            fprintf(logger->sink->fd, "%s\n", buffer);
+        fprintf(logger->sink->fd, "%s\n", buffer);
     }
 }
 
 static void
 init_default_logger() {
-    struct Logger *logger = malloc(sizeof(struct Logger));
+    struct Logger *logger = NULL;
+
+    if (default_logger != NULL)
+        return;
+
+    logger = malloc(sizeof(struct Logger));
     if (logger != NULL) {
         logger->sink = obtain_stderr_sink();
         if (logger->sink == NULL) {
@@ -462,6 +474,10 @@ static const char *
 timestamp(char *dst, size_t dst_len) {
     /* TODO change to ev_now() */
     time_t now = time(NULL);
+    static struct {
+        time_t when;
+        char string[32];
+    } timestamp_cache = { .when = 0, .string = {'\0'} };
 
     if (now != timestamp_cache.when) {
 #ifdef RFC3339_TIMESTAMP
