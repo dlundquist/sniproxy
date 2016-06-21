@@ -189,6 +189,8 @@ void
 fatal(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_CRIT, format, args);
     va_end(args);
@@ -200,6 +202,8 @@ void
 err(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_ERR, format, args);
     va_end(args);
@@ -208,6 +212,8 @@ err(const char *format, ...) {
 void
 warn(const char *format, ...) {
     va_list args;
+
+    init_default_logger();
 
     va_start(args, format);
     vlog_msg(default_logger, LOG_WARNING, format, args);
@@ -218,6 +224,8 @@ void
 notice(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_NOTICE, format, args);
     va_end(args);
@@ -226,6 +234,8 @@ notice(const char *format, ...) {
 void
 info(const char *format, ...) {
     va_list args;
+
+    init_default_logger();
 
     va_start(args, format);
     vlog_msg(default_logger, LOG_INFO, format, args);
@@ -236,6 +246,8 @@ void
 debug(const char *format, ...) {
     va_list args;
 
+    init_default_logger();
+
     va_start(args, format);
     vlog_msg(default_logger, LOG_DEBUG, format, args);
     va_end(args);
@@ -243,10 +255,7 @@ debug(const char *format, ...) {
 
 static void
 vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) {
-    init_default_logger();
-
-    if (logger == NULL)
-        return;
+    assert(logger != NULL);
 
     if (priority > logger->priority)
         return;
