@@ -50,6 +50,14 @@ AS_IF([test "x$dns" = "xyes"],
   ])
 ])
 
+PDNS_WITH_LUAJIT
+AS_IF([test "x$with_luajit" = "xno"], [
+  PDNS_WITH_LUA
+])
+AS_IF([test "x$with_luajit" = "xno" -a "x$with_lua" = "xno"],
+  [AC_MSG_ERROR([No Lua found])
+])
+
 AC_ARG_ENABLE([rfc3339-timestamps],
   [AS_HELP_STRING([--enable-rfc3339-timestamps], [Enable RFC3339 timestamps])],
   [rfc3339_timestamps=${enableval}], [rfc3339_timestamps=no])

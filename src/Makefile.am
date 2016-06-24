@@ -33,4 +33,4 @@ sniproxy_SOURCES = sniproxy.c \
                    tls.c \
                    tls.h
 
-sniproxy_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)
+sniproxy_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS) $(LUA_LIBS)
