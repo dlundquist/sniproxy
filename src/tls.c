@@ -114,7 +114,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     tls_version_major = data[1];
     tls_version_minor = data[2];
     if (tls_version_major < 3) {
-        debug("Received SSL %d.%d handshake which which can not support SNI.",
+        debug("Received SSL %d.%d handshake which can not support SNI.",
               tls_version_major, tls_version_minor);
 
         return -2;
