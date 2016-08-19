@@ -127,7 +127,8 @@ Configuration Syntax
     table TableName {
         # Match exact request hostnames
         example.com 192.0.2.10:4343
-        example.net [2001:DB8::1:10]:443
+        # If port is not specified the listener port will be used
+        example.net [2001:DB8::1:10]
         # Or use regular expression to match
         .*\\.com    [2001:DB8::1:11]:443
         # Combining regular expression and wildcard will resolve the hostname
