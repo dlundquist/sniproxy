@@ -6,11 +6,6 @@ the initial request of the TCP session. This enables HTTPS name-based virtual
 hosting to separate backend servers without installing the private key on the
 proxy machine.
 
-News
-----
-
-First [user survey](https://docs.google.com/forms/d/1K9Wpm6dZqBl9w4vhx_t2sWhRvOeNbJ8n0DBzYOo6ILo/viewform), please take a moment to offer your input.
-
 Features
 --------
 + Name-based proxying of HTTPS without decrypting traffic. No keys or
