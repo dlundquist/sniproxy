@@ -107,7 +107,7 @@ new_address(const char *hostname_or_ip) {
 
             struct Address *addr = new_address(ip_buf);
             if (addr != NULL)
-                address_set_port(addr, port_num);
+                address_set_port(addr, (uint16_t) port_num);
 
             return addr;
         }
@@ -293,7 +293,7 @@ address_sa_len(const struct Address *addr) {
     return addr->len;
 }
 
-int
+uint16_t
 address_port(const struct Address *addr) {
     switch (addr->type) {
         case HOSTNAME:
@@ -323,12 +323,7 @@ address_port(const struct Address *addr) {
 }
 
 void
-address_set_port(struct Address *addr, int port) {
-    if (port < 0 || port > 65535) {
-        assert(0);
-        return;
-    }
-
+address_set_port(struct Address *addr, uint16_t port) {
     switch (addr->type) {
         case SOCKADDR:
             switch (address_sa(addr)->sa_family) {
@@ -356,6 +351,16 @@ address_set_port(struct Address *addr, int port) {
             /* invalid Address type */
             assert(0);
     }
+}
+
+int
+address_set_port_str(struct Address *addr, const char* str) {
+    int port = atoi(str);
+    if (port < 0 || port > 65535) {
+        return 0;
+    }
+    address_set_port(addr, (uint16_t) port);
+    return 1;
 }
 
 const char *

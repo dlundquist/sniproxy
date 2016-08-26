@@ -26,9 +26,11 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include <inttypes.h>
+
 struct Protocol {
     const char *const name;
-    const int default_port;
+    const uint16_t default_port;
     int (*const parse_packet)(const char*, size_t, char **);
     const char *const abort_message;
     const size_t abort_message_len;
