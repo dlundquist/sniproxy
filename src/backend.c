@@ -72,7 +72,10 @@ accept_backend_arg(struct Backend *backend, const char *arg) {
         }
 #endif
     } else if (address_port(backend->address) == 0 && is_numeric(arg)) {
-        address_set_port(backend->address, atoi(arg));
+        if (!address_set_port_str(backend->address, arg)) {
+            err("Invalid port: %s", arg);
+            return -1;
+        }
     } else {
         err("Unexpected table backend argument: %s", arg);
         return -1;
