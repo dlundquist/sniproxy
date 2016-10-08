@@ -234,7 +234,7 @@ static void apply_lua_policy(struct Connection *con) {
             return;
         }
 
-        lua_pushlstring(lua_state, &addr[addrbegin], strlen(addr));
+        lua_pushlstring(lua_state, &addr[addrbegin], strlen(addr+addrbegin));
         lua_pushlstring(lua_state, con->hostname, con->hostname_len);
         // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
         //     abort_connection(con);
