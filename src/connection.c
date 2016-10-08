@@ -214,23 +214,19 @@ extern lua_State *lua_state;
 static void apply_lua_policy(struct Connection *con) {
     if(lua_state) {
         struct sockaddr_storage *saddr = &(con->client.addr);
-        void *addrptr;
-        int addrlen;
+        int addrbegin = 0;
+        char addr[INET6_ADDRSTRLEN];
 
         if (saddr->ss_family == AF_INET) {
-            addrlen = 4;
-            addrptr = &(((struct sockaddr_in *) saddr)->sin_addr);
+            inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
         } else if (saddr->ss_family == AF_INET6) {
-            addrlen = 16;
-            addrptr = &(((struct sockaddr_in6 *) saddr)->sin6_addr);
-            // [[::ffff:192.168.137.1]:
-            if(memcmp("\0\0\0\0\0\0\0\0\0\0\xff\xff", addrptr, 12) == 0) {
-                addrptr += 12;
-                addrlen = 4;
-            }
+            char str2[INET6_ADDRSTRLEN];
+            inet_ntop(saddr->ss_family, &((struct sockaddr_in6 *) saddr)->sin6_addr, addr, INET6_ADDRSTRLEN);
+            if(strncmp(addr, "::ffff:", 7) == 0)
+                addrbegin = 7;
         }
 
-        fprintf(stderr, "in apply: [%s], addrlen=%d\n", con->hostname, addrlen);
+//        fprintf(stderr, "in apply: [%s], addrlen=%d\n", con->hostname, addrlen);
         lua_getglobal(lua_state,  "preconnect");
         if(!lua_isfunction(lua_state, -1)) {
             fprintf(stderr, "no lua function\n");
@@ -238,7 +234,7 @@ static void apply_lua_policy(struct Connection *con) {
             return;
         }
 
-        lua_pushlstring(lua_state, addrptr, addrlen);
+        lua_pushlstring(lua_state, &addr[addrbegin], strlen(addr));
         lua_pushlstring(lua_state, con->hostname, con->hostname_len);
         // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
         //     abort_connection(con);
