@@ -215,9 +215,12 @@ drop_perms(const char *username) {
     if (getuid() != 0)
         return;
 
+    errno = 0;
     struct passwd *user = getpwnam(username);
-    if (user == NULL)
+    if (errno)
         perror_exit("getpwnam()");
+    else if(user == NULL)
+        fatal("getpwnam(): user %s does not exist", username);
 
     /* drop any supplementary groups */
     if (setgroups(1, &user->pw_gid) < 0)
