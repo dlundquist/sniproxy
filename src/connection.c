@@ -212,47 +212,49 @@ server_socket_open(const struct Connection *con) {
 extern lua_State *lua_state;
 
 static void apply_lua_policy(struct Connection *con) {
-    struct sockaddr_storage *saddr = &(con->client.addr);
-    void *addrptr;
-    int addrlen;
+    if(lua_state) {
+        struct sockaddr_storage *saddr = &(con->client.addr);
+        void *addrptr;
+        int addrlen;
 
-    if (saddr->ss_family == AF_INET) {
-        addrlen = 4;
-        addrptr = &(((struct sockaddr_in *) saddr)->sin_addr);
-    } else if (saddr->ss_family == AF_INET6) {
-        addrlen = 16;
-        addrptr = &(((struct sockaddr_in6 *) saddr)->sin6_addr);
-        // [[::ffff:192.168.137.1]:
-        if(memcmp("\0\0\0\0\0\0\0\0\0\0\xff\xff", addrptr, 12) == 0) {
-            addrptr += 12;
+        if (saddr->ss_family == AF_INET) {
             addrlen = 4;
+            addrptr = &(((struct sockaddr_in *) saddr)->sin_addr);
+        } else if (saddr->ss_family == AF_INET6) {
+            addrlen = 16;
+            addrptr = &(((struct sockaddr_in6 *) saddr)->sin6_addr);
+            // [[::ffff:192.168.137.1]:
+            if(memcmp("\0\0\0\0\0\0\0\0\0\0\xff\xff", addrptr, 12) == 0) {
+                addrptr += 12;
+                addrlen = 4;
+            }
         }
-    }
 
-    fprintf(stderr, "in apply: [%s], addrlen=%d\n", con->hostname, addrlen);
-    lua_getglobal(lua_state,  "preconnect");
-    if(!lua_isfunction(lua_state, -1)) {
-        fprintf(stderr, "no lua function\n");
+        fprintf(stderr, "in apply: [%s], addrlen=%d\n", con->hostname, addrlen);
+        lua_getglobal(lua_state,  "preconnect");
+        if(!lua_isfunction(lua_state, -1)) {
+            fprintf(stderr, "no lua function\n");
+            lua_pop(lua_state, 1);
+            return;
+        }
+
+        lua_pushlstring(lua_state, addrptr, addrlen);
+        lua_pushlstring(lua_state, con->hostname, con->hostname_len);
+        // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
+        //     abort_connection(con);
+
+        if(lua_pcall(lua_state, 2, 1, 0)) {
+            fprintf(stderr, "lua hook error: %s\n", lua_tostring(lua_state, -1));
+            lua_pop(lua_state, 1);
+            return;
+        }
+
+        int block = lua_toboolean(lua_state, 1);
         lua_pop(lua_state, 1);
-        return;
+        fprintf(stderr, "block=%d\n", block);
+        if(block)
+            abort_connection(con);
     }
-
-    lua_pushlstring(lua_state, addrptr, addrlen);
-    lua_pushlstring(lua_state, con->hostname, con->hostname_len);
-    // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
-    //     abort_connection(con);
-
-    if(lua_pcall(lua_state, 2, 1, 0)) {
-        fprintf(stderr, "lua hook error: %s\n", lua_tostring(lua_state, -1));
-        lua_pop(lua_state, 1);
-        return;
-    }
-
-    int block = lua_toboolean(lua_state, 1);
-    lua_pop(lua_state, 1);
-    fprintf(stderr, "block=%d\n", block);
-    if(block)
-        abort_connection(con);
 }
 
 /*

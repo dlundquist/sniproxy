@@ -122,16 +122,18 @@ main(int argc, char **argv) {
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 
-    lua_state = luaL_newstate();
-    luaL_openlibs(lua_state);
-
-    if(luaL_dofile(lua_state, "./sniproxy.lua")) {
-        fprintf(stderr, "lua dofile error: %s\n", lua_isstring(lua_state, -1) ? lua_tostring(lua_state, -1) : "unknown error");
-        return EXIT_FAILURE;
-    }
-
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : default_username);
+
+    if(config->luafilename) {
+        lua_state = luaL_newstate();
+        luaL_openlibs(lua_state);
+
+        if(luaL_dofile(lua_state, config->luafilename)) {
+            fprintf(stderr, "lua dofile error: %s\n", lua_isstring(lua_state, -1) ? lua_tostring(lua_state, -1) : "unknown error");
+            return EXIT_FAILURE;
+        }
+    }
 
     ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
     ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);

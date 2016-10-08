@@ -34,6 +34,7 @@ struct Config {
     char *filename;
     char *user;
     char *pidfile;
+    char *luafilename;
     struct ResolverConfig {
         char **nameservers;
         char **search;
