@@ -235,7 +235,7 @@ static void apply_lua_policy(struct Connection *con) {
         }
 
         lua_pushlstring(lua_state, &addr[addrbegin], strlen(addr+addrbegin));
-        lua_pushlstring(lua_state, con->hostname, con->hostname_len);
+        lua_pushlstring(lua_state, con->hostname, con->hostname != NULL ? con->hostname_len : 0);
         // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
         //     abort_connection(con);
 
@@ -420,7 +420,7 @@ parse_client_request(struct Connection *con) {
 
     con->hostname = hostname;
     con->hostname_len = result;
-    fprintf(stderr, "got hostname [%s] len [%d]\n", hostname, result);
+    fprintf(stderr, "got hostname [%s] len [%d]\n", hostname != NULL ? hostname : "(null)", result);
     con->state = PARSED;
 }
 
