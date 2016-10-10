@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -205,6 +206,38 @@ server_socket_open(const struct Connection *con) {
         con->state == CLIENT_CLOSED;
 }
 
+static bool is_mapped_ipv4(const struct sockaddr_in6* addr) {
+    if (addr->sin6_family != AF_INET6) {
+        return false;
+    }
+
+    const unsigned char* ptr = (const unsigned char*) &addr->sin6_addr.s6_addr;
+    for (size_t idx = 0; idx < 10; idx++) {
+        if (ptr[idx] != 0) {
+            return false;
+        }
+    }
+
+    if (ptr[10] != 0xff) {
+        return false;
+    }
+
+    if (ptr[11] != 0xff) {
+        return false;
+    }
+
+    return true;
+}
+
+static void map_to_v4(const struct sockaddr_in6* src, struct sockaddr_in* dst) {
+    const unsigned char* ptr = (const unsigned char*) &src->sin6_addr.s6_addr;
+    dst->sin_family = AF_INET;
+    dst->sin_port = src->sin6_port;
+
+    ptr += (sizeof(src->sin6_addr.s6_addr) - sizeof(dst->sin_addr.s_addr));
+    memcpy(&dst->sin_addr.s_addr, ptr, sizeof(dst->sin_addr.s_addr));
+}
+
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
@@ -213,20 +246,24 @@ extern lua_State *lua_state;
 
 static void apply_lua_policy(struct Connection *con) {
     if(lua_state) {
-        struct sockaddr_storage *saddr = &(con->client.addr);
-        int addrbegin = 0;
+        const struct sockaddr_storage *saddr = &(con->client.addr);
+        struct sockaddr_storage unmapped;
         char addr[INET6_ADDRSTRLEN];
 
         if (saddr->ss_family == AF_INET) {
             inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
         } else if (saddr->ss_family == AF_INET6) {
-            char str2[INET6_ADDRSTRLEN];
-            inet_ntop(saddr->ss_family, &((struct sockaddr_in6 *) saddr)->sin6_addr, addr, INET6_ADDRSTRLEN);
-            if(strncmp(addr, "::ffff:", 7) == 0)
-                addrbegin = 7;
+            if (is_mapped_ipv4((struct sockaddr_in6 *) saddr)) {
+                map_to_v4((struct sockaddr_in6 *) saddr, (struct sockaddr_in *) &unmapped);
+                saddr = &unmapped;
+                inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
+            }
+            else {
+                inet_ntop(saddr->ss_family, &((struct sockaddr_in6 *) saddr)->sin6_addr, addr, INET6_ADDRSTRLEN);
+            }
         }
 
-//        fprintf(stderr, "in apply: [%s], addrlen=%d\n", con->hostname, addrlen);
+//        fprintf(stderr, "in apply: [%s](%zu), addr=%s, addrlen=%zu\n", con->hostname != NULL ? con->hostname : "(null)", con->hostname_len, addr, strlen(addr));
         lua_getglobal(lua_state,  "preconnect");
         if(!lua_isfunction(lua_state, -1)) {
             fprintf(stderr, "no lua function\n");
@@ -234,7 +271,7 @@ static void apply_lua_policy(struct Connection *con) {
             return;
         }
 
-        lua_pushlstring(lua_state, &addr[addrbegin], strlen(addr+addrbegin));
+        lua_pushlstring(lua_state, addr, strlen(addr));
         lua_pushlstring(lua_state, con->hostname, con->hostname != NULL ? con->hostname_len : 0);
         // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
         //     abort_connection(con);
