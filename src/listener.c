@@ -139,6 +139,7 @@ listeners_reload(struct Listener_head *existing_listeners,
  */
 static void
 listener_update(struct Listener *existing_listener, struct Listener *new_listener, const struct Table_head *tables) {
+    debug("[DEBUG] %s(): ", __FUNCTION__);
     assert(existing_listener != NULL);
     assert(new_listener != NULL);
     assert(address_compare(existing_listener->address, new_listener->address) == 0);
@@ -150,6 +151,12 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
     free(existing_listener->source_address);
     existing_listener->source_address = new_listener->source_address;
     new_listener->source_address = NULL;
+
+#ifdef SO_BINDTODEVICE
+    free(existing_listener->device_name);
+    existing_listener->device_name = new_listener->device_name;
+    new_listener->device_name = NULL;
+#endif
 
     existing_listener->protocol = new_listener->protocol;
 
@@ -184,6 +191,9 @@ new_listener() {
         return NULL;
     }
 
+#ifdef SO_BINDTODEVICE
+    listener->device_name = NULL;
+#endif
     listener->address = NULL;
     listener->fallback_address = NULL;
     listener->source_address = NULL;
@@ -260,6 +270,8 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
+    debug("[DEBUG] %s(): load fallback address from config: '%s'", __FUNCTION__, fallback);
+
     if (listener->fallback_address != NULL) {
         err("Duplicate fallback address: %s", fallback);
         return 0;
@@ -297,10 +309,21 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
 
 int
 accept_listener_source_address(struct Listener *listener, char *source) {
+    debug("[DEBUG] %s(): load source address from config: %s", __FUNCTION__, source);
+
     if (listener->source_address != NULL) {
         err("Duplicate source address: %s", source);
         return 0;
     }
+#ifdef SO_BINDTODEVICE
+    if (listener->device_name != NULL) {
+        err("Config Error: Cannot set source address '%s' with bind device '%s'",
+            listener->source_address,
+            listener->device_name
+            );
+        return 0;
+    }
+#endif
 
     listener->source_address = new_address(source);
     if (listener->source_address == NULL) {
@@ -320,8 +343,40 @@ accept_listener_source_address(struct Listener *listener, char *source) {
                 display_address(listener->address, address, sizeof(address)));
     }
 
+    debug("[DEBUG] %s(): source address '%s' set.", __FUNCTION__, source);
     return 1;
 }
+
+
+#ifdef SO_BINDTODEVICE
+int
+accept_listener_device_name(struct Listener *listener, char *device_name) {
+    debug("[DEBUG] %s(): load device name from config: %s", __FUNCTION__, device_name);
+
+    if (getuid() != 0) {
+        err("Binding device '%s' requires ROOT access.", device_name);
+        return 0;
+    }
+
+    if (listener->device_name != NULL) {
+        err("Duplicate device name: %s", device_name);
+        return 0;
+    }
+
+    if (listener->device_name != NULL) {
+        err("Config Error: Cannot set bind device '%s' with source address '%s'",
+            listener->device_name,
+            listener->source_address
+            );
+        return 0;
+    }
+
+    listener->device_name = strdup(device_name);
+
+    debug("[DEBUG] %s(): bind device '%s' set.", __FUNCTION__, listener->device_name);
+    return 1;
+}
+#endif
 
 int
 accept_listener_bad_request_action(struct Listener *listener, char *action) {
@@ -546,6 +601,11 @@ print_listener_config(FILE *file, const struct Listener *listener) {
                 display_address(listener->source_address,
                     address, sizeof(address)));
 
+#ifdef SO_BINDTODEVICE
+    if (listener->device_name)
+        fprintf(file, "\tdevice %s\n", listener->device_name);
+#endif
+
     fprintf(file, "}\n\n");
 }
 
@@ -568,6 +628,11 @@ free_listener(struct Listener *listener) {
     free(listener->address);
     free(listener->fallback_address);
     free(listener->source_address);
+
+#ifdef SO_BINDTODEVICE
+    listener->device_name = NULL;
+#endif
+
     free(listener->table_name);
 
     table_ref_put(listener->table);

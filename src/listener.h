@@ -41,6 +41,10 @@ struct Listener {
     struct Logger *access_log;
     int log_bad_requests;
 
+#ifdef SO_BINDTODEVICE
+    char *device_name;
+#endif
+
     /* Runtime fields */
     int reference_count;
     struct ev_io watcher;
@@ -55,6 +59,9 @@ int accept_listener_arg(struct Listener *, char *);
 int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_source_address(struct Listener *, char *);
+#ifdef SO_BINDTODEVICE
+int accept_listener_device_name(struct Listener *, char *);
+#endif
 int accept_listener_protocol(struct Listener *, char *);
 int accept_listener_bad_request_action(struct Listener *, char *);
 
