@@ -425,7 +425,7 @@ accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
     };
 
     for (size_t i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
-        if(strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
+        if (strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
             lb->priority = priorities[i].priority;
             return 1;
         }
