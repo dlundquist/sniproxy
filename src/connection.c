@@ -501,7 +501,25 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
-    if (con->listener->source_address) {
+    if (con->listener->transparent_proxy) {
+        int on = 1;
+        int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+        if (result < 0) {
+            err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
+
+        result = bind(sockfd, (struct sockaddr *)&con->client.addr,
+                con->client.addr_len);
+        if (result < 0) {
+            err("bind failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
+    } else if (con->listener->source_address) {
         int on = 1;
         int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
         if (result < 0) {

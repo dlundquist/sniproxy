@@ -39,7 +39,7 @@ struct Listener {
     const struct Protocol *protocol;
     char *table_name;
     struct Logger *access_log;
-    int log_bad_requests;
+    int transparent_proxy, log_bad_requests;
 
     /* Runtime fields */
     int reference_count;
