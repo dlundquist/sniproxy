@@ -190,6 +190,7 @@ new_listener() {
     listener->protocol = tls_protocol;
     listener->table_name = NULL;
     listener->access_log = NULL;
+    listener->transparent_proxy = 0;
     listener->log_bad_requests = 0;
     listener->reference_count = 0;
     /* Initializes sock fd to negative sentinel value to indicate watchers
@@ -297,9 +298,14 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
 
 int
 accept_listener_source_address(struct Listener *listener, char *source) {
-    if (listener->source_address != NULL) {
+    if (listener->source_address != NULL || listener->transparent_proxy) {
         err("Duplicate source address: %s", source);
         return 0;
+    }
+
+    if (strcasecmp("client", source) == 0) {
+        listener->transparent_proxy = 1;
+        return 1;
     }
 
     listener->source_address = new_address(source);
