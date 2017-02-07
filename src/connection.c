@@ -251,6 +251,7 @@ static void apply_lua_policy(struct Connection *con) {
         struct sockaddr_storage unmapped;
         char addr[INET6_ADDRSTRLEN];
 
+        addr[0]='\0';
         if (saddr->ss_family == AF_INET) {
             inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
         } else if (saddr->ss_family == AF_INET6) {
@@ -264,7 +265,6 @@ static void apply_lua_policy(struct Connection *con) {
             }
         }
 
-//        fprintf(stderr, "in apply: [%s](%zu), addr=%s, addrlen=%zu\n", con->hostname != NULL ? con->hostname : "(null)", con->hostname_len, addr, strlen(addr));
         lua_getglobal(lua_state,  "preconnect");
         if(!lua_isfunction(lua_state, -1)) {
             fprintf(stderr, "no lua function\n");
@@ -272,10 +272,8 @@ static void apply_lua_policy(struct Connection *con) {
             return;
         }
 
-        lua_pushlstring(lua_state, addr, strlen(addr));
+        lua_pushstring(lua_state, addr);
         lua_pushlstring(lua_state, con->hostname, con->hostname != NULL ? con->hostname_len : 0);
-        // if (strcmp(con->hostname, "rss.7bits.nl") == 0)
-        //     abort_connection(con);
 
         if(lua_pcall(lua_state, 2, 1, 0)) {
             fprintf(stderr, "lua hook error: %s\n", lua_tostring(lua_state, -1));
