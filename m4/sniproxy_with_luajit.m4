@@ -1,4 +1,4 @@
-AC_DEFUN([PDNS_WITH_LUAJIT],[
+AC_DEFUN([SNIPROXY_WITH_LUAJIT],[
   AC_MSG_CHECKING([whether we will be linking in LuaJIT])
   AC_ARG_WITH([luajit],
     [AS_HELP_STRING([--with-luajit], [build LuaJIT bindings @<:@default=auto@:>@])],

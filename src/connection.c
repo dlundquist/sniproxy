@@ -238,6 +238,7 @@ static void map_to_v4(const struct sockaddr_in6* src, struct sockaddr_in* dst) {
     memcpy(&dst->sin_addr.s_addr, ptr, sizeof(dst->sin_addr.s_addr));
 }
 
+#ifdef HAVE_LUA
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
@@ -289,6 +290,7 @@ static void apply_lua_policy(struct Connection *con) {
             abort_connection(con);
     }
 }
+#endif
 
 /*
  * Main client callback: this is used by both the client and server watchers
@@ -340,7 +342,9 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (is_client && con->state == ACCEPTED)
         parse_client_request(con);
     if (is_client && con->state == PARSED) {
+#ifdef HAVE_LUA
         apply_lua_policy(con);
+#endif
         resolve_server_address(con, loop);
     }
     if (is_client && con->state == RESOLVED)

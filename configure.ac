@@ -50,12 +50,9 @@ AS_IF([test "x$dns" = "xyes"],
   ])
 ])
 
-PDNS_WITH_LUAJIT
+SNIPROXY_WITH_LUAJIT
 AS_IF([test "x$with_luajit" = "xno"], [
-  PDNS_WITH_LUA
-])
-AS_IF([test "x$with_luajit" = "xno" -a "x$with_lua" = "xno"],
-  [AC_MSG_ERROR([No Lua found])
+  SNIPROXY_WITH_LUA
 ])
 
 AC_ARG_ENABLE([rfc3339-timestamps],

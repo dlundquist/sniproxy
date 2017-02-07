@@ -1,4 +1,4 @@
-AC_DEFUN([PDNS_WITH_LUA],[
+AC_DEFUN([SNIPROXY_WITH_LUA],[
   AC_MSG_CHECKING([whether we will be linking in Lua])
   AC_ARG_WITH([lua],
     [AS_HELP_STRING([--with-lua], [build Lua Bindings @<:@default=auto@:>@])],
