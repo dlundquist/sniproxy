@@ -242,7 +242,7 @@ static void map_to_v4(const struct sockaddr_in6* src, struct sockaddr_in* dst) {
 #include "lauxlib.h"
 #include "lualib.h"
 
-extern lua_State *lua_state;
+lua_State *lua_state;
 
 static void apply_lua_policy(struct Connection *con) {
     if(lua_state) {

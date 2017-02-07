@@ -66,7 +66,7 @@ static struct ev_signal sigusr1_watcher;
 static struct ev_signal sigint_watcher;
 static struct ev_signal sigterm_watcher;
 
-lua_State *lua_state;
+extern lua_State *lua_state;
 
 int
 main(int argc, char **argv) {

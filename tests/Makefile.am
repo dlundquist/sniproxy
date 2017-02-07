@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS)
+AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS) $(LUA_CFLAGS)
 
 TESTS = http_test \
         tls_test \
@@ -46,7 +46,7 @@ binder_test_SOURCES = binder_test.c \
 buffer_test_SOURCES = buffer_test.c \
                       ../src/buffer.c
 
-buffer_test_LDADD = $(LIBEV_LIBS)
+buffer_test_LDADD = $(LIBEV_LIBS) $(LUA_LIBS)
 
 address_test_SOURCES = address_test.c \
                       ../src/address.c
@@ -71,14 +71,14 @@ config_test_SOURCES = config_test.c \
                       ../src/tls.c \
                       ../src/http.c
 
-config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)
+config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS) $(LUA_LIBS)
 
 resolv_test_SOURCES = resolv_test.c \
                       ../src/resolv.c \
                       ../src/address.c \
                       ../src/logger.c
 
-resolv_test_LDADD = $(LIBEV_LIBS) $(LIBUDNS_LIBS)
+resolv_test_LDADD = $(LIBEV_LIBS) $(LIBUDNS_LIBS) $(LUA_LIBS)
 
 table_test_SOURCES = table_test.c \
                       ../src/backend.c \
@@ -86,4 +86,4 @@ table_test_SOURCES = table_test.c \
                       ../src/address.c \
                       ../src/logger.c
 
-table_test_LDADD = $(LIBPCRE_LIBS)
+table_test_LDADD = $(LIBPCRE_LIBS) $(LUA_LIBS)
