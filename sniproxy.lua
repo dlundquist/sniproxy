@@ -4,7 +4,7 @@ function hex_dump(buf)
     io.write(string.format('%08X  ',byte-1))
     chunk:gsub('.', function (c) io.write(string.format('%02X ',string.byte(c))) end)
     io.write(string.rep(' ',3*(16-#chunk)))
-    io.write("\n") 
+    io.write("\n")
   end
 end
 
