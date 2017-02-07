@@ -15,7 +15,7 @@ function preconnect(remote, name)
   print("["..name.."]")
   name = string.lower(name)
   print("["..name.."]")
-  if remote == '127.0.0.1' and name == 'rss.7bits.nl' then
+  if remote == '127.0.0.1' and name == 'www.example.com' then
     print('blocking')
     return true
   end
