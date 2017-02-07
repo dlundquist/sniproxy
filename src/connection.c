@@ -44,6 +44,12 @@
 #include <alloca.h>
 #endif
 
+#ifdef HAVE_LUA
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+#endif
+
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"
@@ -239,10 +245,6 @@ static void map_to_v4(const struct sockaddr_in6* src, struct sockaddr_in* dst) {
 }
 
 #ifdef HAVE_LUA
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
-
 lua_State *lua_state;
 
 static void apply_lua_policy(struct Connection *con) {

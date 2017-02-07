@@ -46,9 +46,9 @@
 #include "logger.h"
 
 #ifdef HAVE_LUA
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
 #endif
 
 static void usage();
