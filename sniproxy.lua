@@ -13,6 +13,8 @@ function preconnect(remote, name)
   hex_dump(remote)
   print("["..remote.."]")
   print("["..name.."]")
+  name = string.lower(name)
+  print("["..name.."]")
   if remote == '127.0.0.1' and name == 'rss.7bits.nl' then
     print('blocking')
     return true
