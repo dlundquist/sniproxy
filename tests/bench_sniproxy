@@ -6,7 +6,7 @@ if [ -n "${LOCAL_HTTPD_PORT}" ]; then
 else
     TEST_HTTPD_PORT=${TEST_HTTPD_PORT:=8081}
     # Start TestHTTPD
-    perl -MTestHTTPD -e "TestHTTPD::httpd(${TEST_HTTPD_PORT})" &
+    perl -MTestHTTPD -e "TestHTTPD::httpd(port => ${TEST_HTTPD_PORT})" &
     TEST_HTTPD_PID=$!
 fi
 
