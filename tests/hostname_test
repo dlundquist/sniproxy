@@ -69,7 +69,7 @@ sub main {
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
 
     # Wait for proxy to load and parse config
-    wait_for_port($proxy_port);
+    wait_for_port(port => $proxy_port);
 
     for (my $i = 0; $i < $workers; $i++) {
         start_child('worker', \&worker, $proxy_port, $iterations);

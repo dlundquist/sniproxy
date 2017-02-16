@@ -86,8 +86,8 @@ sub main {
 
     my $config = make_fallback_config($proxy_port, $local_httpd || $httpd_port, $fallback_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
-    my $fallback_httpd_pid = start_child('server', \&TestHTTPD::httpd, $fallback_port, sub {
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
+    my $fallback_httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $fallback_port, generator => sub {
             return sub($) {
                 my $sock = shift;
 
@@ -102,9 +102,9 @@ sub main {
         });
 
     # Wait for proxy to load and parse config
-    wait_for_port($httpd_port);
-    wait_for_port($proxy_port);
-    wait_for_port($fallback_port);
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $proxy_port);
+    wait_for_port(port => $fallback_port);
 
     for (my $i = 0; $i < $workers; $i++) {
         start_child('worker', \&worker, 'nonexistant.host', '', $proxy_port, $iterations);

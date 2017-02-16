@@ -9,3 +9,4 @@ table_test
 tls_test
 *.log
 *.trs
+*.pcap

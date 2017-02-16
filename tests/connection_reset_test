@@ -92,8 +92,8 @@ sub main {
     my $httpd_pid = start_child('server', \&simple_server, $httpd_port);
 
     # Wait for proxy to load and parse config
-    wait_for_port($httpd_port);
-    wait_for_port($proxy_port);
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $proxy_port);
 
     for (my $i = 0; $i < 10; $i++) {
         start_child('worker', \&bad_client, $proxy_port);

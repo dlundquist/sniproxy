@@ -49,12 +49,14 @@ sub default_response_generator {
 }
 
 sub httpd {
-    my $port = shift;
-    my $responder_generator = shift || \&default_response_generator;
+    my %args = @_;
+    my $ip = $args{'ip'} || 'localhost';
+    my $port = $args{'port'} || 8081;
+    my $responder_generator = $args{'generator'} || \&default_response_generator;
 
     my $server = IO::Socket::INET->new(Listen    => Socket::SOMAXCONN(),
                                        Proto     => 'tcp',
-                                       LocalAddr => 'localhost',
+                                       LocalAddr => $ip,
                                        LocalPort => $port,
                                        ReuseAddr => 1)
         or die $!;

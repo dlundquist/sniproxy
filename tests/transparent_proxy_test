@@ -1,0 +1,171 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use TestUtils;
+use TestHTTPD;
+use File::Temp;
+
+
+sub checked_system {
+    my $result = system(@_);
+
+    if ($result == -1) {
+        die "@_ failed to execute: $!\n";
+    } elsif ($result & 127) {
+        printf STDERR "@_ died with signal %d, %s coredump\n", ($result & 127), ($result & 128) ? 'with' : 'without';
+        exit 255;
+    } elsif ($result >> 8) {
+        exit $result >> 8;
+    }
+}
+
+sub make_config($$) {
+    my $proxy_port = shift;
+    my $httpd_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+user root
+
+listen 192.0.2.5 $proxy_port {
+    proto http
+    source client
+    access_log $logfile
+}
+
+table {
+    localhost 192.0.2.2 $httpd_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub proxy {
+    my $config = shift;
+
+    exec('ip', 'netns', 'exec', 'ns-test-proxy', @_, '../src/sniproxy', '-f', '-c', $config);
+}
+
+sub exec_cmd {
+    exec(@_);
+}
+
+sub worker($$$$$) {
+    my ($hostname, $path, $ip, $port, $requests) = @_;
+
+    for (my $i = 0; $i < $requests; $i++) {
+        system('ip', 'netns', 'exec', 'ns-test-clt',
+                'curl',
+                '-s', '-S',
+                '-H', "Host: $hostname",
+                '-o', '/dev/null',
+                "http://$ip:$port/$path");
+
+        if ($? == -1) {
+            die "failed to execute: $!\n";
+        } elsif ($? & 127) {
+            printf STDERR "child died with signal %d, %s coredump\n", ($? & 127), ($? & 128) ? 'with' : 'without';
+            exit 255;
+        } elsif ($? >> 8) {
+            exit $? >> 8;
+        }
+    }
+    # Success
+    exit 0;
+}
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
+    my $workers = $ENV{WORKERS} || 10;
+    my $iterations = $ENV{ITERATIONS} || 10;
+
+    my $config = make_config($proxy_port, $httpd_port);
+
+    die "This tests requires root privileges" unless $> == 0;
+
+    checked_system('ip', 'netns', 'add', 'ns-test-proxy');
+    checked_system('ip', 'netns', 'add', 'ns-test-clt');
+
+    checked_system('ip', 'link', 'add', 'veth-proxy-srv', 'type', 'veth', 'peer', 'name', 'veth-srv-proxy');
+
+    checked_system('ip', 'link', 'set', 'veth-srv-proxy', 'up');
+    checked_system('ip', 'addr', 'add', '192.0.2.2/30', 'dev', 'veth-srv-proxy');
+    checked_system('ip', 'route', 'add', '192.0.2.4/30', 'via', '192.0.2.1', 'dev', 'veth-srv-proxy');
+
+    checked_system('ip', 'link', 'set', 'veth-proxy-srv', 'up', 'netns', 'ns-test-proxy');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', 'addr', 'add', '192.0.2.1/30', 'dev', 'veth-proxy-srv');
+
+    checked_system('ip', 'link', 'add', 'veth-proxy-clt', 'type', 'veth', 'peer', 'name', 'veth-clt-proxy');
+
+    checked_system('ip', 'link', 'set', 'veth-proxy-clt', 'up', 'netns', 'ns-test-proxy');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', 'addr', 'add', '192.0.2.5/30', 'dev', 'veth-proxy-clt');
+
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'sysctl', 'net.ipv4.conf.all.forwarding=1');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables', '-t', 'nat', '-A', 'POSTROUTING', '-o', 'veth-proxy-clt', '-j', 'MASQUERADE');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables', '-t', 'mangle', '-N', 'DIVERT');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables', '-t', 'mangle', '-A', 'PREROUTING', '-p', 'tcp', '-m', 'socket', '-j', 'DIVERT');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables', '-t', 'mangle', '-A', 'DIVERT', '-j', 'MARK', '--set-mark', '1');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables', '-t', 'mangle', '-A', 'DIVERT', '-j', 'ACCEPT');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', 'rule', 'add', 'fwmark', '1', 'lookup', '100');
+    checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', 'route', 'add', 'local', '0.0.0.0/0', 'dev', 'lo', 'table', '100');
+
+    #checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'iptables-save');
+    #checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', '-d', 'addr', 'show');
+    #checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ip', '-d', 'route', 'show');
+
+    checked_system('ip', 'link', 'set', 'veth-clt-proxy', 'up', 'netns', 'ns-test-clt');
+    checked_system('ip', 'netns', 'exec', 'ns-test-clt', 'ip', 'addr', 'add', '192.0.2.6/30', 'dev', 'veth-clt-proxy');
+
+    #checked_system('ip', 'netns', 'exec', 'ns-test-clt', 'ip', '-d', 'addr', 'show');
+    #checked_system('ip', 'netns', 'exec', 'ns-test-clt', 'ip', '-d', 'route', 'show');
+
+    my $proxy_pid = start_child('proxy', \&proxy, $config, @ARGV);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, ip => '192.0.2.2', port => $httpd_port);
+    my $tcpdump1_pid = start_child('tcpdump', \&exec_cmd, 'ip', 'netns', 'exec', 'ns-test-proxy', 'tcpdump', '-npi' ,'veth-proxy-clt', '-s', '0', '-w', 'veth-proxy-clt.pcap');
+    my $tcpdump2_pid = start_child('tcpdump', \&exec_cmd, 'ip', 'netns', 'exec', 'ns-test-proxy', 'tcpdump', '-npi' ,'veth-proxy-srv', '-s', '0', '-w', 'veth-proxy-srv.pcap');
+
+    #checked_system('ip', 'netns', 'exec', 'ns-test-proxy', 'ss', '-lptn');
+
+    # Wait for proxy to load and parse config
+    wait_for_port(ip => '192.0.2.2', port => $httpd_port);
+    wait_for_port(ip => '192.0.2.5', port => $proxy_port);
+
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, 'localhost', '', '192.0.2.5', $proxy_port, $iterations);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    kill 15, $httpd_pid;
+    kill 15, $tcpdump1_pid;
+    kill 15, $tcpdump2_pid;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+
+    # Cleanup our network name spaces
+    checked_system('ip', 'netns', 'delete', 'ns-test-clt');
+    checked_system('ip', 'netns', 'delete', 'ns-test-proxy');
+}
+
+main();

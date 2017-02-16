@@ -8,9 +8,10 @@ install:
   - mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
   - ./autogen.sh
 script:
-  - echo "Running unit tests"
+  - echo "Running unit and functional tests"
   - ./configure
   - make all check
+  - bash -c "cd tests && sudo ./transparent_proxy_test"
   - echo "Checking for memory leaks"
   - bash -c "cd tests && ./bad_dns_request_test valgrind --leak-check=full --error-exitcode=1"
   - bash -c "cd tests && ./bad_request_test valgrind --leak-check=full --error-exitcode=1"

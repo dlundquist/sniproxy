@@ -74,7 +74,7 @@ sub reap_children {
         exit 1;
     } else {
         # print "Test passed.\n";
-        exit 0;
+        return;
     }
 }
 
@@ -86,17 +86,19 @@ sub wait_for_type($) {
     }
 }
 
-sub wait_for_port($) {
-    my $port = shift;
+sub wait_for_port {
+    my %args = @_;
+    my $ip = $args{'ip'} || 'localhost';
+    my $port = $args{'port'} or die "port required";
 
     my $delay = 1;
     while ($delay < 60) {
         my $port_open = undef;
         eval {
-            my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
-                                            PeerPort => $port,
-                                            Proto => "tcp",
-                                            Type => SOCK_STREAM);
+            my $socket = IO::Socket::INET->new(PeerAddr => $ip,
+                                               PeerPort => $port,
+                                               Proto => "tcp",
+                                               Type => SOCK_STREAM);
             if ($socket && $socket->connected()) {
                 $socket->shutdown(2);
                 $port_open = 1;
