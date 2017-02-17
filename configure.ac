@@ -6,12 +6,12 @@ AC_INIT([sniproxy], [0.4.0])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
+AC_GNU_SOURCE
 
 # Checks for programs.
 AC_PROG_CC_C99
 # Required by automake < 1.14
 AM_PROG_CC_C_O
-
 
 
 # Checks for libraries.
@@ -74,6 +74,8 @@ AC_FUNC_MALLOC
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp],,
     AC_MSG_ERROR([required functions(s) not found]))
+
+AC_CHECK_FUNCS([accept4])
 
 # Enable large file support (so we can log more than 2GB)
 AC_SYS_LARGEFILE

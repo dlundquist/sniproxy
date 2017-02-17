@@ -107,9 +107,16 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
         return 0;
     }
 
+#ifdef HAVE_ACCEPT4
+    int sockfd = accept4(listener->watcher.fd,
+                    (struct sockaddr *)&con->client.addr,
+                    &con->client.addr_len,
+                    O_NONBLOCK);
+#else
     int sockfd = accept(listener->watcher.fd,
                     (struct sockaddr *)&con->client.addr,
                     &con->client.addr_len);
+#endif
     if (sockfd < 0) {
         int saved_errno = errno;
 
@@ -120,8 +127,10 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
         return 0;
     }
 
+#ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     /* Avoiding type-punned pointer warning */
     struct ev_io *client_watcher = &con->client.watcher;
@@ -473,7 +482,11 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 
 static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
+#ifdef HAVE_ACCEPT4
+    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
     int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
+#endif
     if (sockfd < 0) {
         char client[INET6_ADDRSTRLEN + 8];
         warn("socket failed: %s, closing connection from %s",
@@ -483,8 +496,10 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
+#ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     if (con->listener->source_address) {
         int on = 1;
