@@ -419,7 +419,11 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
+#ifdef HAVE_ACCEPT4
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
     int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+#endif
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
         return sockfd;
@@ -461,9 +465,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         return result;
     }
 
-
+#ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
