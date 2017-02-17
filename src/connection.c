@@ -488,9 +488,15 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 
     if (con->listener->source_address) {
         int on = 1;
-        setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        if (result < 0) {
+            err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
 
-        int result = 0;
+        result = 0;
         int tries = 5;
         do {
             result = bind(sockfd,

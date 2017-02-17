@@ -427,9 +427,14 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
     int on = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (result < 0) {
+        err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
 
-    int result = bind(sockfd, address_sa(listener->address),
+    result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {
         /* Retry using binder module */
