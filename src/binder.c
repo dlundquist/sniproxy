@@ -172,7 +172,12 @@ binder_main(int sockfd) {
 
         /* set SO_REUSEADDR on server socket to facilitate restart */
         int on = 1;
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        int result = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+        if (result < 0) {
+            memset(buffer, 0, sizeof(buffer));
+            snprintf(buffer, sizeof(buffer), "setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+            goto error;
+        }
 
         if (bind(fd, req->address, req->address_len) < 0) {
             memset(buffer, 0, sizeof(buffer));
