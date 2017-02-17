@@ -422,7 +422,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
-        return -2;
+        return sockfd;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
@@ -439,21 +439,21 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         if (sockfd < 0) {
             err("binder failed to bind to %s",
                 display_address(listener->address, address, sizeof(address)));
-            close(sockfd);
-            return -3;
+            return sockfd;
         }
     } else if (result < 0) {
         err("bind %s failed: %s",
             display_address(listener->address, address, sizeof(address)),
             strerror(errno));
         close(sockfd);
-        return -3;
+        return result;
     }
 
-    if (listen(sockfd, SOMAXCONN) < 0) {
+    result = listen(sockfd, SOMAXCONN);
+    if (result < 0) {
         err("listen failed: %s", strerror(errno));
         close(sockfd);
-        return -4;
+        return result;
     }
 
 

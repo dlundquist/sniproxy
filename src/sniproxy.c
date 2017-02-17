@@ -218,19 +218,19 @@ drop_perms(const char *username) {
     errno = 0;
     struct passwd *user = getpwnam(username);
     if (errno)
-        perror_exit("getpwnam()");
+        fatal("getpwnam(): %s", strerror(errno));
     else if (user == NULL)
         fatal("getpwnam(): user %s does not exist", username);
 
     /* drop any supplementary groups */
     if (setgroups(1, &user->pw_gid) < 0)
-        perror_exit("setgroups()");
+        fatal("setgroups(): %s", strerror(errno));
 
     if (setgid(user->pw_gid) < 0)
-        perror_exit("setgid()");
+        fatal("setgid(): %s", strerror(errno));
 
     if (setuid(user->pw_uid) < 0)
-        perror_exit("setuid()");
+        fatal("setuid(): %s", strerror(errno));
 }
 
 static void
