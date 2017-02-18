@@ -205,7 +205,7 @@ resolv_cancel(struct ResolvQuery *query_handle) {
     struct ResolvQuery *cb_data = (struct ResolvQuery *)query_handle;
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
-    for (int i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++) {
+    for (size_t i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++) {
         if (cb_data->queries[i] != NULL) {
             dns_cancel(ctx, cb_data->queries[i]);
             free(cb_data->queries[i]);
@@ -329,7 +329,7 @@ process_client_callback(struct ResolvQuery *cb_data) {
 
     cb_data->client_cb(best_address, cb_data->client_cb_data);
 
-    for (int i = 0; i < cb_data->response_count; i++)
+    for (size_t i = 0; i < cb_data->response_count; i++)
         free(cb_data->responses[i]);
 
     free(cb_data->responses);
@@ -340,7 +340,7 @@ process_client_callback(struct ResolvQuery *cb_data) {
 
 static struct Address *
 choose_ipv4_first(struct ResolvQuery *cb_data) {
-    for (int i = 0; i < cb_data->response_count; i++)
+    for (size_t i = 0; i < cb_data->response_count; i++)
         if (address_is_sockaddr(cb_data->responses[i]) &&
                 address_sa(cb_data->responses[i])->sa_family == AF_INET)
             return cb_data->responses[i];
@@ -350,7 +350,7 @@ choose_ipv4_first(struct ResolvQuery *cb_data) {
 
 static struct Address *
 choose_ipv6_first(struct ResolvQuery *cb_data) {
-    for (int i = 0; i < cb_data->response_count; i++)
+    for (size_t i = 0; i < cb_data->response_count; i++)
         if (address_is_sockaddr(cb_data->responses[i]) &&
                 address_sa(cb_data->responses[i])->sa_family == AF_INET6)
             return cb_data->responses[i];
@@ -397,7 +397,7 @@ static inline int
 all_queries_are_null(struct ResolvQuery *cb_data) {
     int result = 1;
 
-    for (int i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++)
+    for (size_t i = 0; i < sizeof(cb_data->queries) / sizeof(cb_data->queries[0]); i++)
         result = result && cb_data->queries[i] == NULL;
 
     return result;
