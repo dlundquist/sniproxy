@@ -46,7 +46,8 @@
  */
 
 int
-resolv_init(struct ev_loop *loop, char **nameservers, char **search_domains, int mode) {
+resolv_init(struct ev_loop *loop, char **nameservers, char **search_domains,
+        int mode) {
     return 0;
 }
 
@@ -55,7 +56,8 @@ resolv_shutdown(struct ev_loop *loop) {
 }
 
 struct ResolvQuery *
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
+resolv_query(const char *hostname, int mode,
+        void (*client_cb)(struct Address *, void *),
         void (*client_free_cb)(void *), void *client_cb_data) {
     return NULL;
 }
@@ -73,19 +75,16 @@ struct ResolvQuery {
     void (*client_cb)(struct Address *, void *);
     void (*client_free_cb)(void *);
     void *client_cb_data;
+    int resolv_mode;
     struct dns_query *queries[2];
     size_t response_count;
     struct Address **responses;
 };
 
 
+static int default_resolv_mode = 1;
 static struct ev_io resolv_io_watcher;
 static struct ev_timer resolv_timeout_watcher;
-static const int MODE_IPV4_ONLY = 0;
-static const int MODE_IPV6_ONLY = 1;
-static const int MODE_IPV4_FIRST = 2;
-static const int MODE_IPV6_FIRST = 3;
-static int resolv_mode = 0;
 
 
 static void resolv_sock_cb(struct ev_loop *, struct ev_io *, int);
@@ -117,7 +116,7 @@ resolv_init(struct ev_loop *loop, char **nameservers, char **search, int mode) {
                 dns_add_srch(ctx, search[i]);
     }
 
-    resolv_mode = mode;
+    default_resolv_mode = mode;
 
     int sockfd = dns_open(ctx);
     if (sockfd < 0)
@@ -154,7 +153,8 @@ resolv_shutdown(struct ev_loop * loop) {
 }
 
 struct ResolvQuery *
-resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
+resolv_query(const char *hostname, int mode,
+        void (*client_cb)(struct Address *, void *),
         void (*client_free_cb)(void *), void *client_cb_data) {
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 
@@ -169,12 +169,13 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
     cb_data->client_cb = client_cb;
     cb_data->client_free_cb = client_free_cb;
     cb_data->client_cb_data = client_cb_data;
+    cb_data->resolv_mode = mode > 0 ? mode : default_resolv_mode;
     memset(cb_data->queries, 0, sizeof(cb_data->queries));
     cb_data->response_count = 0;
     cb_data->responses = NULL;
 
     /* Submit A and AAAA queries */
-    if (resolv_mode != MODE_IPV6_ONLY) {
+    if (cb_data->resolv_mode != RESOLV_MODE_IPV6_ONLY) {
         cb_data->queries[0] = dns_submit_a4(ctx,
                 hostname, 0,
                 dns_query_v4_cb, cb_data);
@@ -182,7 +183,7 @@ resolv_query(const char *hostname, void (*client_cb)(struct Address *, void *),
             err("Failed to submit DNS query: %s", dns_strerror(dns_status(ctx)));
     };
 
-    if (resolv_mode != MODE_IPV4_ONLY) {
+    if (cb_data->resolv_mode != RESOLV_MODE_IPV4_ONLY) {
         cb_data->queries[1] = dns_submit_a6(ctx,
                 hostname, 0,
                 dns_query_v6_cb, cb_data);
@@ -320,9 +321,9 @@ static void
 process_client_callback(struct ResolvQuery *cb_data) {
     struct Address *best_address = NULL;
 
-    if (resolv_mode == MODE_IPV4_FIRST)
+    if (cb_data->resolv_mode == RESOLV_MODE_IPV4_FIRST)
         best_address = choose_ipv4_first(cb_data);
-    else if (resolv_mode == MODE_IPV6_FIRST)
+    else if (cb_data->resolv_mode == RESOLV_MODE_IPV6_FIRST)
         best_address = choose_ipv6_first(cb_data);
     else
         best_address = choose_any(cb_data);

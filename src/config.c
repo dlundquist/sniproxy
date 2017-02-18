@@ -180,6 +180,7 @@ static struct Keyword global_grammar[] = {
 };
 
 static const char *resolver_mode_names[] = {
+    "DEFAULT",
     "ipv4_only",
     "ipv6_only",
     "ipv4_first",
