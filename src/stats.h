@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,32 +23,23 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef CONFIG_H
-#define CONFIG_H
-
-#include <stdio.h>
+#ifndef STATS_H
+#define STATS_H
+#include <sys/socket.h>
+#include <ev.h>
+#include "address.h"
 #include "table.h"
-#include "listener.h"
-#include "stats.h"
 
-struct Config {
-    char *filename;
-    char *user;
-    char *pidfile;
-    struct ResolverConfig {
-        char **nameservers;
-        char **search;
-        int mode;
-    } resolver;
-    struct Logger *access_log;
-    struct Listener_head listeners;
-    struct Stats_head stats_listeners;
-    struct Table_head tables;
+SLIST_HEAD(Stats_head, StatsListener);
+struct StatsListener {
+    struct Address *address;
+    struct ev_io watcher;
+    SLIST_ENTRY(StatsListener) entries;
 };
 
-struct Config *init_config(const char *, struct ev_loop *);
-void reload_config(struct Config *, struct ev_loop *);
-void free_config(struct Config *, struct ev_loop *);
-void print_config(FILE *, struct Config *);
+struct StatsListener *new_stats_listener();
+int accept_stats_listener_arg(struct StatsListener *listener, char *arg);
 
+void init_stats_listeners(struct Stats_head *, struct ev_loop *);
+void free_stats_listeners(struct Stats_head *, struct ev_loop *);
 #endif

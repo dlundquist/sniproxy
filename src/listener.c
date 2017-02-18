@@ -411,6 +411,8 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     }
     init_table(table);
     listener->table = table_ref_get(table);
+    listener->stats.created = ev_now(loop);
+    listener->stats.last_accept = ev_now(loop);
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */

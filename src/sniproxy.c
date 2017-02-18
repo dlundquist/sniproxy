@@ -44,6 +44,7 @@
 #include "listener.h"
 #include "resolv.h"
 #include "logger.h"
+#include "stats.h"
 
 
 static void usage();
@@ -117,6 +118,7 @@ main(int argc, char **argv) {
     set_limits(max_nofiles);
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
+    init_stats_listeners(&config->stats_listeners, EV_DEFAULT);
 
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : default_username);
@@ -137,6 +139,7 @@ main(int argc, char **argv) {
 
     ev_run(EV_DEFAULT, 0);
 
+    free_stats_listeners(&config->stats_listeners, EV_DEFAULT);
     free_connections(EV_DEFAULT);
     resolv_shutdown(EV_DEFAULT);
 

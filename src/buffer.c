@@ -23,6 +23,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h> /* malloc */
 #include <string.h> /* memcpy */
@@ -277,6 +278,50 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
         advance_write_position(dst, bytes_appended);
 
     return bytes_appended;
+}
+
+size_t
+buffer_sprintf(struct Buffer *dst, const char *format, ...) {
+    va_list args;
+
+    struct iovec iov[2];
+    size_t room = buffer_room(dst);
+    size_t iov_len = setup_write_iov(dst, iov, room);
+
+    if (iov_len < 1) /* no room in buffer, unable to append */
+        return 0;
+
+    va_start(args, format);
+    int result = vsnprintf(iov[0].iov_base, iov[0].iov_len, format, args);
+    va_end(args);
+    if (result < 0) /* printf error */
+        assert(0);
+
+    size_t len = result;
+    if (len <= iov[0].iov_len) {
+        /* easy case: already wrote to the buffer without wrapping */
+        advance_write_position(dst, len);
+
+        return len;
+    } else if (len <= room) {
+        /* hard case: allocate a temporary buffer and copy data to it */
+        char *temp = malloc(len + 1);
+        if (temp == NULL)
+            return 0;
+
+        va_start(args, format);
+        vsnprintf(iov[0].iov_base, iov[0].iov_len, format, args);
+        va_end(args);
+
+        size_t result = buffer_push(dst, temp, len);
+        free(temp);
+
+        return result;
+    } else {
+        /* impossible case: not enough room to write formatted output in this
+         * buffer */
+        return 0;
+    }
 }
 
 /*
