@@ -270,7 +270,7 @@ dns_query_v4_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
 
     /* Once all queries have completed, call client callback */
     if (all_queries_are_null(cb_data))
-        return process_client_callback(cb_data);
+        process_client_callback(cb_data);
 }
 
 static void
@@ -310,7 +310,7 @@ dns_query_v6_cb(struct dns_ctx *ctx, struct dns_rr_a6 *result, void *data) {
 
     /* Once all queries have completed, call client callback */
     if (all_queries_are_null(cb_data))
-        return process_client_callback(cb_data);
+        process_client_callback(cb_data);
 }
 
 /*
