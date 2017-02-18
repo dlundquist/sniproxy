@@ -31,8 +31,15 @@
 struct ResolvQuery;
 
 int resolv_init(struct ev_loop *, char **, char **, int);
-struct ResolvQuery *resolv_query(const char *, void(*)(struct Address *, void *), void (*)(void *), void *);
+struct ResolvQuery *resolv_query(const char *, int,
+        void(*)(struct Address *, void *), void (*)(void *), void *);
 void resolv_cancel(struct ResolvQuery *);
 void resolv_shutdown(struct ev_loop *);
+
+static const int RESOLV_MODE_DEFAULT = 0;
+static const int RESOLV_MODE_IPV4_ONLY = 1;
+static const int RESOLV_MODE_IPV6_ONLY = 2;
+static const int RESOLV_MODE_IPV4_FIRST = 3;
+static const int RESOLV_MODE_IPV6_FIRST = 4;
 
 #endif

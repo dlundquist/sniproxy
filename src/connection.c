@@ -420,8 +420,30 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         cb_data->address = server_address;
         cb_data->loop = loop;
 
+        int resolv_mode = RESOLV_MODE_DEFAULT;
+        if (con->listener->transparent_proxy) {
+            char listener_address[ADDRESS_BUFFER_SIZE];
+            switch (con->client.addr.ss_family) {
+                case AF_INET:
+                    resolv_mode = RESOLV_MODE_IPV4_ONLY;
+                    break;
+                case AF_INET6:
+                    resolv_mode = RESOLV_MODE_IPV6_ONLY;
+                    break;
+                default:
+                    warn("attempt to use transparent proxy with hostname %s "
+                            "on non-IP listener %s, falling back to "
+                            "non-transparent mode",
+                            address_hostname(server_address),
+                            display_sockaddr(con->listener->address,
+                                    listener_address, sizeof(listener_address))
+                            );
+            }
+        }
+
         con->query_handle = resolv_query(address_hostname(server_address),
-                resolv_cb, (void (*)(void *))free_resolv_cb_data, cb_data);
+                resolv_mode, resolv_cb,
+                (void (*)(void *))free_resolv_cb_data, cb_data);
 
         con->state = RESOLVING;
 #endif
@@ -501,7 +523,8 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
-    if (con->listener->transparent_proxy) {
+    if (con->listener->transparent_proxy &&
+            con->client.addr.ss_family == con->server.addr.ss_family) {
         int on = 1;
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
         if (result < 0) {
