@@ -304,8 +304,13 @@ accept_listener_source_address(struct Listener *listener, char *source) {
     }
 
     if (strcasecmp("client", source) == 0) {
+#ifdef IP_TRANSPARENT
         listener->transparent_proxy = 1;
         return 1;
+#else
+        err("Transparent proxy not supported on this platform.");
+        return 0;
+#endif
     }
 
     listener->source_address = new_address(source);
