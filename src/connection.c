@@ -526,7 +526,13 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
         int on = 1;
+#ifdef IP_TRANSPARENT
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+#else
+        int result = -EPERM;
+        /* XXX error: not implemented would be better, but this shouldn't be
+         * reached since it is prohibited in the configuration parser. */
+#endif
         if (result < 0) {
             err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
             close(sockfd);
