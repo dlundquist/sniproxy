@@ -33,6 +33,7 @@
 struct Config {
     char *filename;
     char *user;
+    char *group;
     char *pidfile;
     struct ResolverConfig {
         char **nameservers;
