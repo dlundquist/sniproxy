@@ -324,6 +324,10 @@ print_config(FILE *file, struct Config *config) {
 
 static int
 accept_username(struct Config *config, char *username) {
+    if (config->user != NULL) {
+        err("Duplicate username: %s", username);
+        return 0;
+    }
     config->user = strdup(username);
     if (config->user == NULL) {
         err("%s: strdup", __func__);
@@ -335,6 +339,10 @@ accept_username(struct Config *config, char *username) {
 
 static int
 accept_groupname(struct Config *config, char *groupname) {
+    if (config->group != NULL) {
+        err("Duplicate groupname: %s", groupname);
+        return 0;
+    }
     config->group = strdup(groupname);
     if (config->group == NULL) {
         err("%s: strdup", __func__);
@@ -346,6 +354,10 @@ accept_groupname(struct Config *config, char *groupname) {
 
 static int
 accept_pidfile(struct Config *config, char *pidfile) {
+    if (config->pidfile != NULL) {
+        err("Duplicate pidfile: %s", pidfile);
+        return 0;
+    }
     config->pidfile = strdup(pidfile);
     if (config->pidfile == NULL) {
         err("%s: strdup", __func__);

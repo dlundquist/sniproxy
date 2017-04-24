@@ -238,10 +238,15 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 
 int
 accept_listener_table_name(struct Listener *listener, char *table_name) {
-    if (listener->table_name == NULL)
-        listener->table_name = strdup(table_name);
-    else
-        err("Duplicate table_name: %s", table_name);
+    if (listener->table_name != NULL) {
+        err("Duplicate table: %s", table_name);
+        return 0;
+    }
+    listener->table_name = strdup(table_name);
+    if (listener->table_name == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
     return 1;
 }
