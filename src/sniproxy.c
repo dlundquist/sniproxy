@@ -224,7 +224,7 @@ drop_perms(const char *username, const char *groupname) {
 
     gid_t gid = user->pw_gid;
 
-    if (groupname) {
+    if (groupname != NULL) {
       errno = 0;
       struct group *group = getgrnam(groupname);
       if (errno)
