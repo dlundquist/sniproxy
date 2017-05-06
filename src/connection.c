@@ -111,7 +111,7 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     int sockfd = accept4(listener->watcher.fd,
                     (struct sockaddr *)&con->client.addr,
                     &con->client.addr_len,
-                    O_NONBLOCK);
+                    SOCK_NONBLOCK);
 #else
     int sockfd = accept(listener->watcher.fd,
                     (struct sockaddr *)&con->client.addr,
