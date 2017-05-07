@@ -258,7 +258,7 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     else
         listener->protocol = tls_protocol;
 
-    if (address_port(listener->address) == 0)
+    if (listener->address != NULL && address_port(listener->address) == 0)
         address_set_port(listener->address, listener->protocol->default_port);
 
     return 1;
