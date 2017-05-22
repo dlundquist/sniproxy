@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/socket.h>
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
@@ -105,11 +106,13 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_protocol,
             NULL,
             NULL},
+#ifdef SO_REUSEPORT
     { "reuseport",
             NULL,
             (int(*)(void *, char *))accept_listener_reuseport,
             NULL,
             NULL},
+#endif
     { "table",
             NULL,
             (int(*)(void *, char *))accept_listener_table_name,

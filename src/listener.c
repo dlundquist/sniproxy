@@ -264,6 +264,7 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     return 1;
 }
 
+#ifdef SO_REUSEPORT
 int
 accept_listener_reuseport(struct Listener *listener, char *reuseport) {
     if (strncasecmp(reuseport, "yes", strlen(reuseport)) == 0)
@@ -273,6 +274,7 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
 
     return 1;
 }
+#endif
 
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
@@ -464,6 +466,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         return result;
     }
 
+#ifdef SO_REUSEPORT
     if (listener->reuseport == 1) {
 	/* set SO_REUSEPORT on server socket to allow binding of multiple processess on the same ip:port */
 	result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
@@ -473,7 +476,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 	    return result;
 	}
     }
-    
+#endif
     result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {

@@ -37,7 +37,9 @@ struct Listener {
     /* Configuration fields */
     struct Address *address, *fallback_address, *source_address;
     const struct Protocol *protocol;
+#ifdef SO_REUSEPORT
     int reuseport;
+#endif
     char *table_name;
     struct Logger *access_log;
     int transparent_proxy, log_bad_requests;
@@ -57,7 +59,9 @@ int accept_listener_table_name(struct Listener *, char *);
 int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_source_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
+#ifdef SO_REUSEPORT
 int accept_listener_reuseport(struct Listener *, char *);
+#endif
 int accept_listener_bad_request_action(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
