@@ -265,6 +265,16 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 }
 
 int
+accept_listener_reuseport(struct Listener *listener, char *reuseport) {
+    if (strncasecmp(reuseport, "yes", strlen(reuseport)) == 0)
+        listener->reuseport = 1;
+    else
+        listener->reuseport = 0;
+
+    return 1;
+}
+
+int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
     if (listener->fallback_address != NULL) {
         err("Duplicate fallback address: %s", fallback);
@@ -454,6 +464,16 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         return result;
     }
 
+    if (listener->reuseport == 1) {
+	/* set SO_REUSEPORT on server socket to allow binding of multiple processess on the same ip:port */
+	result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+	if (result < 0) {
+	    err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+	    close(sockfd);
+	    return result;
+	}
+    }
+    
     result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {
