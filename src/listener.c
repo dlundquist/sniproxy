@@ -48,7 +48,7 @@
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
-
+#include "config.h"
 
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
@@ -57,6 +57,33 @@ static int init_listener(struct Listener *, const struct Table_head *, struct ev
 static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
 static void free_listener(struct Listener *);
 
+static const char *boolean_true[] = {
+    "yes",
+    "true",
+    "on",
+};
+
+static const char *boolean_false[] = {
+    "no",
+    "false",
+    "off",
+};
+
+static int
+parse_boolean(char *boolean) {
+    int i;
+    for (i = 0; i < 3; i++) {
+	if (strncasecmp(boolean, boolean_true[i], strlen(boolean)) == 0)
+	    return 1;
+    }
+    
+    for (i = 0; i < 3; i++) {
+	if (strncasecmp(boolean, boolean_false[i], strlen(boolean)) == 0)
+	    return 0;
+    }
+    
+    return -1;
+}
 
 /*
  * Initialize each listener.
@@ -264,17 +291,21 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
     return 1;
 }
 
-#ifdef SO_REUSEPORT
 int
 accept_listener_reuseport(struct Listener *listener, char *reuseport) {
-    if (strncasecmp(reuseport, "yes", strlen(reuseport)) == 0)
-        listener->reuseport = 1;
-    else
-        listener->reuseport = 0;
-
+#ifdef SO_REUSEPORT
+    listener->reuseport = parse_boolean(reuseport);
+    if (listener->reuseport == -1) {
+	err("Unable to parse '%s' as a boolean value", reuseport);
+	return 0;
+    }
+    
     return 1;
-}
+#else
+    err("sniproxy was built without SO_REUSEPORT support")
+    return 0;
 #endif
+}
 
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
@@ -472,6 +503,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 	result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
 	if (result < 0) {
 	    err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+	    err("possible reasons: no kernel support or other process without SO_REUSEPORT already bound this ip:port");
 	    close(sockfd);
 	    return result;
 	}

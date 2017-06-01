@@ -106,13 +106,11 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_protocol,
             NULL,
             NULL},
-#ifdef SO_REUSEPORT
     { "reuseport",
             NULL,
             (int(*)(void *, char *))accept_listener_reuseport,
             NULL,
             NULL},
-#endif
     { "table",
             NULL,
             (int(*)(void *, char *))accept_listener_table_name,
@@ -200,7 +198,6 @@ static const char *resolver_mode_names[] = {
     "ipv4_first",
     "ipv6_first",
 };
-
 
 struct Config *
 init_config(const char *filename, struct ev_loop *loop) {
