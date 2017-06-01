@@ -48,7 +48,6 @@
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
-#include "config.h"
 
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
