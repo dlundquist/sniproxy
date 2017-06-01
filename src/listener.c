@@ -56,29 +56,29 @@ static int init_listener(struct Listener *, const struct Table_head *, struct ev
 static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
 static void free_listener(struct Listener *);
 
-static const char *boolean_true[] = {
+const char *boolean_true[] = {
     "yes",
     "true",
     "on",
 };
 
-static const char *boolean_false[] = {
+const char *boolean_false[] = {
     "no",
     "false",
     "off",
 };
 
-static int
+int
 parse_boolean(char *boolean) {
     int i;
     for (i = 0; i < 3; i++) {
-	if (strncasecmp(boolean, boolean_true[i], strlen(boolean)) == 0)
-	    return 1;
+        if (strcasecmp(boolean, boolean_true[i]) == 0)
+            return 1;
     }
-    
+
     for (i = 0; i < 3; i++) {
-	if (strncasecmp(boolean, boolean_false[i], strlen(boolean)) == 0)
-	    return 0;
+        if (strcasecmp(boolean, boolean_false[i]) == 0)
+            return 0;
     }
     
     return -1;
@@ -301,7 +301,7 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
     
     return 1;
 #else
-    err("sniproxy was built without SO_REUSEPORT support")
+    err("sniproxy was built without SO_REUSEPORT support");
     return 0;
 #endif
 }
@@ -498,19 +498,19 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 
     if (listener->reuseport == 1) {
 #ifdef SO_REUSEPORT
-	/* set SO_REUSEPORT on server socket to allow binding of multiple processess on the same ip:port */
-	result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+        /* set SO_REUSEPORT on server socket to allow binding of multiple processess on the same ip:port */
+        result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
 #else
-	result = -ENOSYS;
+        result = -ENOSYS;
 #endif
-	if (result < 0) {
-	    err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
-	    err("possible reasons: no kernel support or other process without SO_REUSEPORT already bound this ip:port");
-	    close(sockfd);
-	    return result;
-	}
+        if (result < 0) {
+            err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+            err("possible reasons: no kernel support or other process without SO_REUSEPORT already bound this ip:port");
+            close(sockfd);
+            return result;
+        }
     }
-    
+
     result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {
