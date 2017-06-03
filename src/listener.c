@@ -300,7 +300,7 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
 
 #ifndef SO_REUSEPORT
     if (listener->reuseport == 1) {
-        err("sniproxy was built without SO_REUSEPORT support");
+        err("Reuseport not supported in this build");
         return 0;
     }
 #endif
@@ -507,7 +507,6 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 #endif
         if (result < 0) {
             err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
-            err("possible reasons: no kernel support or other process without SO_REUSEPORT already bound this ip:port");
             close(sockfd);
             return result;
         }
