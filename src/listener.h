@@ -37,10 +37,9 @@ struct Listener {
     /* Configuration fields */
     struct Address *address, *fallback_address, *source_address;
     const struct Protocol *protocol;
-    int reuseport;
     char *table_name;
     struct Logger *access_log;
-    int transparent_proxy, log_bad_requests;
+    int log_bad_requests, reuseport, transparent_proxy;
 
     /* Runtime fields */
     int reference_count;
@@ -50,7 +49,6 @@ struct Listener {
     SLIST_ENTRY(Listener) entries;
 };
 
-static int parse_boolean(char *boolean);
 
 struct Listener *new_listener();
 int accept_listener_arg(struct Listener *, char *);

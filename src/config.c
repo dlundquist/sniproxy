@@ -26,7 +26,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/socket.h>
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
@@ -198,6 +197,7 @@ static const char *resolver_mode_names[] = {
     "ipv4_first",
     "ipv6_first",
 };
+
 
 struct Config *
 init_config(const char *filename, struct ev_loop *loop) {

@@ -55,32 +55,33 @@ static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
 static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
 static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
 static void free_listener(struct Listener *);
+static int parse_boolean(const char *);
 
-const char *boolean_true[] = {
-    "yes",
-    "true",
-    "on",
-};
 
-const char *boolean_false[] = {
-    "no",
-    "false",
-    "off",
-};
+static int
+parse_boolean(const char *boolean) {
+    const char *boolean_true[] = {
+        "yes",
+        "true",
+        "on",
+    };
 
-int
-parse_boolean(char *boolean) {
-    int i;
-    for (i = 0; i < 3; i++) {
+    const char *boolean_false[] = {
+        "no",
+        "false",
+        "off",
+    };
+
+    for (size_t i = 0; i < sizeof(boolean_true) / sizeof(boolean_true[0]); i++)
         if (strcasecmp(boolean, boolean_true[i]) == 0)
             return 1;
-    }
 
-    for (i = 0; i < 3; i++) {
+    for (size_t i = 0; i < sizeof(boolean_false) / sizeof(boolean_false[0]); i++)
         if (strcasecmp(boolean, boolean_false[i]) == 0)
             return 0;
-    }
-    
+
+    err("Unable to parse '%s' as a boolean value", boolean);
+
     return -1;
 }
 
@@ -292,18 +293,19 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 
 int
 accept_listener_reuseport(struct Listener *listener, char *reuseport) {
-#ifdef SO_REUSEPORT
     listener->reuseport = parse_boolean(reuseport);
     if (listener->reuseport == -1) {
-	err("Unable to parse '%s' as a boolean value", reuseport);
-	return 0;
+        return 0;
     }
-    
-    return 1;
-#else
-    err("sniproxy was built without SO_REUSEPORT support");
-    return 0;
+
+#ifndef SO_REUSEPORT
+    if (listener->reuseport == 1) {
+        err("sniproxy was built without SO_REUSEPORT support");
+        return 0;
+    }
 #endif
+
+    return 1;
 }
 
 int
@@ -628,6 +630,9 @@ print_listener_config(FILE *file, const struct Listener *listener) {
         fprintf(file, "\tsource %s\n",
                 display_address(listener->source_address,
                     address, sizeof(address)));
+
+    if (listener->reuseport)
+        fprintf(file, "\treuseport on\n");
 
     fprintf(file, "}\n\n");
 }
