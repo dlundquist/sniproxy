@@ -118,6 +118,7 @@ listener 192.0.2.10:80 {
     fallback 192.0.2.100:80
     bad_requests log
     source 192.0.2.10
+    proxy_header yes
 
     access_log {
         filename /var/log/sniproxy/http_access.log
@@ -158,6 +159,11 @@ connecting to the backend server. In most cases it is better to omit this
 option and allow the operating system to select the outgoing address
 automatically. Do not include a port number in this address, doing so will
 limit the proxy to one simultaneous to each server at time.
+
+The proxy_header directive controls if the server should generate PROXY v1
+headers to inform the backend server about the real remote address. It is
+generated according to Haproxy PROXY v1 specification, and is compatible with
+servers such as Nginx and ocserv.
 
 The access log configuration may be overridden on each listener.
 

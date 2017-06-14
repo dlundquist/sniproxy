@@ -87,6 +87,7 @@ static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 static void free_resolv_cb_data(struct resolv_cb_data *);
+static void send_proxy_header(int, const struct Connection *);
 
 
 void
@@ -131,6 +132,10 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
+
+    if (listener->proxy_header) {
+        send_proxy_header(sockfd, con);
+    }
 
     /* Avoiding type-punned pointer warning */
     struct ev_io *client_watcher = &con->client.watcher;
@@ -500,6 +505,52 @@ static void
 free_resolv_cb_data(struct resolv_cb_data *cb_data) {
     free(cb_data->address);
     free(cb_data);
+}
+
+static void
+send_proxy_header(int clientfd, const struct Connection *con) {
+
+    struct sockaddr_storage sockname;
+    socklen_t socklen = sizeof(sockname);
+    getsockname(clientfd, (struct sockaddr *)&sockname, &socklen);
+
+    const char *proto;
+    char client_ip[INET6_ADDRSTRLEN], server_ip[INET6_ADDRSTRLEN];
+    int client_port, server_port;
+
+    if (con->client.addr.ss_family == AF_INET) {
+        proto = "TCP4";
+
+        const struct sockaddr_in *client_addr = (const struct sockaddr_in *)&con->client.addr;
+        const struct sockaddr_in *server_addr = (const struct sockaddr_in *)&sockname;
+
+        inet_ntop(AF_INET, &client_addr->sin_addr, client_ip, sizeof(client_ip));
+        inet_ntop(AF_INET, &server_addr->sin_addr, server_ip, sizeof(server_ip));
+
+        client_port = ntohs(client_addr->sin_port);
+        server_port = ntohs(server_addr->sin_port);
+
+    } else if (con->client.addr.ss_family == AF_INET6) {
+        proto = "TCP6";
+
+        const struct sockaddr_in6 *client_addr = (const struct sockaddr_in6 *)&con->client.addr;
+        const struct sockaddr_in6 *server_addr = (const struct sockaddr_in6 *)&sockname;
+
+        inet_ntop(AF_INET, &client_addr->sin6_addr, client_ip, sizeof(client_ip));
+        inet_ntop(AF_INET, &server_addr->sin6_addr, server_ip, sizeof(server_ip));
+
+        client_port = ntohs(client_addr->sin6_port);
+        server_port = ntohs(server_addr->sin6_port);
+
+    } else {
+        err("cannot send PROXY header for unsupported family %d\n", con->client.addr.ss_family);
+        return;
+    }
+
+    /* creaft header according to Haproxy PROXY v1 specification */
+    char header[128];
+    int hdrlen = snprintf(header, sizeof(header), "PROXY %s %s %s %d %d\r\n", proto, client_ip, server_ip, client_port, server_port);
+    buffer_push(con->client.buffer, header, hdrlen);
 }
 
 static void

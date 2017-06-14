@@ -135,6 +135,11 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_bad_request_action,
             NULL,
             NULL},
+    { "proxy_header",
+            NULL,
+            (int(*)(void *, char *))accept_listener_proxy_header,
+            NULL,
+            NULL},
     { NULL, NULL, NULL, NULL, NULL }
 };
 
