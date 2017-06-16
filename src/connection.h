@@ -56,6 +56,7 @@ struct Connection {
     size_t hostname_len;
     struct ResolvQuery *query_handle;
     ev_tstamp established_timestamp;
+    int proxy_header;
 
     TAILQ_ENTRY(Connection) entries;
 };
