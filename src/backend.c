@@ -76,6 +76,8 @@ accept_backend_arg(struct Backend *backend, const char *arg) {
             err("Invalid port: %s", arg);
             return -1;
         }
+    } else if (address_proxy_header(backend->address) == PROXY_NONE && strcmp(arg, "proxy-v1") == 0) {
+        address_set_proxy_header(backend->address, PROXY_V1);
     } else {
         err("Unexpected table backend argument: %s", arg);
         return -1;

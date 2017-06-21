@@ -45,6 +45,7 @@ struct Address {
 
     size_t len;     /* length of data */
     uint16_t port;  /* for hostname and wildcard */
+    int proxy_header;
     char data[];
 };
 
@@ -189,6 +190,7 @@ new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
         addr->len = sa_len;
         memcpy(addr->data, sa, sa_len);
         addr->port = address_port(addr);
+        addr->proxy_header = PROXY_NONE;
     }
 
     return addr;
@@ -361,6 +363,16 @@ address_set_port_str(struct Address *addr, const char* str) {
     }
     address_set_port(addr, (uint16_t) port);
     return 1;
+}
+
+int
+address_proxy_header(struct Address *addr) {
+    return addr->proxy_header;
+}
+
+void
+address_set_proxy_header(struct Address *addr, int has_header) {
+    addr->proxy_header = has_header;
 }
 
 const char *

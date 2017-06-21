@@ -309,16 +309,6 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
 }
 
 int
-accept_listener_proxy_header(struct Listener *listener, char *proxy_header) {
-    listener->proxy_header = parse_boolean(proxy_header);
-    if (listener->proxy_header == -1) {
-        return 0;
-    }
-
-    return 1;
-}
-
-int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
     if (listener->fallback_address != NULL) {
         err("Duplicate fallback address: %s", fallback);

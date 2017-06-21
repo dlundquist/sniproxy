@@ -87,7 +87,7 @@ static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 static void free_resolv_cb_data(struct resolv_cb_data *);
-static int send_proxy_header(const struct Connection *);
+static int send_proxy_header(struct Connection *);
 
 
 void
@@ -140,7 +140,6 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     con->state = ACCEPTED;
     con->listener = listener_ref_get(listener);
     con->established_timestamp = ev_now(loop);
-    con->proxy_header = listener->proxy_header;
 
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
@@ -252,22 +251,14 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     }
 
     /* Send proxy header before anything else if needed */
-    if (revents & EV_WRITE && !is_client && con->proxy_header) {
+    if (revents & EV_WRITE && !is_client && con->proxy_header != PROXY_NONE) {
         if (send_proxy_header(con)) {
             /* If succeeded, remove flag so we don't transmit it again */
-            con->proxy_header = 0;
+            con->proxy_header = PROXY_NONE;
         } else {
             /* Prevent transmitting before we've written the header */
             revents = 0;
-
-            if (!IS_TEMPORARY_SOCKERR(errno)) {
-                warn("send_proxy_header(): %s, closing connection",
-                        strerror(errno));
-
-                close_socket(con, loop);
-            }
         }
-
     }
 
     /* Transmit */
@@ -481,6 +472,8 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         /* invalid address type */
         assert(0);
     }
+
+    con->proxy_header = address_proxy_header(server_address);
 }
 
 static void
@@ -524,7 +517,7 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 }
 
 static int
-send_proxy_header(const struct Connection *con) {
+send_proxy_header(struct Connection *con) {
 
     struct sockaddr_storage sockname;
     socklen_t socklen = sizeof(sockname);
@@ -560,6 +553,7 @@ send_proxy_header(const struct Connection *con) {
 
     } else {
         err("cannot send PROXY header for unsupported family %d\n", con->client.addr.ss_family);
+        abort_connection(con);
         return 0;
     }
 
@@ -568,7 +562,18 @@ send_proxy_header(const struct Connection *con) {
     int hdrlen = snprintf(header, sizeof(header), "PROXY %s %s %s %d %d\r\n", proto, client_ip, server_ip, client_port, server_port);
 
     ssize_t written = write(con->server.watcher.fd, header, hdrlen);
-    return written == hdrlen;
+    if (hdrlen != written) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            warn("send_proxy_header(): %s, closing connection",
+                    strerror(errno));
+
+            abort_connection(con);
+        }
+
+        return 0;
+    }
+
+    return 1;
 }
 
 static void
