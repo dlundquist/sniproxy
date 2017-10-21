@@ -47,7 +47,8 @@ void reopen_loggers();
 
 /* Shorthand to log to global error log */
 void fatal(const char *, ...)
-    __attribute__ ((format (printf, 1, 2)));
+    __attribute__ ((format (printf, 1, 2)))
+    __attribute__ ((noreturn));
 void err(const char *, ...)
     __attribute__ ((format (printf, 1, 2)));
 void warn(const char *, ...)

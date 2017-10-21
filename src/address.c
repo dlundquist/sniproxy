@@ -86,9 +86,10 @@ new_address(const char *hostname_or_ip) {
     /* Unix socket */
     memset(&sa, 0, sizeof(sa));
     if (strncmp("unix:", hostname_or_ip, 5) == 0) {
+        /* XXX: only supporting pathname unix sockets */
         ((struct sockaddr_un *)&sa)->sun_family = AF_UNIX;
         strncpy(((struct sockaddr_un *)&sa)->sun_path,
-                hostname_or_ip + 5, sizeof(sa) -
+                hostname_or_ip + 5, sizeof(struct sockaddr_un) -
                 offsetof(struct sockaddr_un, sun_path));
 
         return new_address_sa(

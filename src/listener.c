@@ -462,7 +462,8 @@ valid_listener(const struct Listener *listener) {
 }
 
 static int
-init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
+init_listener(struct Listener *listener, const struct Table_head *tables,
+        struct ev_loop *loop) {
     char address[ADDRESS_BUFFER_SIZE];
     struct Table *table = table_lookup(tables, listener->table_name);
     if (table == NULL) {
@@ -500,7 +501,7 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
 
     if (listener->reuseport == 1) {
 #ifdef SO_REUSEPORT
-        /* set SO_REUSEPORT on server socket to allow binding of multiple processess on the same ip:port */
+        /* set SO_REUSEPORT on server socket to allow binding of multiple processes on the same ip:port */
         result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
 #else
         result = -ENOSYS;
@@ -544,10 +545,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
-    listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
     listener->backoff_timer.data = listener;
+    listener_ref_get(listener);
 
     ev_io_start(loop, &listener->watcher);
 

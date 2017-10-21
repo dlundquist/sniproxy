@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
+#include <assert.h>
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
@@ -55,8 +57,8 @@ static int accept_resolver_nameserver(struct ResolverConfig *, char *);
 static int accept_resolver_search(struct ResolverConfig *, char *);
 static int accept_resolver_mode(struct ResolverConfig *, char *);
 static int end_resolver_stanza(struct Config *, struct ResolverConfig *);
-static size_t string_vector_len(char **);
-static int append_to_string_vector(char ***, const char *);
+static inline size_t string_vector_len(char **);
+static int append_to_string_vector(char ***, const char *) __attribute__((nonnull(1)));
 static void free_string_vector(char **);
 static void print_resolver_config(FILE *, struct ResolverConfig *);
 
@@ -380,6 +382,7 @@ end_listener_stanza(struct Config *config, struct Listener *listener) {
 
         /* free listener */
         listener_ref_get(listener);
+        assert(listener->reference_count == 1);
         listener_ref_put(listener);
 
         return -1;
@@ -577,15 +580,13 @@ string_vector_len(char **vector) {
 
 static int
 append_to_string_vector(char ***vector_ptr, const char *string) {
-    char **vector = NULL;
-    if (vector_ptr != NULL)
-        vector = *vector_ptr;
+    char **vector = *vector_ptr;
 
     size_t len = string_vector_len(vector);
     vector = realloc(vector, (len + 2) * sizeof(char *));
     if (vector == NULL) {
         err("%s: realloc", __func__);
-        return -1;
+        return -errno;
     }
 
     *vector_ptr = vector;
@@ -593,11 +594,11 @@ append_to_string_vector(char ***vector_ptr, const char *string) {
     vector[len] = strdup(string);
     if (vector[len] == NULL) {
         err("%s: strdup", __func__);
-        return -1;
+        return -errno;
     }
     vector[len + 1] = NULL;
 
-    return 1;
+    return len + 1;
 }
 
 static void

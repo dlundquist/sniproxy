@@ -558,7 +558,6 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             return;
         }
 
-        result = 0;
         int tries = 5;
         do {
             result = bind(sockfd,
@@ -749,8 +748,8 @@ log_bad_request(struct Connection *con __attribute__((unused)), const char *req,
                                 "0x%02hhx, ", (unsigned char)req[i]);
 
     message_pos -= 2;/* Delete the trailing ', ' */
-    message_pos += snprintf(message_pos, message_end - message_pos,
-                            "}, %ld, ...) = %d", req_len, parse_result);
+    snprintf(message_pos, message_end - message_pos, "}, %ld, ...) = %d",
+             req_len, parse_result);
     debug("%s", message);
 }
 
