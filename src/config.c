@@ -42,6 +42,7 @@ struct LoggerBuilder {
 static int accept_username(struct Config *, char *);
 static int accept_groupname(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
+static int accept_luafilename(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
@@ -164,6 +165,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_pidfile,
             NULL,
             NULL},
+    { "luafilename",
+            NULL,
+            (int(*)(void *, char *))accept_luafilename,
+            NULL,
+            NULL},
     { "resolver",
             (void *(*)())new_resolver_config,
             NULL,
@@ -213,6 +219,7 @@ init_config(const char *filename, struct ev_loop *loop) {
     config->user = NULL;
     config->group = NULL;
     config->pidfile = NULL;
+    config->luafilename = NULL;
     config->access_log = NULL;
     config->resolver.nameservers = NULL;
     config->resolver.search = NULL;
@@ -269,6 +276,7 @@ free_config(struct Config *config, struct ev_loop *loop) {
     free(config->user);
     free(config->group);
     free(config->pidfile);
+    free(config->luafilename);
 
     free_string_vector(config->resolver.nameservers);
     config->resolver.nameservers = NULL;
@@ -317,6 +325,9 @@ print_config(FILE *file, struct Config *config) {
 
     if (config->pidfile)
         fprintf(file, "pidfile %s\n\n", config->pidfile);
+
+    if (config->luafilename)
+        fprintf(file, "luafilename %s\n\n", config->luafilename);
 
     print_resolver_config(file, &config->resolver);
 
@@ -367,6 +378,17 @@ accept_pidfile(struct Config *config, char *pidfile) {
     }
     config->pidfile = strdup(pidfile);
     if (config->pidfile == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
+accept_luafilename(struct Config *config, char *luafilename) {
+    config->luafilename = strdup(luafilename);
+    if (config->luafilename == NULL) {
         err("%s: strdup", __func__);
         return -1;
     }

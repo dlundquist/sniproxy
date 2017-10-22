@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -41,6 +42,12 @@
 
 #ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
+
+#ifdef HAVE_LUA
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
 #endif
 
 #include "connection.h"
@@ -214,6 +221,86 @@ server_socket_open(const struct Connection *con) {
         con->state == CLIENT_CLOSED;
 }
 
+static bool is_mapped_ipv4(const struct sockaddr_in6* addr) {
+    if (addr->sin6_family != AF_INET6) {
+        return false;
+    }
+
+    const unsigned char* ptr = (const unsigned char*) &addr->sin6_addr.s6_addr;
+    for (size_t idx = 0; idx < 10; idx++) {
+        if (ptr[idx] != 0) {
+            return false;
+        }
+    }
+
+    if (ptr[10] != 0xff) {
+        return false;
+    }
+
+    if (ptr[11] != 0xff) {
+        return false;
+    }
+
+    return true;
+}
+
+static void map_to_v4(const struct sockaddr_in6* src, struct sockaddr_in* dst) {
+    const unsigned char* ptr = (const unsigned char*) &src->sin6_addr.s6_addr;
+    dst->sin_family = AF_INET;
+    dst->sin_port = src->sin6_port;
+
+    ptr += (sizeof(src->sin6_addr.s6_addr) - sizeof(dst->sin_addr.s_addr));
+    memcpy(&dst->sin_addr.s_addr, ptr, sizeof(dst->sin_addr.s_addr));
+}
+
+#ifdef HAVE_LUA
+lua_State *lua_state;
+
+static void apply_lua_policy(struct Connection *con) {
+    if(lua_state) {
+        const struct sockaddr_storage *saddr = &(con->client.addr);
+        struct sockaddr_storage unmapped;
+        char addr[INET6_ADDRSTRLEN];
+
+        addr[0]='\0';
+        if (saddr->ss_family == AF_INET) {
+            inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
+        } else if (saddr->ss_family == AF_INET6) {
+            if (is_mapped_ipv4((struct sockaddr_in6 *) saddr)) {
+                map_to_v4((struct sockaddr_in6 *) saddr, (struct sockaddr_in *) &unmapped);
+                saddr = &unmapped;
+                inet_ntop(saddr->ss_family, &((struct sockaddr_in *) saddr)->sin_addr, addr, INET_ADDRSTRLEN);
+            }
+            else {
+                inet_ntop(saddr->ss_family, &((struct sockaddr_in6 *) saddr)->sin6_addr, addr, INET6_ADDRSTRLEN);
+            }
+        }
+
+        lua_getglobal(lua_state,  "preconnect");
+        if(!lua_isfunction(lua_state, -1)) {
+            fprintf(stderr, "no lua function\n");
+            lua_pop(lua_state, 1);
+            return;
+        }
+
+        lua_pushstring(lua_state, addr);
+        lua_pushlstring(lua_state, con->hostname, con->hostname != NULL ? con->hostname_len : 0);
+
+        if(lua_pcall(lua_state, 2, 1, 0)) {
+            fprintf(stderr, "lua hook error: %s\n", lua_tostring(lua_state, -1));
+            lua_pop(lua_state, 1);
+            return;
+        }
+
+        int block = lua_toboolean(lua_state, 1);
+        lua_pop(lua_state, 1);
+        fprintf(stderr, "block=%d\n", block);
+        if(block)
+            abort_connection(con);
+    }
+}
+#endif
+
 /*
  * Main client callback: this is used by both the client and server watchers
  *
@@ -263,8 +350,12 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Handle any state specific logic */
     if (is_client && con->state == ACCEPTED)
         parse_client_request(con);
-    if (is_client && con->state == PARSED)
+    if (is_client && con->state == PARSED) {
+#ifdef HAVE_LUA
+        apply_lua_policy(con);
+#endif
         resolve_server_address(con, loop);
+    }
     if (is_client && con->state == RESOLVED)
         initiate_server_connect(con, loop);
 
@@ -379,6 +470,7 @@ parse_client_request(struct Connection *con) {
 
     con->hostname = hostname;
     con->hostname_len = result;
+    fprintf(stderr, "got hostname [%s] len [%d]\n", hostname != NULL ? hostname : "(null)", result);
     con->state = PARSED;
 }
 

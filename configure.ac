@@ -50,6 +50,11 @@ AS_IF([test "x$dns" = "xyes"],
   ])
 ])
 
+SNIPROXY_WITH_LUAJIT
+AS_IF([test "x$with_luajit" = "xno"], [
+  SNIPROXY_WITH_LUA
+])
+
 AC_ARG_ENABLE([rfc3339-timestamps],
   [AS_HELP_STRING([--enable-rfc3339-timestamps], [Enable RFC3339 timestamps])],
   [rfc3339_timestamps=${enableval}], [rfc3339_timestamps=no])

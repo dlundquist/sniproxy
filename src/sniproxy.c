@@ -45,6 +45,11 @@
 #include "resolv.h"
 #include "logger.h"
 
+#ifdef HAVE_LUA
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+#endif
 
 static void usage();
 static void daemonize(void);
@@ -63,6 +68,9 @@ static struct ev_signal sigusr1_watcher;
 static struct ev_signal sigint_watcher;
 static struct ev_signal sigterm_watcher;
 
+#ifdef HAVE_LUA
+extern lua_State *lua_state;
+#endif
 
 int
 main(int argc, char **argv) {
@@ -120,6 +128,21 @@ main(int argc, char **argv) {
 
     /* Drop permissions only when we can */
     drop_perms(config->user ? config->user : default_username, config->group);
+
+    if(config->luafilename) {
+#ifdef HAVE_LUA
+        lua_state = luaL_newstate();
+        luaL_openlibs(lua_state);
+
+        if(luaL_dofile(lua_state, config->luafilename)) {
+            fprintf(stderr, "lua dofile error: %s\n", lua_isstring(lua_state, -1) ? lua_tostring(lua_state, -1) : "unknown error");
+            return EXIT_FAILURE;
+        }
+#else
+        fprintf(stderr, "luafilename specified but Lua support not compiled in\n");
+        return EXIT_FAILURE;
+#endif
+    }
 
     ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
     ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);
