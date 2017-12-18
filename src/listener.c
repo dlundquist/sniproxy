@@ -217,8 +217,10 @@ new_listener() {
     listener->protocol = tls_protocol;
     listener->table_name = NULL;
     listener->access_log = NULL;
-    listener->transparent_proxy = 0;
     listener->log_bad_requests = 0;
+    listener->reuseport = 0;
+    listener->ipv6_v6only = 0;
+    listener->transparent_proxy = 0;
     listener->reference_count = 0;
     /* Initializes sock fd to negative sentinel value to indicate watchers
      * are not active */
@@ -301,6 +303,23 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
 #ifndef SO_REUSEPORT
     if (listener->reuseport == 1) {
         err("Reuseport not supported in this build");
+        return 0;
+    }
+#endif
+
+    return 1;
+}
+
+int
+accept_listener_ipv6_v6only(struct Listener *listener, char *ipv6_v6only) {
+    listener->ipv6_v6only = parse_boolean(ipv6_v6only);
+    if (listener->ipv6_v6only == -1) {
+        return 0;
+    }
+
+#ifndef IPV6_V6ONLY
+    if (listener->ipv6_v6only == 1) {
+        err("IPV6_V6ONLY not supported in this build");
         return 0;
     }
 #endif
@@ -501,13 +520,30 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
 
     if (listener->reuseport == 1) {
 #ifdef SO_REUSEPORT
-        /* set SO_REUSEPORT on server socket to allow binding of multiple processes on the same ip:port */
+        /* set SO_REUSEPORT on server socket to allow binding of multiple
+         * processes on the same ip:port */
         result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
 #else
         result = -ENOSYS;
 #endif
         if (result < 0) {
             err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
+    }
+
+    if (listener->ipv6_v6only == 1 &&
+            address_sa(listener->address)->sa_family == AF_INET6) {
+#ifdef IPV6_V6ONLY
+        /* set IPV6_V6ONLY on server socket to only accept IPv6 connections on
+         * IPv6 listeners */
+        result = setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+#else
+        result = -ENOSYS;
+#endif
+        if (result < 0) {
+            err("setsockopt IPV6_V6ONLY failed: %s", strerror(errno));
             close(sockfd);
             return result;
         }

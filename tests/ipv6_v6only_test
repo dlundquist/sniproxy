@@ -1,0 +1,116 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use File::Basename;
+use lib dirname (__FILE__);
+use TestUtils;
+use TestHTTPD;
+use File::Temp;
+
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sniproxy', '-f', '-c', $config);
+}
+
+sub worker($$$$) {
+    my ($hostname, $path, $port, $requests) = @_;
+
+    for (my $i = 0; $i < $requests; $i++) {
+        system('curl',
+                '-s', '-S',
+                '-H', "Host: $hostname",
+                '-o', '/dev/null',
+                "http://localhost:$port/$path");
+
+        if ($? == -1) {
+            die "failed to execute: $!\n";
+        } elsif ($? & 127) {
+            printf STDERR "child died with signal %d, %s coredump\n", ($? & 127), ($? & 128) ? 'with' : 'without';
+            exit 255;
+        } elsif ($? >> 8) {
+            exit $? >> 8;
+        }
+    }
+    # Success
+    exit 0;
+}
+
+sub make_reuseport_config($$) {
+    my $proxy_port = shift;
+    my $httpd_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal test configuration
+
+listen :: $proxy_port {
+    proto http
+    ipv6_v6only on
+    access_log $logfile
+}
+
+listen 0.0.0.0 $proxy_port {
+    proto http
+    access_log $logfile
+}
+
+table {
+    localhost 127.0.0.1 $httpd_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
+    my $workers = $ENV{WORKERS} || 10;
+    my $iterations = $ENV{ITERATIONS} || 10;
+    my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
+
+    my $config = make_reuseport_config($proxy_port, $local_httpd || $httpd_port);
+    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
+
+    # Wait for proxy to load and parse config
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $proxy_port);
+
+    for (my $i = 0; $i < $workers; $i++) {
+        start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # For troubleshooting connections stuck in CLOSE_WAIT state
+    #kill 10, $proxy_pid;
+    #system("netstat -ptn | grep $proxy_pid\/sniproxy");
+
+    # For troubleshooting 100% CPU usage
+    #system("top -n 1 -p $proxy_pid -b");
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    kill 15, $httpd_pid unless $local_httpd;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+}
+
+main();

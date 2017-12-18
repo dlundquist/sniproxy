@@ -123,6 +123,14 @@ listener 192.0.2.10:80 {
         filename /var/log/sniproxy/http_access.log
     }
 }
+
+listener [::]:80 {
+    protocol http
+    ipv6_v6only yes
+    table http_hosts
+
+    fallback unix:/var/run/http_fallback_unix.sock
+}
 .fi
 .PP
 
@@ -139,6 +147,12 @@ which allows to run several sniproxy instances on the same ip:port pair.
 This enables us to evenly load-balance incoming connections between these instances
 without the use of any external load-balancing proxy. Requires Linux kernel 3.9+.
 Setting reuseport to "yes" enables this functionality.
+
+The ipv6_v6only directive controls if listening on the IPv6 any address '::'
+will accepting connections to any IPv4 address as well as an IPv6 address. This
+is useful if the user wants different configurations for IPv4 and IPv6 or
+wishes to handle IPv4 traffic with another server/proxy entirely. This is only
+applicable to IPv6 listeners, and is ignored on other listeners.
 
 Table specifies the name of the table used to lookup which server to forward
 the connection to based on the hostname extracted from the initial client

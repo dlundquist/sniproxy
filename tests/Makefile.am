@@ -14,7 +14,9 @@ TESTS = http_test \
         reload_test \
         connection_reset_test \
         bind_source_test \
-        fd_limit_test
+        fd_limit_test \
+		reuseport_test \
+		ipv6_v6only_test
 
 if DNS_ENABLED
   TESTS += config_test \
