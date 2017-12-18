@@ -46,8 +46,8 @@ struct Connection {
     } state;
 
     struct {
-        struct sockaddr_storage addr;
-        socklen_t addr_len;
+        struct sockaddr_storage addr, local_addr;
+        socklen_t addr_len, local_addr_len;
         struct ev_io watcher;
         struct Buffer *buffer;
     } client, server;
