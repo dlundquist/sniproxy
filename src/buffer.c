@@ -44,6 +44,9 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 
+static const size_t BUFFER_MAX_SIZE = 1024 * 1024 * 1024;
+
+
 static size_t setup_write_iov(const struct Buffer *, struct iovec *, size_t);
 static size_t setup_read_iov(const struct Buffer *, struct iovec *, size_t);
 static inline void advance_write_position(struct Buffer *, size_t);
@@ -51,7 +54,7 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 
 struct Buffer *
-new_buffer(int size, struct ev_loop *loop) {
+new_buffer(size_t size, struct ev_loop *loop) {
     struct Buffer *buf;
 
     buf = malloc(sizeof(struct Buffer));
@@ -78,6 +81,9 @@ ssize_t
 buffer_resize(struct Buffer *buf, size_t new_size) {
     char *new_buffer;
 
+    if (new_size > BUFFER_MAX_SIZE)
+        return -3;
+
     if (new_size < buf->len)
         return -1; /* new_size too small to hold existing data */
 
@@ -92,7 +98,7 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
     buf->size = new_size;
     buf->head = 0;
 
-    return buf->len;
+    return (ssize_t)buf->len;
 }
 
 void
@@ -127,7 +133,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
     buffer->last_recv = ev_now(loop);
 
     if (bytes > 0)
-        advance_write_position(buffer, bytes);
+        advance_write_position(buffer, (size_t)bytes);
 
     return bytes;
 }
@@ -151,7 +157,7 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
     buffer->last_send = ev_now(loop);
 
     if (bytes > 0)
-        advance_read_position(buffer, bytes);
+        advance_read_position(buffer, (size_t)bytes);
 
     return bytes;
 }
@@ -171,7 +177,7 @@ buffer_read(struct Buffer *buffer, int fd) {
     bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
 
     if (bytes > 0)
-        advance_write_position(buffer, bytes);
+        advance_write_position(buffer, (size_t)bytes);
 
     return bytes;
 }
@@ -187,7 +193,7 @@ buffer_write(struct Buffer *buffer, int fd) {
     bytes = writev(fd, iov, setup_read_iov(buffer, iov, 0));
 
     if (bytes > 0)
-        advance_read_position(buffer, bytes);
+        advance_read_position(buffer, (size_t)bytes);
 
     return bytes;
 }
@@ -264,7 +270,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
         dst->head = 0;
 
     if (dst->size - dst->len < len)
-        return -1; /* insufficient room */
+        return 0; /* insufficient room */
 
     size_t iov_len = setup_write_iov(dst, iov, len);
 

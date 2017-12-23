@@ -6,7 +6,7 @@
 
 struct test_packet {
     const char *packet;
-    int len;
+    size_t len;
 };
 
 const unsigned char good_data_1[] = {
