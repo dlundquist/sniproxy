@@ -39,7 +39,7 @@ struct Listener {
     const struct Protocol *protocol;
     char *table_name;
     struct Logger *access_log;
-    int log_bad_requests, reuseport, transparent_proxy;
+    int log_bad_requests, reuseport, transparent_proxy, ipv6_v6only;
 
     /* Runtime fields */
     int reference_count;
@@ -57,6 +57,7 @@ int accept_listener_fallback_address(struct Listener *, char *);
 int accept_listener_source_address(struct Listener *, char *);
 int accept_listener_protocol(struct Listener *, char *);
 int accept_listener_reuseport(struct Listener *, char *);
+int accept_listener_ipv6_v6only(struct Listener *, char *);
 int accept_listener_bad_request_action(struct Listener *, char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
