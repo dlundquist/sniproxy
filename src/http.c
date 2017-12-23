@@ -40,8 +40,8 @@ static const char http_503[] =
     "Backend not available";
 
 static int parse_http_header(const char *, size_t, char **);
-static int get_header(const char *, const char *, int, char **);
-static int next_header(const char **, int *);
+static int get_header(const char *, const char *, size_t, char **);
+static size_t next_header(const char **, size_t *);
 
 static const struct Protocol http_protocol_st = {
     .name = "http",
@@ -92,8 +92,8 @@ parse_http_header(const char* data, size_t data_len, char **hostname) {
 }
 
 static int
-get_header(const char *header, const char *data, int data_len, char **value) {
-    int len, header_len;
+get_header(const char *header, const char *data, size_t data_len, char **value) {
+    size_t len, header_len;
 
     header_len = strlen(header);
 
@@ -122,9 +122,9 @@ get_header(const char *header, const char *data, int data_len, char **value) {
     return -2;
 }
 
-static int
-next_header(const char **data, int *len) {
-    int header_len;
+static size_t
+next_header(const char **data, size_t *len) {
+    size_t header_len;
 
     /* perhaps we can optimize this to reuse the value of header_len, rather
      * than scanning twice.

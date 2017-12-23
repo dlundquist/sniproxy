@@ -49,7 +49,7 @@
 static void usage();
 static void daemonize(void);
 static void write_pidfile(const char *, pid_t);
-static void set_limits(int);
+static void set_limits(rlim_t);
 static void drop_perms(const char* username, const char* groupname);
 static void perror_exit(const char *);
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
@@ -68,7 +68,7 @@ int
 main(int argc, char **argv) {
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
-    int max_nofiles = 65536;
+    rlim_t max_nofiles = 65536;
     int opt;
 
     while ((opt = getopt(argc, argv, "fc:n:V")) != -1) {
@@ -80,7 +80,7 @@ main(int argc, char **argv) {
                 background_flag = 0;
                 break;
             case 'n':
-                max_nofiles = atoi(optarg);
+                max_nofiles = strtoul(optarg, NULL, 10);
                 break;
             case 'V':
                 printf("sniproxy %s\n", sniproxy_version);
@@ -198,7 +198,7 @@ daemonize(void) {
  * At some point we should make this a config parameter
  */
 static void
-set_limits(int max_nofiles) {
+set_limits(rlim_t max_nofiles) {
     struct rlimit fd_limit = {
         .rlim_cur = max_nofiles,
         .rlim_max = max_nofiles,
