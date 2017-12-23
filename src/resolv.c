@@ -242,7 +242,7 @@ dns_query_v4_cb(struct dns_ctx *ctx, struct dns_rr_a4 *result, void *data) {
         info("resolv: %s\n", dns_strerror(dns_status(ctx)));
     } else if (result->dnsa4_nrr > 0) {
         struct Address **new_responses = realloc(cb_data->responses,
-                (cb_data->response_count + result->dnsa4_nrr) *
+                (cb_data->response_count + (size_t)result->dnsa4_nrr) *
                     sizeof(struct Address *));
         if (new_responses == NULL) {
             err("Failed to allocate memory for additional DNS responses");
@@ -282,7 +282,7 @@ dns_query_v6_cb(struct dns_ctx *ctx, struct dns_rr_a6 *result, void *data) {
         info("resolv: %s\n", dns_strerror(dns_status(ctx)));
     } else if (result->dnsa6_nrr > 0) {
         struct Address **new_responses = realloc(cb_data->responses,
-                (cb_data->response_count + result->dnsa6_nrr) *
+                (cb_data->response_count + (size_t)result->dnsa6_nrr) *
                     sizeof(struct Address *));
         if (new_responses == NULL) {
             err("Failed to allocate memory for additional DNS responses");
