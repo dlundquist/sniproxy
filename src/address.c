@@ -98,9 +98,8 @@ new_address(const char *hostname_or_ip) {
     }
 
     /* Trailing port */
-    if ((port = strrchr(hostname_or_ip, ':')) != NULL &&
-            is_numeric(port + 1)) {
-        len = (size_t)(port - hostname_or_ip);
+    if ((port = strrchr(hostname_or_ip, ':')) != NULL && is_numeric(port + 1)) {
+        len = port - hostname_or_ip;
         int port_num = atoi(port + 1);
 
         if (len < sizeof(ip_buf) && port_num >= 0 && port_num <= 65535) {
@@ -139,9 +138,8 @@ new_address(const char *hostname_or_ip) {
 
     /* [IPv6 address] */
     memset(&sa, 0, sizeof(sa));
-    if (hostname_or_ip[0] == '[' &&
-            (port = strchr(hostname_or_ip, ']')) != NULL) {
-        len = (size_t)(port - hostname_or_ip - 1);
+    if (hostname_or_ip[0] == '[' && (port = strchr(hostname_or_ip, ']'))) {
+        len = port - hostname_or_ip - 1;
 
         /* inet_pton() will not parse the IP correctly unless it is in a
          * separate string.
@@ -238,8 +236,8 @@ address_compare(const struct Address *addr_1, const struct Address *addr_2) {
     if (addr_1->type > addr_2->type)
         return 1;
 
-    size_t addr1_len = addr_1->len;
-    size_t addr2_len = addr_2->len;
+    int addr1_len = addr_1->len;
+    int addr2_len = addr_2->len;
     int result = memcmp(addr_1->data, addr_2->data, MIN(addr1_len, addr2_len));
 
     if (result == 0) { /* they match, find a tie breaker */
@@ -466,13 +464,13 @@ valid_hostname(const char *hostname) {
     if (hostname[0] == '.')
         return 0;
 
-    const char *hostname_end = hostname + hostname_len;
-    for (const char *label = hostname; label < hostname_end;) {
-        size_t label_len = (size_t)(hostname_end - label);
+    const char *label = hostname;
+    while (label < hostname + hostname_len) {
+        size_t label_len = hostname_len - (label - hostname);
         char *next_dot = strchr(label, '.');
         if (next_dot != NULL)
-            label_len = (size_t)(next_dot - label);
-        assert(label + label_len <= hostname_end);
+            label_len = next_dot - label;
+        assert(label + label_len <= hostname + hostname_len);
 
         if (label_len > 63 || label_len < 1)
             return 0;

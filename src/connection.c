@@ -345,7 +345,7 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 static void
 parse_client_request(struct Connection *con) {
     const char *payload;
-    size_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
+    ssize_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
 
     int result = con->listener->protocol->parse_packet(payload, payload_len, &hostname);
@@ -378,7 +378,7 @@ parse_client_request(struct Connection *con) {
     }
 
     con->hostname = hostname;
-    con->hostname_len = (size_t)result;
+    con->hostname_len = result;
     con->state = PARSED;
 }
 
@@ -740,15 +740,15 @@ log_bad_request(struct Connection *con __attribute__((unused)), const char *req,
     char *message_pos = message;
     char *message_end = message + message_len;
 
-    message_pos += snprintf(message_pos, (size_t)(message_end - message_pos),
+    message_pos += snprintf(message_pos, message_end - message_pos,
                             "parse_packet({");
 
     for (size_t i = 0; i < req_len; i++)
-        message_pos += snprintf(message_pos, (size_t)(message_end - message_pos),
+        message_pos += snprintf(message_pos, message_end - message_pos,
                                 "0x%02hhx, ", (unsigned char)req[i]);
 
     message_pos -= 2;/* Delete the trailing ', ' */
-    snprintf(message_pos, (size_t)(message_end - message_pos), "}, %ld, ...) = %d",
+    snprintf(message_pos, message_end - message_pos, "}, %ld, ...) = %d",
              req_len, parse_result);
     debug("%s", message);
 }
