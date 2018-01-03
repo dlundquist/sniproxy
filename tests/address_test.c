@@ -101,7 +101,7 @@ int main() {
         display_address(addr, buffer, sizeof(buffer));
 
         if (strcmp(buffer, good[i].output)) {
-            fprintf(stderr, "display_address(%p) returned \"%s\", expected \"%s\"\n", addr, buffer, good[i].output);
+            fprintf(stderr, "display_address(%p) returned \"%s\", expected \"%s\"\n", (void *)addr, buffer, good[i].output);
             return 1;
         }
 
@@ -110,14 +110,14 @@ int main() {
         port = address_port(addr);
 
         if (good[i].port != port) {
-            fprintf(stderr, "address_port(%p) return %d, expected %d\n", addr, port, good[i].port);
+            fprintf(stderr, "address_port(%p) return %d, expected %d\n", (void *)addr, port, good[i].port);
             return 1;
         }
 
         address_set_port(addr, port);
 
         if (good[i].port != port) {
-            fprintf(stderr, "address_port(%p) return %d, expected %d\n", addr, port, good[i].port);
+            fprintf(stderr, "address_port(%p) return %d, expected %d\n", (void *)addr, port, good[i].port);
             return 1;
         }
 
