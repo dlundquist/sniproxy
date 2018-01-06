@@ -37,6 +37,7 @@ SLIST_HEAD(Table_head, Table);
 
 struct Table {
     char *name;
+    int use_proxy_header;
 
     /* Runtime fields */
     int reference_count;

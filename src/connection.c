@@ -139,7 +139,7 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
 
     ev_io_start(loop, client_watcher);
 
-    if (0 /* TODO: test if proxy is enabled on this backend */) {
+    if (con->listener->table->use_proxy_header) {
         struct sockaddr_storage dest_addr;
         socklen_t dest_addr_len = sizeof(dest_addr);
         char ip[INET6_ADDRSTRLEN] = { '\0' };

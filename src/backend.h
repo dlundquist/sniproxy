@@ -36,6 +36,7 @@ STAILQ_HEAD(Backend_head, Backend);
 struct Backend {
     char *pattern;
     struct Address *address;
+    int use_proxy_header;
 
     /* Runtime fields */
     pcre *pattern_re;

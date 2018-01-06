@@ -59,6 +59,7 @@ new_table() {
     }
 
     table->name = NULL;
+    table->use_proxy_header = 0;
     table->reference_count = 0;
     STAILQ_INIT(&table->backends);
 
