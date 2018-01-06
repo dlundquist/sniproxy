@@ -82,7 +82,7 @@ struct ResolvQuery {
 };
 
 
-static int default_resolv_mode = RESOLV_MODE_IPV4_ONLY;
+static int default_resolv_mode = 0 /* RESOLV_MODE_IPV4_ONLY */;
 static struct ev_io resolv_io_watcher;
 static struct ev_timer resolv_timeout_watcher;
 
