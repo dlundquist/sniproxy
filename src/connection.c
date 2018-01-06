@@ -139,6 +139,75 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
 
     ev_io_start(loop, client_watcher);
 
+    if (0 /* TODO: test if proxy is enabled on this backend */) {
+        struct sockaddr_storage dest_addr;
+        socklen_t dest_addr_len = sizeof(dest_addr);
+        char ip[INET6_ADDRSTRLEN] = { '\0' };
+        size_t ip_len;
+
+        getsockname(sockfd, (struct sockaddr *)&dest_addr, &dest_addr_len);
+
+        con->header_len += buffer_push(con->client.buffer, "PROXY ", 6);
+
+        switch (con->client.addr.ss_family) {
+            case AF_INET:
+                con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5);
+
+                inet_ntop(AF_INET,
+                          &((const struct sockaddr_in *)&con->client.addr)->
+                          sin_addr, ip, sizeof(ip));
+                ip_len = strlen(ip);
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+                inet_ntop(AF_INET,
+                          &((const struct sockaddr_in *)&dest_addr)->sin_addr,
+                          ip, sizeof(ip));
+                ip_len = strlen(ip);
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                ip_len = snprintf(ip, sizeof(ip), " %d",
+                                  ntohs(((const struct sockaddr_in *)&con->
+                                  client.addr)->sin_port));
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                ip_len = snprintf(ip, sizeof(ip), " %d",
+                                  ntohs(((const struct sockaddr_in *)&dest_addr)->sin_port));
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                break;
+            case AF_INET6:
+                con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5);
+                inet_ntop(AF_INET6,
+                        &((const struct sockaddr_in6 *)&con->client.addr)->sin6_addr, ip, sizeof(ip));
+                ip_len = strlen(ip);
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+                inet_ntop(AF_INET6,
+                          &((const struct sockaddr_in6 *)&dest_addr)->sin6_addr,
+                          ip, sizeof(ip));
+                ip_len = strlen(ip);
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                ip_len = snprintf(ip, sizeof(ip), " %d",
+                                  ntohs(((const struct sockaddr_in6 *)&con->
+                                  client.addr)->sin6_port));
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                ip_len = snprintf(ip, sizeof(ip), " %d",
+                                  ntohs(((const struct sockaddr_in6 *)&dest_addr)->sin6_port));
+                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
+
+                break;
+            default:
+                con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7);
+        }
+        con->header_len += buffer_push(con->client.buffer, "\r\n", 2);
+    }
+
     return 1;
 }
 
@@ -342,6 +411,13 @@ parse_client_request(struct Connection *con) {
     const char *payload;
     size_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
+
+    /* Avoid payload_len underflow and empty request */
+    if (payload_len <= con->header_len)
+        return;
+
+    payload += con->header_len;
+    payload_len -= con->header_len;
 
     int result = con->listener->protocol->parse_packet(payload, payload_len, &hostname);
     if (result < 0) {
@@ -680,6 +756,7 @@ new_connection(struct ev_loop *loop) {
     con->server.addr_len = sizeof(con->server.addr);
     con->hostname = NULL;
     con->hostname_len = 0;
+    con->header_len = 0;
     con->query_handle = NULL;
 
     con->client.buffer = new_buffer(4096, loop);
