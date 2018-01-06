@@ -82,7 +82,7 @@ struct ResolvQuery {
 };
 
 
-static int default_resolv_mode = 1;
+static int default_resolv_mode = RESOLV_MODE_IPV4_ONLY;
 static struct ev_io resolv_io_watcher;
 static struct ev_timer resolv_timeout_watcher;
 
@@ -169,7 +169,8 @@ resolv_query(const char *hostname, int mode,
     cb_data->client_cb = client_cb;
     cb_data->client_free_cb = client_free_cb;
     cb_data->client_cb_data = client_cb_data;
-    cb_data->resolv_mode = mode > 0 ? mode : default_resolv_mode;
+    cb_data->resolv_mode = mode != RESOLV_MODE_DEFAULT ?
+                           mode : default_resolv_mode;
     memset(cb_data->queries, 0, sizeof(cb_data->queries));
     cb_data->response_count = 0;
     cb_data->responses = NULL;
