@@ -37,6 +37,11 @@
  */
 #define ADDRESS_BUFFER_SIZE 262
 
+enum {
+    PROXY_NONE = 0,
+    PROXY_V1
+};
+
 struct Address;
 
 struct Address *new_address(const char *);
@@ -53,6 +58,8 @@ socklen_t address_sa_len(const struct Address *);
 uint16_t address_port(const struct Address *);
 void address_set_port(struct Address *, uint16_t);
 int address_set_port_str(struct Address *addr, const char* str);
+int address_proxy_header(struct Address *addr);
+void address_set_proxy_header(struct Address *, int);
 const char *display_address(const struct Address *, char *, size_t);
 const char *display_sockaddr(const void *, char *, size_t);
 int is_numeric(const char *);

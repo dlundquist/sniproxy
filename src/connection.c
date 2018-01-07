@@ -87,6 +87,7 @@ static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
 static void print_connection(FILE *, const struct Connection *);
 static void free_resolv_cb_data(struct resolv_cb_data *);
+static int send_proxy_header(struct Connection *);
 
 
 void
@@ -245,6 +246,17 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             revents = 0; /* Clear revents so we don't try to send */
         } else if (bytes_received == 0) { /* peer closed socket */
             close_socket(con, loop);
+            revents = 0;
+        }
+    }
+
+    /* Send proxy header before anything else if needed */
+    if (revents & EV_WRITE && !is_client && con->proxy_header != PROXY_NONE) {
+        if (send_proxy_header(con)) {
+            /* If succeeded, remove flag so we don't transmit it again */
+            con->proxy_header = PROXY_NONE;
+        } else {
+            /* Prevent transmitting before we've written the header */
             revents = 0;
         }
     }
@@ -460,6 +472,8 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         /* invalid address type */
         assert(0);
     }
+
+    con->proxy_header = address_proxy_header(server_address);
 }
 
 static void
@@ -500,6 +514,66 @@ static void
 free_resolv_cb_data(struct resolv_cb_data *cb_data) {
     free(cb_data->address);
     free(cb_data);
+}
+
+static int
+send_proxy_header(struct Connection *con) {
+
+    struct sockaddr_storage sockname;
+    socklen_t socklen = sizeof(sockname);
+    getsockname(con->client.watcher.fd, (struct sockaddr *)&sockname, &socklen);
+
+    const char *proto;
+    char client_ip[INET6_ADDRSTRLEN], server_ip[INET6_ADDRSTRLEN];
+    int client_port, server_port;
+
+    if (con->client.addr.ss_family == AF_INET) {
+        proto = "TCP4";
+
+        const struct sockaddr_in *client_addr = (const struct sockaddr_in *)&con->client.addr;
+        const struct sockaddr_in *server_addr = (const struct sockaddr_in *)&sockname;
+
+        inet_ntop(AF_INET, &client_addr->sin_addr, client_ip, sizeof(client_ip));
+        inet_ntop(AF_INET, &server_addr->sin_addr, server_ip, sizeof(server_ip));
+
+        client_port = ntohs(client_addr->sin_port);
+        server_port = ntohs(server_addr->sin_port);
+
+    } else if (con->client.addr.ss_family == AF_INET6) {
+        proto = "TCP6";
+
+        const struct sockaddr_in6 *client_addr = (const struct sockaddr_in6 *)&con->client.addr;
+        const struct sockaddr_in6 *server_addr = (const struct sockaddr_in6 *)&sockname;
+
+        inet_ntop(AF_INET6, &client_addr->sin6_addr, client_ip, sizeof(client_ip));
+        inet_ntop(AF_INET6, &server_addr->sin6_addr, server_ip, sizeof(server_ip));
+
+        client_port = ntohs(client_addr->sin6_port);
+        server_port = ntohs(server_addr->sin6_port);
+
+    } else {
+        err("cannot send PROXY header for unsupported family %d\n", con->client.addr.ss_family);
+        abort_connection(con);
+        return 0;
+    }
+
+    /* craft header according to Haproxy PROXY v1 specification */
+    char header[128];
+    int hdrlen = snprintf(header, sizeof(header), "PROXY %s %s %s %d %d\r\n", proto, client_ip, server_ip, client_port, server_port);
+
+    ssize_t written = write(con->server.watcher.fd, header, hdrlen);
+    if (hdrlen != written) {
+        if (!IS_TEMPORARY_SOCKERR(errno)) {
+            warn("send_proxy_header(): %s, closing connection",
+                    strerror(errno));
+
+            abort_connection(con);
+        }
+
+        return 0;
+    }
+
+    return 1;
 }
 
 static void
