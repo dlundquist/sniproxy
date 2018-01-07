@@ -35,6 +35,7 @@
 
 
 static void free_backend(struct Backend *);
+static char *backend_config_options(const struct Backend *);
 
 
 struct Backend *
@@ -139,9 +140,18 @@ void
 print_backend_config(FILE *file, const struct Backend *backend) {
     char address[ADDRESS_BUFFER_SIZE];
 
-    fprintf(file, "\t%s %s\n",
+    fprintf(file, "\t%s %s%s\n",
             backend->pattern,
-            display_address(backend->address, address, sizeof(address)));
+            display_address(backend->address, address, sizeof(address)),
+            backend_config_options(backend));
+}
+
+static char *
+backend_config_options(const struct Backend *backend) {
+    if (backend->use_proxy_header)
+        return " proxy";
+    else
+        return "";
 }
 
 void
