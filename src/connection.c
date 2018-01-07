@@ -52,8 +52,9 @@
 
 struct resolv_cb_data {
     struct Connection *connection;
-    struct Address *address;
+    const struct Address *address;
     struct ev_loop *loop;
+    int cb_free_addr;
 };
 
 
@@ -466,30 +467,37 @@ abort_connection(struct Connection *con) {
 
 static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
-    /* TODO avoid extra malloc in listener_lookup_server_address() */
-    struct Address *server_address =
+    struct LookupResult result =
         listener_lookup_server_address(con->listener, con->hostname, con->hostname_len);
 
-    if (server_address == NULL) {
+    if (result.address == NULL) {
         abort_connection(con);
         return;
-    } else if (address_is_hostname(server_address)) {
+    } else if (address_is_hostname(result.address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
-        free(server_address);
+
+        if (result.caller_free_address)
+            free(result.address);
+
         abort_connection(con);
         return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
-            free(server_address);
+
+            if (result.caller_free_address)
+                free((void *)result.address);
+
             abort_connection(con);
             return;
         }
         cb_data->connection = con;
-        cb_data->address = server_address;
+        cb_data->address = result.address;
+        cb_data->cb_free_addr = result.caller_free_address;
         cb_data->loop = loop;
+        con->use_proxy_header = result.use_proxy_header;
 
         int resolv_mode = RESOLV_MODE_DEFAULT;
         if (con->listener->transparent_proxy) {
@@ -505,26 +513,28 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
                     warn("attempt to use transparent proxy with hostname %s "
                             "on non-IP listener %s, falling back to "
                             "non-transparent mode",
-                            address_hostname(server_address),
+                            address_hostname(result.address),
                             display_sockaddr(con->listener->address,
                                     listener_address, sizeof(listener_address))
                             );
             }
         }
 
-        con->query_handle = resolv_query(address_hostname(server_address),
+        con->query_handle = resolv_query(address_hostname(result.address),
                 resolv_mode, resolv_cb,
                 (void (*)(void *))free_resolv_cb_data, cb_data);
 
         con->state = RESOLVING;
 #endif
-    } else if (address_is_sockaddr(server_address)) {
-        con->server.addr_len = address_sa_len(server_address);
+    } else if (address_is_sockaddr(result.address)) {
+        con->server.addr_len = address_sa_len(result.address);
         assert(con->server.addr_len <= sizeof(con->server.addr));
-        memcpy(&con->server.addr, address_sa(server_address),
+        memcpy(&con->server.addr, address_sa(result.address),
             con->server.addr_len);
+        con->use_proxy_header = result.use_proxy_header;
 
-        free(server_address);
+        if (result.caller_free_address)
+            free((void *)result.address);
 
         con->state = RESOLVED;
     } else {
@@ -569,7 +579,8 @@ resolv_cb(struct Address *result, void *data) {
 
 static void
 free_resolv_cb_data(struct resolv_cb_data *cb_data) {
-    free(cb_data->address);
+    if (cb_data->cb_free_addr)
+        free((void *)cb_data->address);
     free(cb_data);
 }
 
@@ -658,6 +669,12 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
                 strerror(errno));
         abort_connection(con);
         return;
+    }
+
+    if (con->header_len && !con->use_proxy_header) {
+        /* If we prepended the PROXY header and this backend isn't configured
+         * to receive it, consume it now */
+        buffer_pop(con->client.buffer, NULL, con->header_len);
     }
 
     struct ev_io *server_watcher = &con->server.watcher;
@@ -758,6 +775,7 @@ new_connection(struct ev_loop *loop) {
     con->hostname_len = 0;
     con->header_len = 0;
     con->query_handle = NULL;
+    con->use_proxy_header = 0;
 
     con->client.buffer = new_buffer(4096, loop);
     if (con->client.buffer == NULL) {

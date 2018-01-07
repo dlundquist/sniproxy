@@ -45,12 +45,18 @@ struct Table {
     SLIST_ENTRY(Table) entries;
 };
 
+struct LookupResult {
+    const struct Address *address;
+    int caller_free_address;
+    int use_proxy_header;
+};
+
 struct Table *new_table();
 int accept_table_arg(struct Table *, const char *);
 void add_table(struct Table_head *, struct Table *);
 struct Table *table_lookup(const struct Table_head *, const char *);
-const struct Address *table_lookup_server_address(const struct Table *,
-                                                  const char *, size_t);
+struct LookupResult table_lookup_server_address(const struct Table *,
+                                                const char *, size_t);
 void reload_tables(struct Table_head *, struct Table_head *);
 void print_table_config(FILE *, struct Table *);
 int valid_table(struct Table *);

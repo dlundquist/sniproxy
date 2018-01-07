@@ -227,7 +227,8 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
     size_t iov_len = setup_read_iov(src, iov, len);
 
     for (size_t i = 0; i < iov_len; i++) {
-        memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
+        if (dst != NULL)
+            memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
 
         bytes_copied += iov[i].iov_len;
     }
