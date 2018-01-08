@@ -40,6 +40,7 @@ struct Listener {
     char *table_name;
     struct Logger *access_log;
     int log_bad_requests, reuseport, transparent_proxy, ipv6_v6only;
+    int fallback_use_proxy_header;
 
     /* Runtime fields */
     int reference_count;
