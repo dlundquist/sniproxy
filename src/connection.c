@@ -70,6 +70,7 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_cb(struct Address *, void *);
 static void reactivate_watchers(struct Connection *, struct ev_loop *);
+static void insert_proxy_v1_header(struct Connection *, const struct sockaddr_storage *);
 static void parse_client_request(struct Connection *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
@@ -142,72 +143,15 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
 
     if (con->listener->table->use_proxy_header ||
             con->listener->fallback_use_proxy_header) {
-        struct sockaddr_storage dest_addr;
-        socklen_t dest_addr_len = sizeof(dest_addr);
-        char ip[INET6_ADDRSTRLEN] = { '\0' };
-        size_t ip_len;
+        struct sockaddr_storage client_dest_addr = {.ss_family = AF_UNSPEC};
+        socklen_t client_dest_addr_len = sizeof(client_dest_addr);
 
-        getsockname(sockfd, (struct sockaddr *)&dest_addr, &dest_addr_len);
-
-        con->header_len += buffer_push(con->client.buffer, "PROXY ", 6);
-
-        switch (con->client.addr.ss_family) {
-            case AF_INET:
-                con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5);
-
-                inet_ntop(AF_INET,
-                          &((const struct sockaddr_in *)&con->client.addr)->
-                          sin_addr, ip, sizeof(ip));
-                ip_len = strlen(ip);
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                con->header_len += buffer_push(con->client.buffer, " ", 1);
-
-                inet_ntop(AF_INET,
-                          &((const struct sockaddr_in *)&dest_addr)->sin_addr,
-                          ip, sizeof(ip));
-                ip_len = strlen(ip);
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                ip_len = snprintf(ip, sizeof(ip), " %d",
-                                  ntohs(((const struct sockaddr_in *)&con->
-                                  client.addr)->sin_port));
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                ip_len = snprintf(ip, sizeof(ip), " %d",
-                                  ntohs(((const struct sockaddr_in *)&dest_addr)->sin_port));
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                break;
-            case AF_INET6:
-                con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5);
-                inet_ntop(AF_INET6,
-                        &((const struct sockaddr_in6 *)&con->client.addr)->sin6_addr, ip, sizeof(ip));
-                ip_len = strlen(ip);
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                con->header_len += buffer_push(con->client.buffer, " ", 1);
-
-                inet_ntop(AF_INET6,
-                          &((const struct sockaddr_in6 *)&dest_addr)->sin6_addr,
-                          ip, sizeof(ip));
-                ip_len = strlen(ip);
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                ip_len = snprintf(ip, sizeof(ip), " %d",
-                                  ntohs(((const struct sockaddr_in6 *)&con->
-                                  client.addr)->sin6_port));
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                ip_len = snprintf(ip, sizeof(ip), " %d",
-                                  ntohs(((const struct sockaddr_in6 *)&dest_addr)->sin6_port));
-                con->header_len += buffer_push(con->client.buffer, ip, ip_len);
-
-                break;
-            default:
-                con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7);
+        if (getsockname(sockfd, (struct sockaddr *)&client_dest_addr,
+                &client_dest_addr_len) != 0) {
+            warn("getsockname failed: %s", strerror(errno));
         }
-        con->header_len += buffer_push(con->client.buffer, "\r\n", 2);
+
+        insert_proxy_v1_header(con, &client_dest_addr);
     }
 
     return 1;
@@ -406,6 +350,72 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
         ev_io_set(w, w->fd, events);
         ev_io_start(loop, w);
     }
+}
+
+static void
+insert_proxy_v1_header(struct Connection *con, const struct sockaddr_storage *dest_addr) {
+    char buf[INET6_ADDRSTRLEN] = { '\0' };
+    size_t buf_len;
+
+    con->header_len += buffer_push(con->client.buffer, "PROXY ", 6);
+
+    switch (con->client.addr.ss_family) {
+        case AF_INET:
+            con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5);
+
+            inet_ntop(AF_INET,
+                      &((const struct sockaddr_in *)&con->client.addr)->
+                      sin_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+            inet_ntop(AF_INET,
+                      &((const struct sockaddr_in *)dest_addr)->sin_addr,
+                      buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in *)&con->
+                              client.addr)->sin_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in *)dest_addr)->sin_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            break;
+        case AF_INET6:
+            con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5);
+            inet_ntop(AF_INET6,
+                    &((const struct sockaddr_in6 *)&con->client.addr)->sin6_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+            inet_ntop(AF_INET6,
+                      &((const struct sockaddr_in6 *)dest_addr)->sin6_addr,
+                      buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in6 *)&con->
+                              client.addr)->sin6_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in6 *)dest_addr)->sin6_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            break;
+        default:
+            con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7);
+    }
+    con->header_len += buffer_push(con->client.buffer, "\r\n", 2);
 }
 
 static void
