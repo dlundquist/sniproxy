@@ -55,9 +55,7 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 struct Buffer *
 new_buffer(size_t size, struct ev_loop *loop) {
-    struct Buffer *buf;
-
-    buf = malloc(sizeof(struct Buffer));
+    struct Buffer *buf = malloc(sizeof(struct Buffer));
     if (buf == NULL)
         return NULL;
 
@@ -79,7 +77,6 @@ new_buffer(size_t size, struct ev_loop *loop) {
 
 ssize_t
 buffer_resize(struct Buffer *buf, size_t new_size) {
-    char *new_buffer;
 
     if (new_size > BUFFER_MAX_SIZE)
         return -3;
@@ -87,7 +84,7 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
     if (new_size < buf->len)
         return -1; /* new_size too small to hold existing data */
 
-    new_buffer = malloc(new_size);
+    char *new_buffer = malloc(new_size);
     if (new_buffer == NULL)
         return -2;
 
@@ -112,23 +109,17 @@ free_buffer(struct Buffer *buf) {
 
 ssize_t
 buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
-    ssize_t bytes;
-    struct iovec iov[2];
-    struct msghdr msg;
-
     /* coalesce when reading into an empty buffer */
     if (buffer->len == 0)
         buffer->head = 0;
 
-    msg.msg_name = NULL;
-    msg.msg_namelen = 0;
-    msg.msg_iov = iov;
-    msg.msg_iovlen = setup_write_iov(buffer, iov, 0);
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
+    struct iovec iov[2];
+    struct msghdr msg = {
+        .msg_iov = iov,
+        .msg_iovlen = setup_write_iov(buffer, iov, 0)
+    };
 
-    bytes = recvmsg(sockfd, &msg, flags);
+    ssize_t bytes = recvmsg(sockfd, &msg, flags);
 
     buffer->last_recv = ev_now(loop);
 
@@ -140,19 +131,13 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
 
 ssize_t
 buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
-    ssize_t bytes;
     struct iovec iov[2];
-    struct msghdr msg;
+    struct msghdr msg = {
+        .msg_iov = iov,
+        .msg_iovlen = setup_read_iov(buffer, iov, 0)
+    };
 
-    msg.msg_name = NULL;
-    msg.msg_namelen = 0;
-    msg.msg_iov = iov;
-    msg.msg_iovlen = setup_read_iov(buffer, iov, 0);
-    msg.msg_control = NULL;
-    msg.msg_controllen = 0;
-    msg.msg_flags = 0;
-
-    bytes = sendmsg(sockfd, &msg, flags);
+    ssize_t bytes = sendmsg(sockfd, &msg, flags);
 
     buffer->last_send = ev_now(loop);
 
@@ -167,14 +152,12 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
  */
 ssize_t
 buffer_read(struct Buffer *buffer, int fd) {
-    ssize_t bytes;
-    struct iovec iov[2];
-
     /* coalesce when reading into an empty buffer */
     if (buffer->len == 0)
         buffer->head = 0;
 
-    bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
+    struct iovec iov[2];
+    ssize_t bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
 
     if (bytes > 0)
         advance_write_position(buffer, (size_t)bytes);
@@ -228,6 +211,7 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
 
         if (dst != NULL)
             *dst = buffer->buffer;
+
         return buffer->len;
     }
 }
@@ -250,9 +234,7 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
 
 size_t
 buffer_pop(struct Buffer *src, void *dst, size_t len) {
-    size_t bytes;
-
-    bytes = buffer_peek(src, dst, len);
+    size_t bytes = buffer_peek(src, dst, len);
 
     if (bytes > 0)
         advance_read_position(src, bytes);
@@ -292,11 +274,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
  */
 static size_t
 setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
-    size_t room;
-    size_t start;
-    size_t end;
-
-    room = buffer->size - buffer->len;
+    size_t room = buffer->size - buffer->len;
     if (room == 0) /* trivial case: no room */
         return 0;
 
@@ -304,8 +282,8 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len)
         room = MIN(room, len);
 
-    start = (buffer->head + buffer->len) % buffer->size;
-    end = (start + room) % buffer->size;
+    size_t start = (buffer->head + buffer->len) % buffer->size;
+    size_t end = (start + room) % buffer->size;
 
     if (end > start) { /* simple case */
         iov[0].iov_base = &buffer->buffer[start];
@@ -324,25 +302,20 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
 
 static size_t
 setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
-    size_t end;
-
     if (buffer->len == 0)
         return 0;
 
-    end = buffer->head + buffer->len;
+    len = MIN(len, buffer->len);
 
-    if (len)
-        end = MIN(end, buffer->head + len);
-
-    end = end % buffer->size;
+    size_t end = (buffer->head + len) % buffer->size;
 
     if (end > buffer->head) {
-        iov[0].iov_base = &buffer->buffer[buffer->head];
+        iov[0].iov_base = buffer->buffer + buffer->head;
         iov[0].iov_len = end - buffer->head;
 
         return 1;
     } else {
-        iov[0].iov_base = &buffer->buffer[buffer->head];
+        iov[0].iov_base = buffer->buffer + buffer->head;
         iov[0].iov_len = buffer->size - buffer->head;
         iov[1].iov_base = buffer->buffer;
         iov[1].iov_len = end;
