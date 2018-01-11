@@ -782,39 +782,39 @@ print_connection(FILE *file, const struct Connection *con) {
         case ACCEPTED:
             fprintf(file, "ACCEPTED      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size);
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case PARSED:
             fprintf(file, "PARSED        %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size);
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case RESOLVING:
             fprintf(file, "RESOLVING      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size);
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case RESOLVED:
             fprintf(file, "RESOLVED      %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size);
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case CONNECTED:
             fprintf(file, "CONNECTED     %s %zu/%zu\t%s %zu/%zu\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size,
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer),
                     display_sockaddr(&con->server.addr, server, sizeof(server)),
-                    con->server.buffer->len, con->server.buffer->size);
+                    buffer_len(con->server.buffer), buffer_size(con->server.buffer));
             break;
         case SERVER_CLOSED:
             fprintf(file, "SERVER_CLOSED %s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
-                    con->client.buffer->len, con->client.buffer->size);
+                    buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case CLIENT_CLOSED:
             fprintf(file, "CLIENT_CLOSED -\t%s %zu/%zu\n",
                     display_sockaddr(&con->server.addr, server, sizeof(server)),
-                    con->server.buffer->len, con->server.buffer->size);
+                    buffer_len(con->server.buffer), buffer_size(con->server.buffer));
             break;
         case CLOSED:
             fprintf(file, "CLOSED        -\t-\n");
