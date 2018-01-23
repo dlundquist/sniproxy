@@ -157,7 +157,8 @@ buffer_read(struct Buffer *buffer, int fd) {
         buffer->head = 0;
 
     struct iovec iov[2];
-    ssize_t bytes = readv(fd, iov, setup_write_iov(buffer, iov, 0));
+    size_t iov_len = setup_write_iov(buffer, iov, 0);
+    ssize_t bytes = readv(fd, iov, iov_len);
 
     if (bytes > 0)
         advance_write_position(buffer, (size_t)bytes);
@@ -170,10 +171,9 @@ buffer_read(struct Buffer *buffer, int fd) {
  */
 ssize_t
 buffer_write(struct Buffer *buffer, int fd) {
-    ssize_t bytes;
     struct iovec iov[2];
-
-    bytes = writev(fd, iov, setup_read_iov(buffer, iov, 0));
+    size_t iov_len = setup_read_iov(buffer, iov, 0);
+    size_t bytes = writev(fd, iov, iov_len);
 
     if (bytes > 0)
         advance_read_position(buffer, (size_t)bytes);
