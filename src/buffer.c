@@ -42,6 +42,7 @@
 #include "buffer.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define NOT_POWER_OF_2(x) (x == 0 || (x & (x - 1)))
 
 
 static const size_t BUFFER_MAX_SIZE = 1024 * 1024 * 1024;
@@ -55,18 +56,20 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 struct Buffer *
 new_buffer(size_t size, struct ev_loop *loop) {
+    if (NOT_POWER_OF_2(size))
+        return NULL;
     struct Buffer *buf = malloc(sizeof(struct Buffer));
     if (buf == NULL)
         return NULL;
 
-    buf->size = size;
+    buf->size_mask = size - 1;
     buf->len = 0;
     buf->head = 0;
     buf->tx_bytes = 0;
     buf->rx_bytes = 0;
     buf->last_recv = ev_now(loop);
     buf->last_send = ev_now(loop);
-    buf->buffer = malloc(buf->size);
+    buf->buffer = malloc(size);
     if (buf->buffer == NULL) {
         free(buf);
         buf = NULL;
@@ -77,6 +80,8 @@ new_buffer(size_t size, struct ev_loop *loop) {
 
 ssize_t
 buffer_resize(struct Buffer *buf, size_t new_size) {
+    if (NOT_POWER_OF_2(new_size))
+        return -4;
 
     if (new_size > BUFFER_MAX_SIZE)
         return -3;
@@ -92,7 +97,7 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
 
     free(buf->buffer);
     buf->buffer = new_buffer;
-    buf->size = new_size;
+    buf->size_mask = new_size - 1;
     buf->head = 0;
 
     return (ssize_t)buf->len;
@@ -189,7 +194,7 @@ buffer_write(struct Buffer *buffer, int fd) {
  */
 size_t
 buffer_coalesce(struct Buffer *buffer, const void **dst) {
-    size_t buffer_tail = (buffer->head + buffer->len) % buffer->size;
+    size_t buffer_tail = (buffer->head + buffer->len) & buffer->size_mask;
 
     if (buffer_tail <= buffer->head) {
         /* buffer not wrapped */
@@ -201,7 +206,6 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
         /* buffer wrapped */
         size_t len = buffer->len;
         char *temp = alloca(len);
-
         buffer_pop(buffer, temp, len);
         assert(buffer->len == 0);
 
@@ -251,7 +255,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
     if (dst->len == 0)
         dst->head = 0;
 
-    if (dst->size - dst->len < len)
+    if (buffer_size(dst) - dst->len < len)
         return 0; /* insufficient room */
 
     size_t iov_len = setup_write_iov(dst, iov, len);
@@ -274,7 +278,7 @@ buffer_push(struct Buffer *dst, const void *src, size_t len) {
  */
 static size_t
 setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
-    size_t room = buffer->size - buffer->len;
+    size_t room = buffer_size(buffer) - buffer->len;
 
     if (room == 0) /* trivial case: no room */
         return 0;
@@ -284,28 +288,28 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len != 0)
         write_len = MIN(room, len);
 
-    size_t start = (buffer->head + buffer->len) % buffer->size;
+    size_t start = (buffer->head + buffer->len) & buffer->size_mask;
 
-    if (start + write_len <= buffer->size) {
+    if (start + write_len <= buffer_size(buffer)) {
         iov[0].iov_base = buffer->buffer + start;
         iov[0].iov_len = write_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
         assert(iov[0].iov_len > 0);
         assert((char *)iov[0].iov_base >= buffer->buffer);
-        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer->size);
+        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer_size(buffer));
 
         return 1;
     } else {
         iov[0].iov_base = buffer->buffer + start;
-        iov[0].iov_len = buffer->size - start;
+        iov[0].iov_len = buffer_size(buffer) - start;
         iov[1].iov_base = buffer->buffer;
         iov[1].iov_len = write_len - iov[0].iov_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
         assert(iov[0].iov_len > 0);
         assert((char *)iov[0].iov_base >= buffer->buffer);
-        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer->size);
+        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer_size(buffer));
         assert(iov[1].iov_len > 0);
         assert((char *)iov[1].iov_base >= buffer->buffer);
         assert((char *)iov[1].iov_base + iov[1].iov_len <= (char *)iov[0].iov_base);
@@ -323,26 +327,26 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     if (len != 0)
         read_len = MIN(len, buffer->len);
 
-    if (buffer->head + read_len <= buffer->size) {
+    if (buffer->head + read_len <= buffer_size(buffer)) {
         iov[0].iov_base = buffer->buffer + buffer->head;
         iov[0].iov_len = read_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
         assert(iov[0].iov_len > 0);
         assert((char *)iov[0].iov_base >= buffer->buffer);
-        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer->size);
+        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer_size(buffer));
 
         return 1;
     } else {
         iov[0].iov_base = buffer->buffer + buffer->head;
-        iov[0].iov_len = buffer->size - buffer->head;
+        iov[0].iov_len = buffer_size(buffer) - buffer->head;
         iov[1].iov_base = buffer->buffer;
         iov[1].iov_len = read_len - iov[0].iov_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
         assert(iov[0].iov_len > 0);
         assert((char *)iov[0].iov_base >= buffer->buffer);
-        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer->size);
+        assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer_size(buffer));
         assert(iov[1].iov_len > 0);
         assert((char *)iov[1].iov_base >= buffer->buffer);
         assert((char *)iov[1].iov_base + iov[1].iov_len <= (char *)iov[0].iov_base);
@@ -359,7 +363,7 @@ advance_write_position(struct Buffer *buffer, size_t offset) {
 
 static inline void
 advance_read_position(struct Buffer *buffer, size_t offset) {
-    buffer->head = (buffer->head + offset) % buffer->size;
+    buffer->head = (buffer->head + offset) & buffer->size_mask;
     buffer->len -= offset;
     buffer->tx_bytes += offset;
 }

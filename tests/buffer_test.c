@@ -12,7 +12,7 @@ static void test1() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(200, EV_DEFAULT);
+    buffer = new_buffer(256, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
@@ -51,10 +51,10 @@ static void test2() {
     char output[sizeof(input)];
     int len, i = 0;
 
-    buffer = new_buffer(200, EV_DEFAULT);
+    buffer = new_buffer(256, EV_DEFAULT);
     assert(buffer != NULL);
 
-    while (i < 180) {
+    while (i < 236) {
         len = buffer_push(buffer, input, sizeof(input));
         assert(len == sizeof(input));
 
@@ -100,19 +100,19 @@ static void test3() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(200, EV_DEFAULT);
+    buffer = new_buffer(256, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
     assert(len == sizeof(input));
 
     /* Test resizing to too small of a buffer size */
-    len = buffer_resize(buffer, 5);
+    len = buffer_resize(buffer, 8);
     assert(len == -1);
 
 
-    buffer_resize(buffer, 40);
-    assert(buffer_room(buffer) == 40 - sizeof(input));
+    buffer_resize(buffer, 32);
+    assert(buffer_room(buffer) == 32 - sizeof(input));
 
     len = buffer_peek(buffer, output, sizeof(output));
     assert(len == sizeof(input));
