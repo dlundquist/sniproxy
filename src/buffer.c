@@ -32,11 +32,6 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
-
-#ifdef HAVE_ALLOCA_H
-#include <alloca.h>
-#endif
-
 #include <assert.h>
 #include <ev.h>
 #include "buffer.h"
@@ -205,13 +200,17 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
     } else {
         /* buffer wrapped */
         size_t len = buffer->len;
-        char *temp = alloca(len);
-        buffer_pop(buffer, temp, len);
-        assert(buffer->len == 0);
+        char *temp = malloc(len);
+        if (temp != NULL) {
+            buffer_pop(buffer, temp, len);
+            assert(buffer->len == 0);
 
-        buffer_push(buffer, temp, len);
-        assert(buffer->head == 0);
-        assert(buffer->len == len);
+            buffer_push(buffer, temp, len);
+            assert(buffer->head == 0);
+            assert(buffer->len == len);
+
+            free(temp);
+        }
 
         if (dst != NULL)
             *dst = buffer->buffer;
