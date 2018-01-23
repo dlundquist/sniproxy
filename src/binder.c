@@ -28,11 +28,6 @@
 #include <unistd.h>
 #include <string.h> /* memcpy() */
 #include <errno.h> /* errno */
-
-#ifdef HAVE_ALLOCA_H
-#include <alloca.h>
-#endif
-
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
@@ -89,6 +84,10 @@ start_binder() {
 int
 bind_socket(const struct sockaddr *addr, size_t addr_len) {
     struct binder_request *request;
+    struct msghdr msg;
+    struct iovec iov[1];
+    char control_buf[64];
+    char data_buf[256];
 
 
     if (binder_pid <= 0) {
@@ -97,8 +96,9 @@ bind_socket(const struct sockaddr *addr, size_t addr_len) {
     }
 
     size_t request_len = sizeof(request) + addr_len;
-    request = alloca(request_len);
-
+    if (request_len > sizeof(data_buf))
+        fatal("bind_socket: request length %d exceeds buffer", request_len);
+    request = (struct binder_request *)data_buf;
     request->address_len = addr_len;
     memcpy(&request->address, addr, addr_len);
 
@@ -107,10 +107,6 @@ bind_socket(const struct sockaddr *addr, size_t addr_len) {
         return -1;
     }
 
-    struct msghdr msg;
-    struct iovec iov[1];
-    char control_buf[64];
-    char data_buf[256];
     memset(&msg, 0, sizeof(msg));
     iov[0].iov_base = data_buf;
     iov[0].iov_len = sizeof(data_buf);
