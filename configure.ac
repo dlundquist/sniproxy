@@ -58,7 +58,6 @@ AS_IF([test "x$rfc3339_timestamps" = "xyes"],
     [AC_DEFINE([RFC3339_TIMESTAMP], 1, [RFC3339 timestamps enabled])])
 
 # Checks for header files.
-AC_FUNC_ALLOCA
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
     AC_MSG_ERROR([required header(s) not found]))
 
