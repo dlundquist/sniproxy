@@ -33,9 +33,9 @@
 
 struct Buffer {
     char *buffer;
-    size_t size;
-    size_t head;
-    size_t len;
+    size_t size;            /* size of buffer */
+    size_t head;            /* index of first byte of content */
+    size_t len;             /* size of content */
     ev_tstamp last_recv;
     ev_tstamp last_send;
     size_t tx_bytes;
