@@ -38,11 +38,6 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
-
-#ifdef HAVE_ALLOCA_H
-#include <alloca.h>
-#endif
-
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"
@@ -736,7 +731,11 @@ log_connection(struct Connection *con) {
 static void
 log_bad_request(struct Connection *con __attribute__((unused)), const char *req, size_t req_len, int parse_result) {
     size_t message_len = 64 + 6 * req_len;
-    char *message = alloca(message_len);
+    char *message = malloc(message_len);
+    if (message == NULL) {
+        err("log_bad_request: unable to allocate message buffer");
+        return;
+    }
     char *message_pos = message;
     char *message_end = message + message_len;
 
@@ -751,6 +750,8 @@ log_bad_request(struct Connection *con __attribute__((unused)), const char *req,
     snprintf(message_pos, (size_t)(message_end - message_pos), "}, %ld, ...) = %d",
              req_len, parse_result);
     debug("%s", message);
+
+    free(message);
 }
 
 /*
