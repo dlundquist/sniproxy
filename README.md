@@ -141,19 +141,3 @@ build without UDNS, but these features will be unavailable.
 UDNS uses a single UDP socket for all queries, so it is recommended you use a
 local caching DNS resolver (with a single socket each DNS query is protected by
 spoofing by a single 16 bit query ID, which makes it relatively easy to spoof).
-
-UDNS is currently not available in Debian stable, but a package can be easily
-built from the Debian testing or Ubuntu source packages:
-
-    mkdir udns_packaging
-    cd udns_packaging
-    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4-1.dsc
-    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4.orig.tar.gz
-    wget http://archive.ubuntu.com/ubuntu/pool/universe/u/udns/udns_0.4-1.debian.tar.gz
-    tar xfz udns_0.4.orig.tar.gz
-    cd udns-0.4/
-    tar xfz ../udns_0.4-1.debian.tar.gz
-    dpkg-buildpackage
-    cd ..
-    sudo dpkg -i libudns-dev_0.4-1_amd64.deb libudns0_0.4-1_amd64.deb
-
