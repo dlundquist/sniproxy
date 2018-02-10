@@ -95,6 +95,64 @@ sub main {
 
     die "This tests requires root privileges" unless $> == 0;
 
+    # Setup a test network using network namespaces with the ns-test-proxy
+    # namespace configured like a normal transparent proxy box.
+    #
+    #   +-----------------------------------------------------------+
+    #   |           Host (default) Network Namespace                |
+    #   |                                                           |
+    #   |   Route 192.0.2.4/30 via 192.0.2.1 dev veth-srv-proxy     |
+    #   |                                                           |
+    #   |   TestHTTPD process                   o veth-srv-proxy    |
+    #   |                                       | 192.0.2.2/30      |
+    #   |   +-----------------------------------|---------------+   |
+    #   |   |       SNIproxy Network Namespace  |               |   |
+    #   |   |             ns-test-proxy         o veth-proxy-srv|   |
+    #   |   |                                     192.0.2.1/30  |   |
+    #   |   |   IP Forwarding enabled                           |   |
+    #   |   |   IPTables and ip rules configured (see below)    |   |
+    #   |   |                                                   |   |
+    #   |   |                                   o veth-proxy-clt|   |
+    #   |   |   sniproxy process                | 192.0.2.5/30  |   |
+    #   |   |                                   |               |   |
+    #   |   +-----------------------------------|---------------+   |
+    #   |                                       |                   |
+    #   |   +-----------------------------------|---------------+   |
+    #   |   |       Client Network Namespace    | veth-clt-proxy|   |
+    #   |   |             ns-test-clt           o 192.0.2.6/30  |   |
+    #   |   |                                                   |   |
+    #   |   |   Route default via 192.0.2.5 dev veth-clt-proxy  |   |
+    #   |   |                                                   |   |
+    #   |   |   curl process                                    |   |
+    #   |   |                                                   |   |
+    #   |   +---------------------------------------------------+   |
+    #   |                                                           |
+    #   +-----------------------------------------------------------+
+    #
+    # IPTables NAT rules:
+    #   Chain POSTROUTING (policy ACCEPT)
+    #   target     prot opt source               destination
+    #   MASQUERADE  all  --  0.0.0.0/0            0.0.0.0/0
+    #
+    # IPTables Mangle rules:
+    #   Chain PREROUTING (policy ACCEPT)
+    #   target     prot opt source               destination
+    #   DIVERT     tcp  --  0.0.0.0/0            0.0.0.0/0            socket
+    #
+    #   Chain DIVERT (1 references)
+    #   target     prot opt source               destination
+    #   MARK       all  --  0.0.0.0/0            0.0.0.0/0            MARK set 0x1
+    #   ACCEPT     all  --  0.0.0.0/0            0.0.0.0/0
+    #
+    # IP rules:
+    #   0:	from all lookup local
+    #   32765:	from all fwmark 0x1 lookup 100
+    #   32766:	from all lookup main
+    #   32767:	from all lookup default
+    #
+    # IP route table 100:
+    #   local default dev lo scope host
+
     checked_system('ip', 'netns', 'add', 'ns-test-proxy');
     checked_system('ip', 'netns', 'add', 'ns-test-clt');
 
