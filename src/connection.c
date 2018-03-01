@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
 #include <fcntl.h>
@@ -221,6 +222,7 @@ server_socket_open(const struct Connection *con) {
 static void
 connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
+
     int is_client = &con->client.watcher == w;
     struct Buffer *input_buffer =
         is_client ? con->client.buffer : con->server.buffer;
@@ -463,6 +465,8 @@ resolv_cb(struct Address *result, void *data) {
     struct Connection *con = cb_data->connection;
     struct ev_loop *loop = cb_data->loop;
 
+    debug("[DEBUG] %s(): Resolve '%s'", __FUNCTION__, address_hostname(cb_data->address));
+
     if (con->state != RESOLVING) {
         info("resolv_cb() called for connection not in RESOLVING state");
         return;
@@ -484,6 +488,13 @@ resolv_cb(struct Address *result, void *data) {
 
         con->state = RESOLVED;
 
+        char tmp1[INET6_ADDRSTRLEN + 8];
+        char tmp2[INET6_ADDRSTRLEN + 8];
+        debug("[DEBUG] %s(): Resolved. server='%s', client='%s'", __FUNCTION__,
+              display_sockaddr(&con->server.addr, tmp1, sizeof(tmp1)),
+              display_sockaddr(&con->client.addr, tmp2, sizeof(tmp2))
+              );
+
         initiate_server_connect(con, loop);
     }
 
@@ -499,6 +510,15 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 
 static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
+    char tmp1[INET6_ADDRSTRLEN + 8];
+    char tmp2[INET6_ADDRSTRLEN + 8];
+
+    debug("[DEBUG] %s(): Connecting to '%s', client='%s'",
+                    __FUNCTION__,
+                    display_sockaddr(&con->server.addr, tmp1, sizeof(tmp1)),
+                    display_sockaddr(&con->client.addr, tmp2, sizeof(tmp2))
+          );
+
 #ifdef HAVE_ACCEPT4
     int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
 #else
@@ -512,6 +532,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         abort_connection(con);
         return;
     }
+
 
 #ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -553,6 +574,11 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             return;
         }
 
+        debug("[DEBUG] %s(): Use source address '%s'",
+                        __FUNCTION__,
+                        inet_ntoa(((struct sockaddr_in *) address_sa(con->listener->source_address))->sin_addr));
+
+        int result = 0;
         int tries = 5;
         do {
             result = bind(sockfd,
@@ -570,6 +596,27 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         }
     }
 
+#ifdef SO_BINDTODEVICE
+    if (con->listener->device_name) {
+        debug("[DEBUG] %s(): Bind to interface '%s'", __FUNCTION__, con->listener->device_name);
+
+        struct ifreq ifr;
+
+        memcpy(&ifr.ifr_name, con->listener->device_name, sizeof(ifr.ifr_name));
+
+        if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE,
+                        (void *)&ifr, sizeof(ifr)) < 0) {
+
+            err("bind failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
+
+    }
+#endif
+
+    debug("[DEBUG] %s(): Connect", __FUNCTION__);
     int result = connect(sockfd,
             (struct sockaddr *)&con->server.addr,
             con->server.addr_len);

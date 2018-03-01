@@ -132,6 +132,14 @@ struct Keyword listener_stanza_grammar[] = {
             (int(*)(void *, char *))accept_listener_source_address,
             NULL,
             NULL},
+
+#ifdef SO_BINDTODEVICE
+    { "device",
+            NULL,
+            (int(*)(void *, char *))accept_listener_device_name,
+            NULL,
+            NULL},
+#endif
     { "access_log",
             (void *(*)())new_logger_builder,
             (int(*)(void *, char *))accept_logger_filename,
