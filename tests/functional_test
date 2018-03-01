@@ -2,6 +2,8 @@
 
 use strict;
 use warnings;
+use File::Basename;
+use lib dirname (__FILE__);
 use TestUtils;
 use TestHTTPD;
 use File::Temp;
@@ -56,7 +58,7 @@ sub dump_connections_worker($) {
         # Sleep 100ms
         select(undef, undef, undef, 0.25);
 
-        my @new_dump_files = grep { !$existing_dump_files->{$_} } keys connection_dump_files();
+        my @new_dump_files = grep { !$existing_dump_files->{$_} } keys %{connection_dump_files()};
 
         die "sniproxy didn't dump connections" unless @new_dump_files;
 
@@ -76,11 +78,11 @@ sub main {
 
     my $config = make_config($proxy_port, $local_httpd || $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
 
     # Wait for proxy to load and parse config
-    wait_for_port($httpd_port);
-    wait_for_port($proxy_port);
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $proxy_port);
 
     start_child('dump-connections-worker', \&dump_connections_worker, $proxy_pid);
 

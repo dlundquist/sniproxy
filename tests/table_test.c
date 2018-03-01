@@ -11,6 +11,7 @@ static void test_single_entry_table();
 static void append_entry(struct Table *, const char *, const char *);
 static void add_new_table(struct Table_head *, const char *, const char **);
 static void test_add_table();
+static void test_tables_reload();
 static int count_tables(const struct Table_head *);
 
 
@@ -18,6 +19,7 @@ int main() {
     test_empty_table();
     test_single_entry_table();
     test_add_table();
+    test_tables_reload();
 }
 
 static void

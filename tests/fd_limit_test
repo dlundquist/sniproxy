@@ -2,6 +2,8 @@
 
 use strict;
 use warnings;
+use File::Basename;
+use lib dirname (__FILE__);
 use TestUtils;
 use TestHTTPD;
 use File::Temp;
@@ -45,11 +47,11 @@ sub main {
 
     my $config = make_config($proxy_port, $local_httpd || $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
-    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, $httpd_port) unless $local_httpd;
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
 
     # Wait for proxy to load and parse config
-    wait_for_port($httpd_port);
-    wait_for_port($proxy_port);
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $proxy_port);
 
     for (my $i = 0; $i < $workers; $i++) {
         start_child('worker', \&worker, 'localhost', '', $proxy_port, $iterations);

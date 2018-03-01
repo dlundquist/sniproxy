@@ -49,8 +49,8 @@
 static void usage();
 static void daemonize(void);
 static void write_pidfile(const char *, pid_t);
-static void set_limits(int);
-static void drop_perms(const char* username);
+static void set_limits(rlim_t);
+static void drop_perms(const char* username, const char* groupname);
 static void perror_exit(const char *);
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
 
@@ -68,7 +68,7 @@ int
 main(int argc, char **argv) {
     const char *config_file = "/etc/sniproxy.conf";
     int background_flag = 1;
-    int max_nofiles = 65536;
+    rlim_t max_nofiles = 65536;
     int opt;
 
     while ((opt = getopt(argc, argv, "fc:n:V")) != -1) {
@@ -80,7 +80,7 @@ main(int argc, char **argv) {
                 background_flag = 0;
                 break;
             case 'n':
-                max_nofiles = atoi(optarg);
+                max_nofiles = strtoul(optarg, NULL, 10);
                 break;
             case 'V':
                 printf("sniproxy %s\n", sniproxy_version);
@@ -119,7 +119,7 @@ main(int argc, char **argv) {
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 
     /* Drop permissions only when we can */
-    drop_perms(config->user ? config->user : default_username);
+    drop_perms(config->user ? config->user : default_username, config->group);
 
     ev_signal_init(&sighup_watcher, signal_cb, SIGHUP);
     ev_signal_init(&sigusr1_watcher, signal_cb, SIGUSR1);
@@ -198,7 +198,7 @@ daemonize(void) {
  * At some point we should make this a config parameter
  */
 static void
-set_limits(int max_nofiles) {
+set_limits(rlim_t max_nofiles) {
     struct rlimit fd_limit = {
         .rlim_cur = max_nofiles,
         .rlim_max = max_nofiles,
@@ -210,7 +210,7 @@ set_limits(int max_nofiles) {
 }
 
 static void
-drop_perms(const char *username) {
+drop_perms(const char *username, const char *groupname) {
     /* check if we are already an unprivileged user */
     if (getuid() != 0)
         return;
@@ -218,19 +218,33 @@ drop_perms(const char *username) {
     errno = 0;
     struct passwd *user = getpwnam(username);
     if (errno)
-        perror_exit("getpwnam()");
-    else if(user == NULL)
+        fatal("getpwnam(): %s", strerror(errno));
+    else if (user == NULL)
         fatal("getpwnam(): user %s does not exist", username);
 
-    /* drop any supplementary groups */
-    if (setgroups(1, &user->pw_gid) < 0)
-        perror_exit("setgroups()");
+    gid_t gid = user->pw_gid;
 
-    if (setgid(user->pw_gid) < 0)
-        perror_exit("setgid()");
+    if (groupname != NULL) {
+      errno = 0;
+      struct group *group = getgrnam(groupname);
+      if (errno)
+        fatal("getgrnam(): %s", strerror(errno));
+      else if (group == NULL)
+        fatal("getgrnam(): group %s does not exist", groupname);
+
+      gid = group->gr_gid;
+    }
+
+    /* drop any supplementary groups */
+    if (setgroups(1, &gid) < 0)
+        fatal("setgroups(): %s", strerror(errno));
+
+    /* set the main gid */
+    if (setgid(gid) < 0)
+        fatal("setgid(): %s", strerror(errno));
 
     if (setuid(user->pw_uid) < 0)
-        perror_exit("setuid()");
+        fatal("setuid(): %s", strerror(errno));
 }
 
 static void

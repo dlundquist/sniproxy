@@ -37,7 +37,7 @@ sub worker($$$$) {
     exit 0;
 }
 
-sub make_source_config($$) {
+sub make_reuseport_config($$) {
     my $proxy_port = shift;
     my $httpd_port = shift;
 
@@ -48,9 +48,14 @@ sub make_source_config($$) {
     print $fh <<END;
 # Minimal test configuration
 
-listen 127.0.0.1 $proxy_port {
+listen :: $proxy_port {
     proto http
-    source 127.1.1.1
+    ipv6_v6only on
+    access_log $logfile
+}
+
+listen 0.0.0.0 $proxy_port {
+    proto http
     access_log $logfile
 }
 
@@ -71,7 +76,7 @@ sub main {
     my $iterations = $ENV{ITERATIONS} || 10;
     my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
 
-    my $config = make_source_config($proxy_port, $local_httpd || $httpd_port);
+    my $config = make_reuseport_config($proxy_port, $local_httpd || $httpd_port);
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
     my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
 

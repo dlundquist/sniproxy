@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
+#include <assert.h>
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
@@ -38,6 +40,7 @@ struct LoggerBuilder {
 };
 
 static int accept_username(struct Config *, char *);
+static int accept_groupname(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
@@ -54,8 +57,8 @@ static int accept_resolver_nameserver(struct ResolverConfig *, char *);
 static int accept_resolver_search(struct ResolverConfig *, char *);
 static int accept_resolver_mode(struct ResolverConfig *, char *);
 static int end_resolver_stanza(struct Config *, struct ResolverConfig *);
-static size_t string_vector_len(char **);
-static int append_to_string_vector(char ***, const char *);
+static inline size_t string_vector_len(char **);
+static int append_to_string_vector(char ***, const char *) __attribute__((nonnull(1)));
 static void free_string_vector(char **);
 static void print_resolver_config(FILE *, struct ResolverConfig *);
 
@@ -102,6 +105,16 @@ struct Keyword listener_stanza_grammar[] = {
     { "protocol",
             NULL,
             (int(*)(void *, char *))accept_listener_protocol,
+            NULL,
+            NULL},
+    { "reuseport",
+            NULL,
+            (int(*)(void *, char *))accept_listener_reuseport,
+            NULL,
+            NULL},
+    { "ipv6_v6only",
+            NULL,
+            (int(*)(void *, char *))accept_listener_ipv6_v6only,
             NULL,
             NULL},
     { "table",
@@ -154,6 +167,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_username,
             NULL,
             NULL},
+    { "groupname",
+            NULL,
+            (int(*)(void *, char *))accept_groupname,
+            NULL,
+            NULL},
     { "pidfile",
             NULL,
             (int(*)(void *, char *))accept_pidfile,
@@ -188,6 +206,7 @@ static struct Keyword global_grammar[] = {
 };
 
 static const char *resolver_mode_names[] = {
+    "DEFAULT",
     "ipv4_only",
     "ipv6_only",
     "ipv4_first",
@@ -205,6 +224,7 @@ init_config(const char *filename, struct ev_loop *loop) {
 
     config->filename = NULL;
     config->user = NULL;
+    config->group = NULL;
     config->pidfile = NULL;
     config->access_log = NULL;
     config->resolver.nameservers = NULL;
@@ -260,6 +280,7 @@ void
 free_config(struct Config *config, struct ev_loop *loop) {
     free(config->filename);
     free(config->user);
+    free(config->group);
     free(config->pidfile);
 
     free_string_vector(config->resolver.nameservers);
@@ -323,6 +344,10 @@ print_config(FILE *file, struct Config *config) {
 
 static int
 accept_username(struct Config *config, char *username) {
+    if (config->user != NULL) {
+        err("Duplicate username: %s", username);
+        return 0;
+    }
     config->user = strdup(username);
     if (config->user == NULL) {
         err("%s: strdup", __func__);
@@ -333,7 +358,26 @@ accept_username(struct Config *config, char *username) {
 }
 
 static int
+accept_groupname(struct Config *config, char *groupname) {
+    if (config->group != NULL) {
+        err("Duplicate groupname: %s", groupname);
+        return 0;
+    }
+    config->group = strdup(groupname);
+    if (config->group == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
 accept_pidfile(struct Config *config, char *pidfile) {
+    if (config->pidfile != NULL) {
+        err("Duplicate pidfile: %s", pidfile);
+        return 0;
+    }
     config->pidfile = strdup(pidfile);
     if (config->pidfile == NULL) {
         err("%s: strdup", __func__);
@@ -351,6 +395,7 @@ end_listener_stanza(struct Config *config, struct Listener *listener) {
 
         /* free listener */
         listener_ref_get(listener);
+        assert(listener->reference_count == 1);
         listener_ref_put(listener);
 
         return -1;
@@ -433,7 +478,7 @@ accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
     };
 
     for (size_t i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
-        if(strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
+        if (strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
             lb->priority = priorities[i].priority;
             return 1;
         }
@@ -548,15 +593,13 @@ string_vector_len(char **vector) {
 
 static int
 append_to_string_vector(char ***vector_ptr, const char *string) {
-    char **vector = NULL;
-    if (vector_ptr != NULL)
-        vector = *vector_ptr;
+    char **vector = *vector_ptr;
 
     size_t len = string_vector_len(vector);
     vector = realloc(vector, (len + 2) * sizeof(char *));
     if (vector == NULL) {
         err("%s: realloc", __func__);
-        return -1;
+        return -errno;
     }
 
     *vector_ptr = vector;
@@ -564,11 +607,11 @@ append_to_string_vector(char ***vector_ptr, const char *string) {
     vector[len] = strdup(string);
     if (vector[len] == NULL) {
         err("%s: strdup", __func__);
-        return -1;
+        return -errno;
     }
     vector[len + 1] = NULL;
 
-    return 1;
+    return len + 1;
 }
 
 static void
@@ -608,7 +651,7 @@ accept_resolver_search(struct ResolverConfig *resolver, char *search) {
 
 static int
 accept_resolver_mode(struct ResolverConfig *resolver, char *mode) {
-    for (int i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
+    for (size_t i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
         if (strncasecmp(resolver_mode_names[i], mode, strlen(mode)) == 0) {
             resolver->mode = i;
             return 1;

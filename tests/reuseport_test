@@ -37,7 +37,7 @@ sub worker($$$$) {
     exit 0;
 }
 
-sub make_source_config($$) {
+sub make_reuseport_config($$) {
     my $proxy_port = shift;
     my $httpd_port = shift;
 
@@ -50,7 +50,7 @@ sub make_source_config($$) {
 
 listen 127.0.0.1 $proxy_port {
     proto http
-    source 127.1.1.1
+    reuseport on
     access_log $logfile
 }
 
@@ -71,8 +71,9 @@ sub main {
     my $iterations = $ENV{ITERATIONS} || 10;
     my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
 
-    my $config = make_source_config($proxy_port, $local_httpd || $httpd_port);
-    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $config = make_reuseport_config($proxy_port, $local_httpd || $httpd_port);
+    my $proxy1_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $proxy2_pid = start_child('server', \&proxy, $config, @ARGV);
     my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
 
     # Wait for proxy to load and parse config
@@ -97,7 +98,8 @@ sub main {
     #system("top -n 1 -p $proxy_pid -b");
 
     # Orderly shutdown of the server
-    kill 15, $proxy_pid;
+    kill 15, $proxy1_pid;
+    kill 15, $proxy2_pid;
     kill 15, $httpd_pid unless $local_httpd;
     sleep 1;
 

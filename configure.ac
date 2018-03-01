@@ -2,16 +2,16 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.60])
-AC_INIT([sniproxy], [0.4.0])
+AC_INIT([sniproxy], [0.5.0])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
+AC_GNU_SOURCE
 
 # Checks for programs.
 AC_PROG_CC_C99
 # Required by automake < 1.14
 AM_PROG_CC_C_O
-
 
 
 # Checks for libraries.
@@ -58,7 +58,6 @@ AS_IF([test "x$rfc3339_timestamps" = "xyes"],
     [AC_DEFINE([RFC3339_TIMESTAMP], 1, [RFC3339 timestamps enabled])])
 
 # Checks for header files.
-AC_FUNC_ALLOCA
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
     AC_MSG_ERROR([required header(s) not found]))
 
@@ -74,6 +73,8 @@ AC_FUNC_MALLOC
 AC_FUNC_STRTOD
 AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp],,
     AC_MSG_ERROR([required functions(s) not found]))
+
+AC_CHECK_FUNCS([accept4])
 
 # Enable large file support (so we can log more than 2GB)
 AC_SYS_LARGEFILE

@@ -33,16 +33,16 @@
 
 struct Buffer {
     char *buffer;
-    size_t size;
-    size_t head;
-    size_t len;
+    size_t size_mask;       /* bit mask for buffer size */
+    size_t head;            /* index of first byte of content */
+    size_t len;             /* size of content */
     ev_tstamp last_recv;
     ev_tstamp last_send;
     size_t tx_bytes;
     size_t rx_bytes;
 };
 
-struct Buffer *new_buffer(int, struct ev_loop *);
+struct Buffer *new_buffer(size_t, struct ev_loop *);
 void free_buffer(struct Buffer *);
 
 ssize_t buffer_recv(struct Buffer *, int, int, struct ev_loop *);
@@ -55,13 +55,13 @@ size_t buffer_coalesce(struct Buffer *, const void **);
 size_t buffer_pop(struct Buffer *, void *, size_t);
 size_t buffer_push(struct Buffer *, const void *, size_t);
 static inline size_t buffer_size(const struct Buffer *b) {
-    return b->size;
+    return b->size_mask + 1;
 }
 static inline size_t buffer_len(const struct Buffer *b) {
     return b->len;
 }
 static inline size_t buffer_room(const struct Buffer *b) {
-    return b->size - b->len;
+    return buffer_size(b) - b->len;
 }
 
 #endif

@@ -32,6 +32,7 @@
 #include <stdlib.h> /* malloc() */
 #include <string.h> /* strncpy() */
 #include <sys/socket.h>
+#include <sys/types.h>
 #include "tls.h"
 #include "protocol.h"
 #include "logger.h"
@@ -52,14 +53,14 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
-static int parse_tls_header(const char *, size_t, char **);
-static int parse_extensions(const char *, size_t, char **);
-static int parse_server_name_extension(const char *, size_t, char **);
+static int parse_tls_header(const uint8_t*, size_t, char **);
+static int parse_extensions(const uint8_t*, size_t, char **);
+static int parse_server_name_extension(const uint8_t*, size_t, char **);
 
 static const struct Protocol tls_protocol_st = {
     .name = "tls",
     .default_port = 443,
-    .parse_packet = &parse_tls_header,
+    .parse_packet = (int (*const)(const char *, size_t, char **))&parse_tls_header,
     .abort_message = tls_alert,
     .abort_message_len = sizeof(tls_alert)
 };
@@ -80,10 +81,10 @@ const struct Protocol *const tls_protocol = &tls_protocol_st;
  *  < -4 - Invalid TLS client hello
  */
 static int
-parse_tls_header(const char *data, size_t data_len, char **hostname) {
-    char tls_content_type;
-    char tls_version_major;
-    char tls_version_minor;
+parse_tls_header(const uint8_t *data, size_t data_len, char **hostname) {
+    uint8_t tls_content_type;
+    uint8_t tls_version_major;
+    uint8_t tls_version_minor;
     size_t pos = TLS_HEADER_LEN;
     size_t len;
 
@@ -121,8 +122,8 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     }
 
     /* TLS record length */
-    len = ((unsigned char)data[3] << 8) +
-        (unsigned char)data[4] + TLS_HEADER_LEN;
+    len = ((size_t)data[3] << 8) +
+        (size_t)data[4] + TLS_HEADER_LEN;
     data_len = MIN(data_len, len);
 
     /* Check we received entire TLS record length */
@@ -153,19 +154,19 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     /* Session ID */
     if (pos + 1 > data_len)
         return -5;
-    len = (unsigned char)data[pos];
+    len = (size_t)data[pos];
     pos += 1 + len;
 
     /* Cipher Suites */
     if (pos + 2 > data_len)
         return -5;
-    len = ((unsigned char)data[pos] << 8) + (unsigned char)data[pos + 1];
+    len = ((size_t)data[pos] << 8) + (size_t)data[pos + 1];
     pos += 2 + len;
 
     /* Compression Methods */
     if (pos + 1 > data_len)
         return -5;
-    len = (unsigned char)data[pos];
+    len = (size_t)data[pos];
     pos += 1 + len;
 
     if (pos == data_len && tls_version_major == 3 && tls_version_minor == 0) {
@@ -176,7 +177,7 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
     /* Extensions */
     if (pos + 2 > data_len)
         return -5;
-    len = ((unsigned char)data[pos] << 8) + (unsigned char)data[pos + 1];
+    len = ((size_t)data[pos] << 8) + (size_t)data[pos + 1];
     pos += 2;
 
     if (pos + len > data_len)
@@ -185,15 +186,15 @@ parse_tls_header(const char *data, size_t data_len, char **hostname) {
 }
 
 static int
-parse_extensions(const char *data, size_t data_len, char **hostname) {
+parse_extensions(const uint8_t *data, size_t data_len, char **hostname) {
     size_t pos = 0;
     size_t len;
 
     /* Parse each 4 bytes for the extension header */
     while (pos + 4 <= data_len) {
         /* Extension Length */
-        len = ((unsigned char)data[pos + 2] << 8) +
-            (unsigned char)data[pos + 3];
+        len = ((size_t)data[pos + 2] << 8) +
+            (size_t)data[pos + 3];
 
         /* Check if it's a server name extension */
         if (data[pos] == 0x00 && data[pos + 1] == 0x00) {
@@ -213,14 +214,14 @@ parse_extensions(const char *data, size_t data_len, char **hostname) {
 }
 
 static int
-parse_server_name_extension(const char *data, size_t data_len,
+parse_server_name_extension(const uint8_t *data, size_t data_len,
         char **hostname) {
     size_t pos = 2; /* skip server name list length */
     size_t len;
 
     while (pos + 3 < data_len) {
-        len = ((unsigned char)data[pos + 1] << 8) +
-            (unsigned char)data[pos + 2];
+        len = ((size_t)data[pos + 1] << 8) +
+            (size_t)data[pos + 2];
 
         if (pos + 3 + len > data_len)
             return -5;
@@ -233,7 +234,7 @@ parse_server_name_extension(const char *data, size_t data_len,
                     return -4;
                 }
 
-                strncpy(*hostname, data + pos + 3, len);
+                strncpy(*hostname, (const char *)(data + pos + 3), len);
 
                 (*hostname)[len] = '\0';
 

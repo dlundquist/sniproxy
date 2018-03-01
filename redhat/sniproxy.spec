@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.4.0
+Version: 0.5.0
 Release: 1%{?dist}
 Summary: Transparent TLS and HTTP layer 4 proxy with SNI support
 
@@ -46,6 +46,11 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Apr 26 2017 Dustin Lundquist <dustin@null-ptr.net> 0.5.0-1
+- Transparent proxy support
+- Use accept4() on Linix
+- Run as group specified in config
+
 * Tue Apr 7 2015 Dustin Lundquist <dustin@null-ptr.net> 0.4.0-1
 - Improve DNS resolver:
   Support for AAAA records

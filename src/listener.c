@@ -49,14 +49,41 @@
 #include "tls.h"
 #include "http.h"
 
-
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
 static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
 static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
 static void free_listener(struct Listener *);
+static int parse_boolean(const char *);
 
+
+static int
+parse_boolean(const char *boolean) {
+    const char *boolean_true[] = {
+        "yes",
+        "true",
+        "on",
+    };
+
+    const char *boolean_false[] = {
+        "no",
+        "false",
+        "off",
+    };
+
+    for (size_t i = 0; i < sizeof(boolean_true) / sizeof(boolean_true[0]); i++)
+        if (strcasecmp(boolean, boolean_true[i]) == 0)
+            return 1;
+
+    for (size_t i = 0; i < sizeof(boolean_false) / sizeof(boolean_false[0]); i++)
+        if (strcasecmp(boolean, boolean_false[i]) == 0)
+            return 0;
+
+    err("Unable to parse '%s' as a boolean value", boolean);
+
+    return -1;
+}
 
 /*
  * Initialize each listener.
@@ -201,6 +228,9 @@ new_listener() {
     listener->table_name = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
+    listener->reuseport = 0;
+    listener->ipv6_v6only = 0;
+    listener->transparent_proxy = 0;
     listener->reference_count = 0;
     /* Initializes sock fd to negative sentinel value to indicate watchers
      * are not active */
@@ -247,10 +277,15 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 
 int
 accept_listener_table_name(struct Listener *listener, char *table_name) {
-    if (listener->table_name == NULL)
-        listener->table_name = strdup(table_name);
-    else
-        err("Duplicate table_name: %s", table_name);
+    if (listener->table_name != NULL) {
+        err("Duplicate table: %s", table_name);
+        return 0;
+    }
+    listener->table_name = strdup(table_name);
+    if (listener->table_name == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
 
     return 1;
 }
@@ -264,6 +299,40 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 
     if (address_port(listener->address) == 0)
         address_set_port(listener->address, listener->protocol->default_port);
+
+    return 1;
+}
+
+int
+accept_listener_reuseport(struct Listener *listener, char *reuseport) {
+    listener->reuseport = parse_boolean(reuseport);
+    if (listener->reuseport == -1) {
+        return 0;
+    }
+
+#ifndef SO_REUSEPORT
+    if (listener->reuseport == 1) {
+        err("Reuseport not supported in this build");
+        return 0;
+    }
+#endif
+
+    return 1;
+}
+
+int
+accept_listener_ipv6_v6only(struct Listener *listener, char *ipv6_v6only) {
+    listener->ipv6_v6only = parse_boolean(ipv6_v6only);
+    if (listener->ipv6_v6only == -1) {
+        return 0;
+    }
+
+#ifndef IPV6_V6ONLY
+    if (listener->ipv6_v6only == 1) {
+        err("IPV6_V6ONLY not supported in this build");
+        return 0;
+    }
+#endif
 
     return 1;
 }
@@ -311,7 +380,7 @@ int
 accept_listener_source_address(struct Listener *listener, char *source) {
     debug("[DEBUG] %s(): load source address from config: %s", __FUNCTION__, source);
 
-    if (listener->source_address != NULL) {
+    if (listener->source_address != NULL || listener->transparent_proxy) {
         err("Duplicate source address: %s", source);
         return 0;
     }
@@ -324,6 +393,16 @@ accept_listener_source_address(struct Listener *listener, char *source) {
         return 0;
     }
 #endif
+
+    if (strcasecmp("client", source) == 0) {
+#ifdef IP_TRANSPARENT
+        listener->transparent_proxy = 1;
+        return 1;
+#else
+        err("Transparent proxy not supported on this platform.");
+        return 0;
+#endif
+    }
 
     listener->source_address = new_address(source);
     if (listener->source_address == NULL) {
@@ -457,7 +536,8 @@ valid_listener(const struct Listener *listener) {
 }
 
 static int
-init_listener(struct Listener *listener, const struct Table_head *tables, struct ev_loop *loop) {
+init_listener(struct Listener *listener, const struct Table_head *tables,
+        struct ev_loop *loop) {
     char address[ADDRESS_BUFFER_SIZE];
     struct Table *table = table_lookup(tables, listener->table_name);
     if (table == NULL) {
@@ -474,17 +554,57 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
+#ifdef HAVE_ACCEPT4
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
     int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+#endif
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
-        return -2;
+        return sockfd;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
     int on = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (result < 0) {
+        err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
 
-    int result = bind(sockfd, address_sa(listener->address),
+    if (listener->reuseport == 1) {
+#ifdef SO_REUSEPORT
+        /* set SO_REUSEPORT on server socket to allow binding of multiple
+         * processes on the same ip:port */
+        result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#else
+        result = -ENOSYS;
+#endif
+        if (result < 0) {
+            err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
+    }
+
+    if (listener->ipv6_v6only == 1 &&
+            address_sa(listener->address)->sa_family == AF_INET6) {
+#ifdef IPV6_V6ONLY
+        /* set IPV6_V6ONLY on server socket to only accept IPv6 connections on
+         * IPv6 listeners */
+        result = setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+#else
+        result = -ENOSYS;
+#endif
+        if (result < 0) {
+            err("setsockopt IPV6_V6ONLY failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
+    }
+
+    result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {
         /* Retry using binder module */
@@ -494,31 +614,32 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         if (sockfd < 0) {
             err("binder failed to bind to %s",
                 display_address(listener->address, address, sizeof(address)));
-            close(sockfd);
-            return -3;
+            return sockfd;
         }
     } else if (result < 0) {
         err("bind %s failed: %s",
             display_address(listener->address, address, sizeof(address)),
             strerror(errno));
         close(sockfd);
-        return -3;
+        return result;
     }
 
-    if (listen(sockfd, SOMAXCONN) < 0) {
+    result = listen(sockfd, SOMAXCONN);
+    if (result < 0) {
         err("listen failed: %s", strerror(errno));
         close(sockfd);
-        return -4;
+        return result;
     }
 
-
+#ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
-    listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
     listener->backoff_timer.data = listener;
+    listener_ref_get(listener);
 
     ev_io_start(loop, &listener->watcher);
 
@@ -605,6 +726,9 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     if (listener->device_name)
         fprintf(file, "\tdevice %s\n", listener->device_name);
 #endif
+
+    if (listener->reuseport)
+        fprintf(file, "\treuseport on\n");
 
     fprintf(file, "}\n\n");
 }

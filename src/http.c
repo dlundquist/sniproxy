@@ -27,7 +27,7 @@
 #include <stdlib.h> /* malloc() */
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
-#include <ctype.h> /* isblank() */
+#include <ctype.h> /* isblank(), isdigit() */
 #include "http.h"
 #include "protocol.h"
 
@@ -40,8 +40,8 @@ static const char http_503[] =
     "Backend not available";
 
 static int parse_http_header(const char *, size_t, char **);
-static int get_header(const char *, const char *, int, char **);
-static int next_header(const char **, int *);
+static int get_header(const char *, const char *, size_t, char **);
+static size_t next_header(const char **, size_t *);
 
 static const struct Protocol http_protocol_st = {
     .name = "http",
@@ -79,6 +79,7 @@ parse_http_header(const char* data, size_t data_len, char **hostname) {
     /*
      *  if the user specifies the port in the request, it is included here.
      *  Host: example.com:80
+     *  Host: [2001:db8::1]:8080
      *  so we trim off port portion
      */
     for (i = result - 1; i >= 0; i--)
@@ -86,14 +87,16 @@ parse_http_header(const char* data, size_t data_len, char **hostname) {
             (*hostname)[i] = '\0';
             result = i;
             break;
+        } else if (!isdigit((*hostname)[i])) {
+            break;
         }
 
     return result;
 }
 
 static int
-get_header(const char *header, const char *data, int data_len, char **value) {
-    int len, header_len;
+get_header(const char *header, const char *data, size_t data_len, char **value) {
+    size_t len, header_len;
 
     header_len = strlen(header);
 
@@ -122,9 +125,9 @@ get_header(const char *header, const char *data, int data_len, char **value) {
     return -2;
 }
 
-static int
-next_header(const char **data, int *len) {
-    int header_len;
+static size_t
+next_header(const char **data, size_t *len) {
+    size_t header_len;
 
     /* perhaps we can optimize this to reuse the value of header_len, rather
      * than scanning twice.

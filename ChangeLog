@@ -1,3 +1,10 @@
+2017-04-26  Dustin Lundquist <dustin@null-ptr.net>
+	0.5.0 Release
+
+	* Transparent proxy support
+	* Use accept4() on Linix
+	* Run as group specified in config
+
 2015-04-07  Dustin Lundquist <dustin@null-ptr.net>
 	0.4.0 release
 
