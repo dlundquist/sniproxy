@@ -97,7 +97,7 @@ bind_socket(const struct sockaddr *addr, size_t addr_len) {
 
     size_t request_len = sizeof(request) + addr_len;
     if (request_len > sizeof(data_buf))
-        fatal("bind_socket: request length %d exceeds buffer", request_len);
+        fatal("bind_socket: request length %zu exceeds buffer", request_len);
     request = (struct binder_request *)data_buf;
     request->address_len = addr_len;
     memcpy(&request->address, addr, addr_len);
