@@ -16,7 +16,8 @@ TESTS = http_test \
         bind_source_test \
         fd_limit_test \
 		reuseport_test \
-		ipv6_v6only_test
+		ipv6_v6only_test \
+		proxy_header_test
 
 if DNS_ENABLED
   TESTS += config_test \
