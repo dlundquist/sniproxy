@@ -14,6 +14,8 @@ Features
 + Supports IPv4, IPv6 and Unix domain sockets for both back end servers and
   listeners.
 + Supports multiple listening sockets per instance.
++ Supports HAProxy proxy protocol to propagate original source address to
+  backend servers.
 
 Usage
 -----

@@ -221,6 +221,7 @@ new_listener() {
     listener->reuseport = 0;
     listener->ipv6_v6only = 0;
     listener->transparent_proxy = 0;
+    listener->fallback_use_proxy_header = 0;
     listener->reference_count = 0;
     /* Initializes sock fd to negative sentinel value to indicate watchers
      * are not active */
@@ -329,37 +330,42 @@ accept_listener_ipv6_v6only(struct Listener *listener, char *ipv6_v6only) {
 
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
-    if (listener->fallback_address != NULL) {
-        err("Duplicate fallback address: %s", fallback);
-        return 0;
-    }
-    struct Address *fallback_address = new_address(fallback);
-    if (fallback_address == NULL) {
-        err("Unable to parse fallback address: %s", fallback);
-        return 0;
-    } else if (address_is_sockaddr(fallback_address)) {
-        listener->fallback_address = fallback_address;
-        return 1;
-    } else if (address_is_hostname(fallback_address)) {
+    if (listener->fallback_address == NULL) {
+        struct Address *fallback_address = new_address(fallback);
+        if (fallback_address == NULL) {
+            err("Unable to parse fallback address: %s", fallback);
+            return 0;
+        } else if (address_is_sockaddr(fallback_address)) {
+            listener->fallback_address = fallback_address;
+            return 1;
+        } else if (address_is_hostname(fallback_address)) {
 #ifndef HAVE_LIBUDNS
-        err("Only fallback socket addresses permitted when compiled without libudns");
-        free(fallback_address);
-        return 0;
+            err("Only fallback socket addresses permitted when compiled without libudns");
+            free(fallback_address);
+            return 0;
 #else
-        warn("Using hostname as fallback address is strongly discouraged");
-        listener->fallback_address = fallback_address;
-        return 1;
+            warn("Using hostname as fallback address is strongly discouraged");
+            listener->fallback_address = fallback_address;
+            return 1;
 #endif
-    } else if (address_is_wildcard(fallback_address)) {
-        /* The wildcard functionality requires successfully parsing the
-         * hostname from the client's request, if we couldn't find the
-         * hostname and are using a fallback address it doesn't make
-         * much sense to configure it as a wildcard. */
-        err("Wildcard address prohibited as fallback address");
-        free(fallback_address);
-        return 0;
+        } else if (address_is_wildcard(fallback_address)) {
+            /* The wildcard functionality requires successfully parsing the
+             * hostname from the client's request, if we couldn't find the
+             * hostname and are using a fallback address it doesn't make
+             * much sense to configure it as a wildcard. */
+            err("Wildcard address prohibited as fallback address");
+            free(fallback_address);
+            return 0;
+        } else {
+            fatal("Unexpected fallback address type");
+            return 0;
+        }
+    } else if (strcasecmp("proxy", fallback) == 0 &&
+            listener->fallback_use_proxy_header == 0) {
+        listener->fallback_use_proxy_header = 1;
+        return 1;
     } else {
-        fatal("Unexpected fallback address type");
+        err("Unexpected fallback argument: %s", fallback);
         return 0;
     }
 }
@@ -598,51 +604,66 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
  *         address based on the request hostname (if valid)
  *      3. use the fallback address
  */
-struct Address *
+struct LookupResult
 listener_lookup_server_address(const struct Listener *listener,
         const char *name, size_t name_len) {
-    const struct Address *addr =
+    struct LookupResult table_result =
         table_lookup_server_address(listener->table, name, name_len);
-    if (addr == NULL) {
-        if (listener->fallback_address)
-            addr = listener->fallback_address;
-        else
-            return NULL;
-    }
 
-    struct Address *new_addr = NULL;
-
-    if (address_is_wildcard(addr)) {
-        new_addr = new_address(name);
+    if (table_result.address == NULL) {
+        /* No match in table, use fallback address if present */
+        return (struct LookupResult){
+            .address = listener->fallback_address,
+            .use_proxy_header = listener->fallback_use_proxy_header
+        };
+    } else if (address_is_wildcard(table_result.address)) {
+        /* Wildcard table entry, create a new address from hostname */
+        struct Address *new_addr = new_address(name);
         if (new_addr == NULL) {
             warn("Invalid hostname %.*s in client request",
                     (int)name_len, name);
+
+            return (struct LookupResult){
+                .address = listener->fallback_address,
+                .use_proxy_header = listener->fallback_use_proxy_header
+            };
         } else if (address_is_sockaddr(new_addr)) {
             warn("Refusing to proxy to socket address literal %.*s in request",
                     (int)name_len, name);
-
             free(new_addr);
-            new_addr = NULL;
-        } else if (address_port(addr) != 0) {
+
+            return (struct LookupResult){
+                .address = listener->fallback_address,
+                .use_proxy_header = listener->fallback_use_proxy_header
+            };
+        }
+
+        if (address_port(table_result.address) != 0) {
             /* We created a valid new_addr,
              * use the port from wildcard address if present */
-            address_set_port(new_addr, address_port(addr));
+            address_set_port(new_addr, address_port(table_result.address));
         }
+
+        return (struct LookupResult){
+            .address = new_addr,
+            .caller_free_address = 1,
+            .use_proxy_header = table_result.use_proxy_header
+        };
+    } else if (address_port(table_result.address) == 0) {
+        /* If the server port isn't specified return a new address using the
+         * port from the listen, this allows sharing table across listeners */
+        struct Address *new_addr = copy_address(table_result.address);
+
+        address_set_port(new_addr, address_port(listener->address));
+
+        return (struct LookupResult){
+            .address = new_addr,
+            .caller_free_address = 1,
+            .use_proxy_header = table_result.use_proxy_header
+        };
     } else {
-        new_addr = copy_address(addr);
+        return table_result;
     }
-
-    if (new_addr == NULL && listener->fallback_address)
-        new_addr = copy_address(listener->fallback_address);
-
-    if (new_addr) {
-        /* we successfully allocate a new address,
-         * use the listeners port if we don't have one already */
-        if (address_port(new_addr) == 0)
-            address_set_port(new_addr, address_port(listener->address));
-    }
-
-    return new_addr;
 }
 
 void
@@ -657,8 +678,15 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     if (listener->table_name)
         fprintf(file, "\ttable %s\n", listener->table_name);
 
-    if (listener->fallback_address)
+    if (listener->fallback_address &&
+            !listener->fallback_use_proxy_header)
         fprintf(file, "\tfallback %s\n",
+                display_address(listener->fallback_address,
+                    address, sizeof(address)));
+
+    if (listener->fallback_address &&
+            listener->fallback_use_proxy_header)
+        fprintf(file, "\tfallback %s proxy\n",
                 display_address(listener->fallback_address,
                     address, sizeof(address)));
 

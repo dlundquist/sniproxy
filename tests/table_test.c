@@ -36,8 +36,9 @@ test_empty_table() {
     assert(name != table->name);
 
     const char *server_query = "example.com";
-    assert(table_lookup_server_address(table, server_query,
-            strlen(server_query)) == NULL);
+    struct LookupResult result = table_lookup_server_address(table,
+            server_query, strlen(server_query));
+    assert(result.address == NULL);
 
     table_ref_put(table);
 }
@@ -72,8 +73,9 @@ test_single_entry_table() {
     init_table(table);
 
     const char *server_query = "example.com";
-    assert(table_lookup_server_address(table, server_query,
-            strlen(server_query)) != NULL);
+    struct LookupResult result = table_lookup_server_address(table,
+            server_query, strlen(server_query));
+    assert(result.address != NULL);
 
     table_ref_put(table);
 }

@@ -182,7 +182,7 @@ The access log configuration may be overridden on each listener.
 table http_hosts {
     ^example\\.com$ 192.0.2.101
     ^example\\.net$ 192.0.2.102
-    ^example\\.org$ 192.0.2.103
+    ^example\\.org$ 192.0.2.103 proxy_protocol
 }
 .fi
 .PP
@@ -192,6 +192,10 @@ hostname is matched against entries in the table in order, until a match is
 found and that server is used. The server address may be either IP, an IP and
 port, a unix socket path, a hostname or '*'. If no port is specified, the port
 of the listener which connection was received on will be used.
+
+The optional proxy_protocol option will prepend a HAProxy PROXY v1 protocol
+header to the proxied connection allowing supporting webservers to obtain the
+source and destination IP and port of the original incoming TCP connection.
 
 
 .SH "SEE ALSO"

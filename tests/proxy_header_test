@@ -1,0 +1,136 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use File::Basename;
+use lib dirname (__FILE__);
+use TestUtils;
+use TestHTTPD;
+use File::Temp;
+use IO::Socket::INET;
+
+sub proxy {
+    my $config = shift;
+
+    exec(@_, '../src/sniproxy', '-f', '-c', $config);
+}
+
+sub make_proxy_config($$$) {
+    my $proxy_port = shift;
+    my $httpd_port = shift;
+    my $httpd2_port = shift;
+
+    my ($fh, $filename) = File::Temp::tempfile();
+    my ($unused, $logfile) = File::Temp::tempfile();
+
+    # Write out a test config file
+    print $fh <<END;
+# Minimal fallback test configuration
+
+listen 127.0.0.1 $proxy_port {
+    proto http
+    access_log $logfile
+}
+
+table {
+    proxy-protocol.local 127.0.0.1:$httpd2_port proxy_protocol
+    localhost 127.0.0.1:$httpd_port
+}
+END
+
+    close ($fh);
+
+    return $filename;
+}
+
+sub worker($$$$) {
+    my ($hostname, $path, $port, $requests) = @_;
+
+    for (my $i = 0; $i < $requests; $i++) {
+        system('curl',
+                '-s', '-S',
+                '--fail',
+                '-H', "Host: $hostname",
+                '-o', '/dev/null',
+                "http://localhost:$port/$path");
+
+        if ($? == -1) {
+            die "failed to execute: $!\n";
+        } elsif ($? & 127) {
+            printf STDERR "child died with signal %d, %s coredump\n", ($? & 127), ($? & 128) ? 'with' : 'without';
+            exit 255;
+        } elsif ($? >> 8) {
+            exit $? >> 8;
+        }
+    }
+    # Success
+    exit 0;
+}
+
+sub valid_port($) {
+    my $port = shift;
+
+    return $port eq int($port) && $port > 0 && $port <= 65535;
+}
+
+sub main {
+    my $proxy_port = $ENV{SNI_PROXY_PORT} || 8080;
+    my $httpd_port = $ENV{TEST_HTTPD_PORT} || 8081;
+    my $httpd2_port = $ENV{TEST_HTTPD_PORT2} || 8082;
+    my $workers = $ENV{WORKERS} || 10;
+    my $iterations = $ENV{ITERATIONS} || 10;
+    my $local_httpd = $ENV{LOCAL_HTTPD_PORT};
+
+    my $config = make_proxy_config($proxy_port, $local_httpd || $httpd_port, $httpd2_port);
+    my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
+    my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
+    my $httpd2_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd2_port, parser => sub {
+        my $sock = shift;
+
+        my $status = 500;
+
+        for (my $i = 0; my $line = $sock->getline(); $i++) {
+            if ($i == 0 && $line =~ m/\APROXY (\S+) (\S+) (\S+) (\S+) (\S+)\r\n\z/ &&
+                $1 eq 'TCP4' &&
+                $2 eq '127.0.0.1' && $3 eq '127.0.0.1' &&
+                valid_port($4) && valid_port($5)) {
+                $status = 200;
+            }
+
+            # Wait for blank line indicating the end of the request
+            last if $line eq "\r\n";
+        }
+
+        return $status;
+    });
+
+    # Wait for proxy to load and parse config
+    wait_for_port(port => $httpd_port);
+    wait_for_port(port => $httpd2_port);
+    wait_for_port(port => $proxy_port);
+
+    for (my $i = 0; $i < $workers; $i++) {
+        my $req_hostname = ($i % 2) ? 'proxy-protocol.local' : 'localhost';
+        start_child('worker', \&worker, $req_hostname, '', $proxy_port, $iterations);
+    }
+
+    # Wait for all our children to finish
+    wait_for_type('worker');
+
+    # Give the proxy a second to flush buffers and close server connections
+    sleep 1;
+
+    # Orderly shutdown of the server
+    kill 15, $proxy_pid;
+    kill 15, $httpd_pid unless $local_httpd;
+    kill 15, $httpd2_pid;
+    sleep 1;
+
+    # Delete our test configuration
+    unlink($config);
+
+    # Kill off any remaining children
+    reap_children();
+}
+
+main();

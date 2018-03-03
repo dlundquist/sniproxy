@@ -46,16 +46,18 @@ struct Connection {
     } state;
 
     struct {
-        struct sockaddr_storage addr;
-        socklen_t addr_len;
+        struct sockaddr_storage addr, local_addr;
+        socklen_t addr_len, local_addr_len;
         struct ev_io watcher;
         struct Buffer *buffer;
     } client, server;
     struct Listener *listener;
     const char *hostname; /* Requested hostname */
     size_t hostname_len;
+    size_t header_len;
     struct ResolvQuery *query_handle;
     ev_tstamp established_timestamp;
+    int use_proxy_header;
 
     TAILQ_ENTRY(Connection) entries;
 };

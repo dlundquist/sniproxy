@@ -90,8 +90,9 @@ sub main {
     my $proxy_pid = start_child('server', \&proxy, $config, @ARGV);
     my $httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $httpd_port) unless $local_httpd;
     my $fallback_httpd_pid = start_child('server', \&TestHTTPD::httpd, port => $fallback_port, generator => sub {
-            return sub($) {
+            return sub($$) {
                 my $sock = shift;
+                my $status = shift;
 
                 print $sock "HTTP/1.1 203 Non-Authoritative Information\r\n";
                 print $sock "Server: TestHTTPD/$TestHTTPD::VERSION\r\n";

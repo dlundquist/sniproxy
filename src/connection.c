@@ -52,8 +52,9 @@
 
 struct resolv_cb_data {
     struct Connection *connection;
-    struct Address *address;
+    const struct Address *address;
     struct ev_loop *loop;
+    int cb_free_addr;
 };
 
 
@@ -69,6 +70,7 @@ static void reactivate_watcher(struct ev_loop *, struct ev_io *,
 static void connection_cb(struct ev_loop *, struct ev_io *, int);
 static void resolv_cb(struct Address *, void *);
 static void reactivate_watchers(struct Connection *, struct ev_loop *);
+static void insert_proxy_v1_header(struct Connection *);
 static void parse_client_request(struct Connection *);
 static void resolve_server_address(struct Connection *, struct ev_loop *);
 static void initiate_server_connect(struct Connection *, struct ev_loop *);
@@ -127,6 +129,17 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
+    if (getsockname(sockfd, (struct sockaddr *)&con->client.local_addr,
+                &con->client.local_addr_len) != 0) {
+        int saved_errno = errno;
+
+        warn("getsockname failed: %s", strerror(errno));
+        free_connection(con);
+
+        errno = saved_errno;
+        return 0;
+    }
+
     /* Avoiding type-punned pointer warning */
     struct ev_io *client_watcher = &con->client.watcher;
     ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
@@ -138,6 +151,10 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     TAILQ_INSERT_HEAD(&connections, con, entries);
 
     ev_io_start(loop, client_watcher);
+
+    if (con->listener->table->use_proxy_header ||
+            con->listener->fallback_use_proxy_header)
+        insert_proxy_v1_header(con);
 
     return 1;
 }
@@ -338,10 +355,86 @@ reactivate_watcher(struct ev_loop *loop, struct ev_io *w,
 }
 
 static void
+insert_proxy_v1_header(struct Connection *con) {
+    char buf[INET6_ADDRSTRLEN] = { '\0' };
+    size_t buf_len;
+
+    con->header_len += buffer_push(con->client.buffer, "PROXY ", 6);
+
+    switch (con->client.addr.ss_family) {
+        case AF_INET:
+            con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5);
+
+            inet_ntop(AF_INET,
+                      &((const struct sockaddr_in *)&con->client.addr)->
+                      sin_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+            inet_ntop(AF_INET,
+                      &((const struct sockaddr_in *)&con->client.local_addr)->
+                      sin_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in *)&con->
+                              client.addr)->sin_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in *)&con->
+                              client.local_addr)->sin_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            break;
+        case AF_INET6:
+            con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5);
+            inet_ntop(AF_INET6,
+                    &((const struct sockaddr_in6 *)&con->client.addr)->
+                    sin6_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            con->header_len += buffer_push(con->client.buffer, " ", 1);
+
+            inet_ntop(AF_INET6,
+                      &((const struct sockaddr_in6 *)&con->
+                      client.local_addr)->sin6_addr, buf, sizeof(buf));
+            buf_len = strlen(buf);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in6 *)&con->
+                              client.addr)->sin6_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            buf_len = snprintf(buf, sizeof(buf), " %d",
+                              ntohs(((const struct sockaddr_in6 *)&con->
+                              client.local_addr)->sin6_port));
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+
+            break;
+        default:
+            con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7);
+    }
+    con->header_len += buffer_push(con->client.buffer, "\r\n", 2);
+}
+
+static void
 parse_client_request(struct Connection *con) {
     const char *payload;
     size_t payload_len = buffer_coalesce(con->client.buffer, (const void **)&payload);
     char *hostname = NULL;
+
+    /* Avoid payload_len underflow and empty request */
+    if (payload_len <= con->header_len)
+        return;
+
+    payload += con->header_len;
+    payload_len -= con->header_len;
 
     int result = con->listener->protocol->parse_packet(payload, payload_len, &hostname);
     if (result < 0) {
@@ -390,30 +483,37 @@ abort_connection(struct Connection *con) {
 
 static void
 resolve_server_address(struct Connection *con, struct ev_loop *loop) {
-    /* TODO avoid extra malloc in listener_lookup_server_address() */
-    struct Address *server_address =
+    struct LookupResult result =
         listener_lookup_server_address(con->listener, con->hostname, con->hostname_len);
 
-    if (server_address == NULL) {
+    if (result.address == NULL) {
         abort_connection(con);
         return;
-    } else if (address_is_hostname(server_address)) {
+    } else if (address_is_hostname(result.address)) {
 #ifndef HAVE_LIBUDNS
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
-        free(server_address);
+
+        if (result.caller_free_address)
+            free(result.address);
+
         abort_connection(con);
         return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
         if (cb_data == NULL) {
             err("%s: malloc", __func__);
-            free(server_address);
+
+            if (result.caller_free_address)
+                free((void *)result.address);
+
             abort_connection(con);
             return;
         }
         cb_data->connection = con;
-        cb_data->address = server_address;
+        cb_data->address = result.address;
+        cb_data->cb_free_addr = result.caller_free_address;
         cb_data->loop = loop;
+        con->use_proxy_header = result.use_proxy_header;
 
         int resolv_mode = RESOLV_MODE_DEFAULT;
         if (con->listener->transparent_proxy) {
@@ -429,26 +529,28 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
                     warn("attempt to use transparent proxy with hostname %s "
                             "on non-IP listener %s, falling back to "
                             "non-transparent mode",
-                            address_hostname(server_address),
+                            address_hostname(result.address),
                             display_sockaddr(con->listener->address,
                                     listener_address, sizeof(listener_address))
                             );
             }
         }
 
-        con->query_handle = resolv_query(address_hostname(server_address),
+        con->query_handle = resolv_query(address_hostname(result.address),
                 resolv_mode, resolv_cb,
                 (void (*)(void *))free_resolv_cb_data, cb_data);
 
         con->state = RESOLVING;
 #endif
-    } else if (address_is_sockaddr(server_address)) {
-        con->server.addr_len = address_sa_len(server_address);
+    } else if (address_is_sockaddr(result.address)) {
+        con->server.addr_len = address_sa_len(result.address);
         assert(con->server.addr_len <= sizeof(con->server.addr));
-        memcpy(&con->server.addr, address_sa(server_address),
+        memcpy(&con->server.addr, address_sa(result.address),
             con->server.addr_len);
+        con->use_proxy_header = result.use_proxy_header;
 
-        free(server_address);
+        if (result.caller_free_address)
+            free((void *)result.address);
 
         con->state = RESOLVED;
     } else {
@@ -493,7 +595,8 @@ resolv_cb(struct Address *result, void *data) {
 
 static void
 free_resolv_cb_data(struct resolv_cb_data *cb_data) {
-    free(cb_data->address);
+    if (cb_data->cb_free_addr)
+        free((void *)cb_data->address);
     free(cb_data);
 }
 
@@ -582,6 +685,21 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
                 strerror(errno));
         abort_connection(con);
         return;
+    }
+
+    if (getsockname(sockfd, (struct sockaddr *)&con->server.local_addr,
+                &con->server.local_addr_len) != 0) {
+        close(sockfd);
+        warn("getsockname failed: %s", strerror(errno));
+
+        abort_connection(con);
+        return;
+    }
+
+    if (con->header_len && !con->use_proxy_header) {
+        /* If we prepended the PROXY header and this backend isn't configured
+         * to receive it, consume it now */
+        buffer_pop(con->client.buffer, NULL, con->header_len);
     }
 
     struct ev_io *server_watcher = &con->server.watcher;
@@ -677,10 +795,16 @@ new_connection(struct ev_loop *loop) {
 
     con->state = NEW;
     con->client.addr_len = sizeof(con->client.addr);
+    con->client.local_addr = (struct sockaddr_storage){.ss_family = AF_UNSPEC};
+    con->client.local_addr_len = sizeof(con->client.local_addr);
     con->server.addr_len = sizeof(con->server.addr);
+    con->server.local_addr = (struct sockaddr_storage){.ss_family = AF_UNSPEC};
+    con->server.local_addr_len = sizeof(con->server.local_addr);
     con->hostname = NULL;
     con->hostname_len = 0;
+    con->header_len = 0;
     con->query_handle = NULL;
+    con->use_proxy_header = 0;
 
     con->client.buffer = new_buffer(4096, loop);
     if (con->client.buffer == NULL) {
@@ -710,7 +834,7 @@ log_connection(struct Connection *con) {
         duration = con->server.buffer->last_recv - con->established_timestamp;
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
-    display_address(con->listener->address, listener_address, sizeof(listener_address));
+    display_sockaddr(&con->client.local_addr, listener_address, sizeof(listener_address));
     display_sockaddr(&con->server.addr, server_address, sizeof(server_address));
 
     log_msg(con->listener->access_log,

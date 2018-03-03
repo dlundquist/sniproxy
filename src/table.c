@@ -59,6 +59,7 @@ new_table() {
     }
 
     table->name = NULL;
+    table->use_proxy_header = 0;
     table->reference_count = 0;
     STAILQ_INIT(&table->backends);
 
@@ -127,17 +128,16 @@ remove_table(struct Table_head *tables, struct Table *table) {
     table_ref_put(table);
 }
 
-const struct Address *
+struct LookupResult
 table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
-    struct Backend *b;
-
-    b = table_lookup_backend(table, name, name_len);
+    struct Backend *b = table_lookup_backend(table, name, name_len);
     if (b == NULL) {
         info("No match found for %.*s", (int)name_len, name);
-        return NULL;
+        return (struct LookupResult){.address = NULL};
     }
 
-    return b->address;
+    return (struct LookupResult){.address = b->address,
+                                 .use_proxy_header = b->use_proxy_header};
 }
 
 void

@@ -40,6 +40,7 @@ struct Listener {
     char *table_name;
     struct Logger *access_log;
     int log_bad_requests, reuseport, transparent_proxy, ipv6_v6only;
+    int fallback_use_proxy_header;
 
     /* Runtime fields */
     int reference_count;
@@ -67,7 +68,7 @@ void remove_listener(struct Listener_head *, struct Listener *, struct ev_loop *
 void free_listeners(struct Listener_head *, struct ev_loop *);
 
 int valid_listener(const struct Listener *);
-struct Address *listener_lookup_server_address(const struct Listener *,
+struct LookupResult listener_lookup_server_address(const struct Listener *,
         const char *, size_t);
 void print_listener_config(FILE *, const struct Listener *);
 void listener_ref_put(struct Listener *);
