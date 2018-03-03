@@ -33,7 +33,7 @@ listen 127.0.0.1 $proxy_port {
 }
 
 table {
-    transparent.local 127.0.0.1:$httpd2_port proxy
+    proxy-protocol.local 127.0.0.1:$httpd2_port proxy_protocol
     localhost 127.0.0.1:$httpd_port
 }
 END
@@ -110,7 +110,7 @@ sub main {
     wait_for_port(port => $proxy_port);
 
     for (my $i = 0; $i < $workers; $i++) {
-        my $req_hostname = ($i % 2) ? 'transparent.local' : 'localhost';
+        my $req_hostname = ($i % 2) ? 'proxy-protocol.local' : 'localhost';
         start_child('worker', \&worker, $req_hostname, '', $proxy_port, $iterations);
     }
 

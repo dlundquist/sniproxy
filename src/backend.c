@@ -78,7 +78,7 @@ accept_backend_arg(struct Backend *backend, const char *arg) {
             return -1;
         }
     } else if (backend->use_proxy_header == 0 &&
-        strcasecmp(arg, "proxy") == 0) {
+        strcasecmp(arg, "proxy_protocol") == 0) {
         backend->use_proxy_header = 1;
     } else {
         err("Unexpected table backend argument: %s", arg);
@@ -149,7 +149,7 @@ print_backend_config(FILE *file, const struct Backend *backend) {
 static char *
 backend_config_options(const struct Backend *backend) {
     if (backend->use_proxy_header)
-        return " proxy";
+        return " proxy_protocol";
     else
         return "";
 }
