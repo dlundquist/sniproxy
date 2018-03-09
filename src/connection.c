@@ -239,6 +239,8 @@ static void
 connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Connection *con = (struct Connection *)w->data;
     int is_client = &con->client.watcher == w;
+    const char *socket_name =
+        is_client ? "client" : "server";
     struct Buffer *input_buffer =
         is_client ? con->client.buffer : con->server.buffer;
     struct Buffer *output_buffer =
@@ -250,7 +252,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
         if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-            warn("recv(): %s, closing connection",
+            warn("recv(%s): %s, closing connection",
+                    socket_name,
                     strerror(errno));
 
             close_socket(con, loop);
@@ -265,7 +268,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, 0, loop);
         if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
-            warn("send(): %s, closing connection",
+            warn("send(%s): %s, closing connection",
+                    socket_name,
                     strerror(errno));
 
             close_socket(con, loop);
