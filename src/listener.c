@@ -638,11 +638,12 @@ listener_lookup_server_address(const struct Listener *listener,
             };
         }
 
-        if (address_port(table_result.address) != 0) {
-            /* We created a valid new_addr,
-             * use the port from wildcard address if present */
-            address_set_port(new_addr, address_port(table_result.address));
-        }
+        /* We created a valid new_addr, use the port from wildcard address if
+         * present otherwise the listener */
+        address_set_port(new_addr, address_port(table_result.address) != 0 ?
+                                   address_port(table_result.address) :
+                                   address_port(listener->address));
+
 
         return (struct LookupResult){
             .address = new_addr,
