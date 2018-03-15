@@ -54,7 +54,9 @@ Specify how error messages should be handled. Messages can be either logged to
 syslog using the syslog directive specifies that logs should to a given syslog
 facility. Alternatively the filename directive may be specified to log to file,
 these two options are mutually exclusive. The priority directive indicates what
-severity of messages should be logged.
+severity of messages should be logged. Accepted priorities the standard syslog
+priorities, in increasing verbosity: emergency, alert, critical, error,
+warning, notice, info, and debug.
 
 .SS ACCESS_LOG
 
