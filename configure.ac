@@ -6,6 +6,7 @@ AC_INIT([sniproxy], [0.5.0])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
+AM_SILENT_RULES([yes])
 AC_GNU_SOURCE
 
 # Checks for programs.
@@ -58,20 +59,24 @@ AS_IF([test "x$rfc3339_timestamps" = "xyes"],
     [AC_DEFINE([RFC3339_TIMESTAMP], 1, [RFC3339 timestamps enabled])])
 
 # Checks for header files.
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stddef.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h string.h strings.h sys/socket.h sys/time.h syslog.h unistd.h],,
     AC_MSG_ERROR([required header(s) not found]))
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
 AC_TYPE_PID_T
+AC_TYPE_UID_T
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT8_T
 
 # Checks for library functions.
 AC_FUNC_FORK
 AC_FUNC_MALLOC
+AC_FUNC_REALLOC
 AC_FUNC_STRTOD
-AC_CHECK_FUNCS([daemon memset socket strcasecmp strdup strerror strncasecmp],,
+AC_CHECK_FUNCS([atexit daemon memset socket strcasecmp strchr strdup strerror strncasecmp strrchr strspn strtoul],,
     AC_MSG_ERROR([required functions(s) not found]))
 
 AC_CHECK_FUNCS([accept4])

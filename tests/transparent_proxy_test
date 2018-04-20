@@ -93,7 +93,10 @@ sub main {
 
     my $config = make_config($proxy_port, $httpd_port);
 
-    die "This tests requires root privileges" unless $> == 0;
+    unless ($> == 0) {
+        print STDERR "This tests requires root privileges\n";
+        exit 77;
+    }
 
     # Setup a test network using network namespaces with the ns-test-proxy
     # namespace configured like a normal transparent proxy box.
