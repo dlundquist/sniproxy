@@ -498,7 +498,7 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
         warn("DNS lookups not supported unless sniproxy compiled with libudns");
 
         if (result.caller_free_address)
-            free(result.address);
+            free((void *)result.address);
 
         abort_connection(con);
         return;
