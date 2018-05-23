@@ -568,6 +568,16 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
         }
     }
 
+#ifdef TCP_FASTOPEN
+    int qlen = SOMAXCONN;
+    result = setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN, &qlen, sizeof(qlen));
+    if (result < 0) {
+        err("setsockopt TCP_FASTOPEN failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+#endif
+
     result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {

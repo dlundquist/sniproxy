@@ -626,9 +626,23 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
+    int on = 1;
+
+#ifdef TCP_FASTOPEN_CONNECT
+    if (setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN_CONNECT, &on, sizeof(on)) < 0) {
+        if (errno == ENOTSUP) {
+            warn("TCP_FASTOPEN_CONNECT not support on this system");
+        } else {
+            err("setsockopt TCP_FASTOPEN_CONNECT failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return result;
+        }
+    }
+#endif
+
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
-        int on = 1;
 #ifdef IP_TRANSPARENT
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
 #else
