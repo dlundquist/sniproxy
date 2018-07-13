@@ -48,7 +48,7 @@ static const struct Protocol http_protocol_st = {
     .default_port = 80,
     .parse_packet = &parse_http_header,
     .abort_message = http_503,
-    .abort_message_len = sizeof(http_503)
+    .abort_message_len = sizeof(http_503) - 1,
 };
 const struct Protocol *const http_protocol = &http_protocol_st;
 
