@@ -34,14 +34,13 @@ static const struct Keyword *find_keyword(const struct Keyword *, const char *);
 
 int
 parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
-    enum Token token;
     char buffer[256];
     const struct Keyword *keyword = NULL;
     void *sub_context = NULL;
     int result;
 
-    while ((token = next_token(cfg, buffer, sizeof(buffer))) != TOKEN_END) {
-        switch (token) {
+    for (;;) {
+        switch (next_token(cfg, buffer, sizeof(buffer))) {
             case TOKEN_ERROR:
                 err("%s: tokenizer error", __func__);
                 return -1;
@@ -78,8 +77,14 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                 if (keyword && sub_context && keyword->block_grammar) {
                     result = parse_config(sub_context, cfg,
                             keyword->block_grammar);
+                    if (result > 0 && keyword->finalize)
+                        result = keyword->finalize(context, sub_context);
+
                     if (result <= 0)
                         return result;
+
+                    keyword = NULL;
+                    sub_context = NULL;
                 } else {
                     err("%s: block without context", __func__);
                     return -1;
@@ -94,21 +99,14 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
 
                 keyword = NULL;
                 sub_context = NULL;
+
                 break;
             case TOKEN_CBRACE:
-                /* Finalize the current subcontext before returning */
-                if (keyword && sub_context && keyword->finalize) {
-                    result = keyword->finalize(context, sub_context);
-                    if (result <= 0)
-                        return result;
-                }
-
                 /* fall through */
             case TOKEN_END:
                 return 1;
         }
     }
-    return 1;
 }
 
 static const struct Keyword *
