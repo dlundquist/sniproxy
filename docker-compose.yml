@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  sniproxy:
+    image: omercnet/sniproxy
+    build: .
+    restart: always
+    privileged: true
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./sniproxy.conf:/etc/sniproxy.conf
+    ulimits:
+      nofile: 65535
