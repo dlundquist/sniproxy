@@ -25,6 +25,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -383,12 +384,12 @@ insert_proxy_v1_header(struct Connection *con) {
             buf_len = strlen(buf);
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.addr)->sin_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.local_addr)->sin_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
@@ -410,12 +411,12 @@ insert_proxy_v1_header(struct Connection *con) {
             buf_len = strlen(buf);
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.addr)->sin6_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.local_addr)->sin6_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);

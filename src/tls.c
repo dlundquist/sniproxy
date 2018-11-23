@@ -30,6 +30,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h> /* malloc() */
+#include <stdint.h>
 #include <string.h> /* strncpy() */
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -115,7 +116,7 @@ parse_tls_header(const uint8_t *data, size_t data_len, char **hostname) {
     tls_version_major = data[1];
     tls_version_minor = data[2];
     if (tls_version_major < 3) {
-        debug("Received SSL %d.%d handshake which can not support SNI.",
+        debug("Received SSL %" PRIu8 ".%" PRIu8 " handshake which can not support SNI.",
               tls_version_major, tls_version_minor);
 
         return -2;
@@ -240,7 +241,7 @@ parse_server_name_extension(const uint8_t *data, size_t data_len,
 
                 return len;
             default:
-                debug("Unknown server name extension name type: %d",
+                debug("Unknown server name extension name type: %" PRIu8,
                       data[pos]);
         }
         pos += 3 + len;
