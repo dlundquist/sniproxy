@@ -44,6 +44,8 @@ sub make_config($$$) {
 
     my ($fh, $filename) = File::Temp::tempfile();
     my ($unused, $logfile) = File::Temp::tempfile();
+    chmod(0644, $filename);
+    chmod(0666, $logfile);
 
     # Write out a test config file
     print $fh <<END;

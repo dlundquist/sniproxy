@@ -24,6 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h> /* tolower */
@@ -374,7 +375,7 @@ display_address(const struct Address *addr, char *buffer, size_t buffer_len) {
     switch (addr->type) {
         case HOSTNAME:
             if (addr->port != 0)
-                snprintf(buffer, buffer_len, "%s:%d",
+                snprintf(buffer, buffer_len, "%s:%" PRIu16,
                         addr->data,
                         addr->port);
             else
@@ -385,7 +386,7 @@ display_address(const struct Address *addr, char *buffer, size_t buffer_len) {
             return display_sockaddr(addr->data, buffer, buffer_len);
         case WILDCARD:
             if (addr->port != 0)
-                snprintf(buffer, buffer_len, "*:%d",
+                snprintf(buffer, buffer_len, "*:%" PRIu16,
                         addr->port);
             else
                 snprintf(buffer, buffer_len, "*");
@@ -409,7 +410,7 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
                     ip, sizeof(ip));
 
             if (((struct sockaddr_in *)sa)->sin_port != 0)
-                snprintf(buffer, buffer_len, "%s:%d", ip,
+                snprintf(buffer, buffer_len, "%s:%" PRIu16, ip,
                         ntohs(((struct sockaddr_in *)sa)->sin_port));
             else
                 snprintf(buffer, buffer_len, "%s", ip);
@@ -421,7 +422,7 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
                     ip, sizeof(ip));
 
             if (((struct sockaddr_in6 *)sa)->sin6_port != 0)
-                snprintf(buffer, buffer_len, "[%s]:%d", ip,
+                snprintf(buffer, buffer_len, "[%s]:%" PRIu16, ip,
                         ntohs(((struct sockaddr_in6 *)sa)->sin6_port));
             else
                 snprintf(buffer, buffer_len, "[%s]", ip);

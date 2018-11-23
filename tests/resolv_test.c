@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
 #include "resolv.h"
@@ -9,7 +10,7 @@ static int query_count = 0;
 
 static void query_cb(struct Address *result, void *data) {
     int *query_count = (int *)data;
-    char ip_buf[128];
+    char ip_buf[INET6_ADDRSTRLEN];
 
     if (result != NULL &&
             address_is_sockaddr(result) &&

@@ -25,6 +25,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -383,12 +384,12 @@ insert_proxy_v1_header(struct Connection *con) {
             buf_len = strlen(buf);
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.addr)->sin_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.local_addr)->sin_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
@@ -410,12 +411,12 @@ insert_proxy_v1_header(struct Connection *con) {
             buf_len = strlen(buf);
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.addr)->sin6_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
 
-            buf_len = snprintf(buf, sizeof(buf), " %d",
+            buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.local_addr)->sin6_port));
             con->header_len += buffer_push(con->client.buffer, buf, buf_len);
@@ -448,7 +449,7 @@ parse_client_request(struct Connection *con) {
             if (buffer_room(con->client.buffer) > 0)
                 return; /* give client a chance to send more data */
 
-            warn("Request from %s exceeded %ld byte buffer size",
+            warn("Request from %s exceeded %zu byte buffer size",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_size(con->client.buffer));
         } else if (result == -2) {
@@ -843,7 +844,7 @@ log_connection(struct Connection *con) {
 
     log_msg(con->listener->access_log,
            LOG_NOTICE,
-           "%s -> %s -> %s [%.*s] %ld/%ld bytes tx %ld/%ld bytes rx %1.3f seconds",
+           "%s -> %s -> %s [%.*s] %zu/%zu bytes tx %zu/%zu bytes rx %1.3f seconds",
            client_address,
            listener_address,
            server_address,
@@ -875,7 +876,7 @@ log_bad_request(struct Connection *con __attribute__((unused)), const char *req,
                                 "0x%02hhx, ", (unsigned char)req[i]);
 
     message_pos -= 2;/* Delete the trailing ', ' */
-    snprintf(message_pos, (size_t)(message_end - message_pos), "}, %ld, ...) = %d",
+    snprintf(message_pos, (size_t)(message_end - message_pos), "}, %zu, ...) = %d",
              req_len, parse_result);
     debug("%s", message);
 
