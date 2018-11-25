@@ -524,6 +524,15 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
         return result;
     }
 
+    /* set SO_KEEPALIVE on the server socket so that abandoned client connections
+     * do not linger behind forever */
+    result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+    if (result < 0) {
+        err("setsockopt SO_KEEPALIVE failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
     if (listener->reuseport == 1) {
 #ifdef SO_REUSEPORT
         /* set SO_REUSEPORT on server socket to allow binding of multiple
