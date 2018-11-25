@@ -660,14 +660,6 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             return;
         }
 
-        result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
-        if (result < 0) {
-            err("setsockopt SO_KEEPALIVE failed: %s", strerror(errno));
-            close(sockfd);
-            abort_connection(con);
-            return;
-        }
-
         int tries = 5;
         do {
             result = bind(sockfd,
