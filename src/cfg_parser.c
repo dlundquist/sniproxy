@@ -51,14 +51,14 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                         return result;
 
                 } else if ((keyword = find_keyword(grammar, buffer))) {
-                    if (keyword->create)
+                    if (keyword->create) {
                         sub_context = keyword->create();
-                    else
+                        if (sub_context == NULL) {
+                            err("failed to create subcontext");
+                            return -1;
+                        }
+                    } else {
                         sub_context = context;
-
-                    if (sub_context == NULL) {
-                        err("failed to create subcontext");
-                        return -1;
                     }
 
                     /* Special case for wildcard grammars i.e. tables */
@@ -67,7 +67,6 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
                         if (result <= 0)
                             return result;
                     }
-
                 } else {
                     err("%s: unknown keyword %s", __func__, buffer);
                     return -1;
@@ -76,7 +75,7 @@ parse_config(void *context, FILE *cfg, const struct Keyword *grammar) {
             case TOKEN_OBRACE:
                 if (keyword && sub_context && keyword->block_grammar) {
                     result = parse_config(sub_context, cfg,
-                            keyword->block_grammar);
+                                          keyword->block_grammar);
                     if (result > 0 && keyword->finalize)
                         result = keyword->finalize(context, sub_context);
 

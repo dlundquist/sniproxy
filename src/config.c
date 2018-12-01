@@ -39,23 +39,23 @@ struct LoggerBuilder {
     int priority;
 };
 
-static int accept_username(struct Config *, char *);
-static int accept_groupname(struct Config *, char *);
-static int accept_pidfile(struct Config *, char *);
+static int accept_username(struct Config *, const char *);
+static int accept_groupname(struct Config *, const char *);
+static int accept_pidfile(struct Config *, const char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
 static struct LoggerBuilder *new_logger_builder();
-static int accept_logger_filename(struct LoggerBuilder *, char *);
-static int accept_logger_syslog_facility(struct LoggerBuilder *, char *);
-static int accept_logger_priority(struct LoggerBuilder *, char *);
+static int accept_logger_filename(struct LoggerBuilder *, const char *);
+static int accept_logger_syslog_facility(struct LoggerBuilder *, const char *);
+static int accept_logger_priority(struct LoggerBuilder *, const char *);
 static int end_error_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_global_access_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_listener_access_logger_stanza(struct Listener *, struct LoggerBuilder *);
 static struct ResolverConfig *new_resolver_config();
-static int accept_resolver_nameserver(struct ResolverConfig *, char *);
-static int accept_resolver_search(struct ResolverConfig *, char *);
-static int accept_resolver_mode(struct ResolverConfig *, char *);
+static int accept_resolver_nameserver(struct ResolverConfig *, const char *);
+static int accept_resolver_search(struct ResolverConfig *, const char *);
+static int accept_resolver_mode(struct ResolverConfig *, const char *);
 static int end_resolver_stanza(struct Config *, struct ResolverConfig *);
 static inline size_t string_vector_len(char **);
 static int append_to_string_vector(char ***, const char *) __attribute__((nonnull(1)));
@@ -63,141 +63,135 @@ static void free_string_vector(char **);
 static void print_resolver_config(FILE *, struct ResolverConfig *);
 
 
-static struct Keyword logger_stanza_grammar[] = {
-    { "filename",
-            NULL,
-            (int(*)(void *, char *))accept_logger_filename,
-            NULL,
-            NULL},
-    { "syslog",
-            NULL,
-            (int(*)(void *, char *))accept_logger_syslog_facility,
-            NULL,
-            NULL},
-    { "priority",
-            NULL,
-            (int(*)(void *, char *))accept_logger_priority,
-            NULL,
-            NULL},
-    { NULL, NULL, NULL, NULL, NULL },
+static const struct Keyword logger_stanza_grammar[] = {
+    {
+        .keyword="filename",
+        .parse_arg=(int(*)(void *, const char *))accept_logger_filename,
+    },
+    {
+        .keyword="syslog",
+        .parse_arg=(int(*)(void *, const char *))accept_logger_syslog_facility,
+    },
+    {
+        .keyword="priority",
+        .parse_arg=(int(*)(void *, const char *))accept_logger_priority,
+    },
+    { NULL },
 };
 
-struct Keyword resolver_stanza_grammar[] = {
-    { "nameserver",
-            NULL,
-            (int(*)(void *, char *))accept_resolver_nameserver,
-            NULL,
-            NULL},
-    { "search",
-            NULL,
-            (int(*)(void *, char *))accept_resolver_search,
-            NULL,
-            NULL},
-    { "mode",
-            NULL,
-            (int(*)(void *, char *))accept_resolver_mode,
-            NULL,
-            NULL},
-    { NULL, NULL, NULL, NULL, NULL },
+static const struct Keyword resolver_stanza_grammar[] = {
+    {
+        .keyword="nameserver",
+        .parse_arg=(int(*)(void *, const char *))accept_resolver_nameserver,
+    },
+    {
+        .keyword="search",
+        .parse_arg=(int(*)(void *, const char *))accept_resolver_search,
+    },
+    {
+        .keyword="mode",
+        .parse_arg=(int(*)(void *, const char *))accept_resolver_mode,
+    },
+    { NULL },
 };
 
-struct Keyword listener_stanza_grammar[] = {
-    { "protocol",
-            NULL,
-            (int(*)(void *, char *))accept_listener_protocol,
-            NULL,
-            NULL},
-    { "reuseport",
-            NULL,
-            (int(*)(void *, char *))accept_listener_reuseport,
-            NULL,
-            NULL},
-    { "ipv6_v6only",
-            NULL,
-            (int(*)(void *, char *))accept_listener_ipv6_v6only,
-            NULL,
-            NULL},
-    { "table",
-            NULL,
-            (int(*)(void *, char *))accept_listener_table_name,
-            NULL,
-            NULL},
-    { "fallback",
-            NULL,
-            (int(*)(void *, char *))accept_listener_fallback_address,
-            NULL,
-            NULL},
-    { "source",
-            NULL,
-            (int(*)(void *, char *))accept_listener_source_address,
-            NULL,
-            NULL},
-    { "access_log",
-            (void *(*)())new_logger_builder,
-            (int(*)(void *, char *))accept_logger_filename,
-            logger_stanza_grammar,
-            (int(*)(void *, void *))end_listener_access_logger_stanza},
-    { "bad_requests",
-            NULL,
-            (int(*)(void *, char *))accept_listener_bad_request_action,
-            NULL,
-            NULL},
-    { NULL, NULL, NULL, NULL, NULL }
+static const struct Keyword listener_stanza_grammar[] = {
+    {
+        .keyword="protocol",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_protocol,
+    },
+    {
+        .keyword="reuseport",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_reuseport,
+    },
+    {
+        .keyword="ipv6_v6only",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_ipv6_v6only,
+    },
+    {
+        .keyword="table",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_table_name,
+    },
+    {
+        .keyword="fallback",
+        .parse_arg=    (int(*)(void *, const char *))accept_listener_fallback_address,
+    },
+    {
+        .keyword="source",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_source_address,
+    },
+    {
+        .keyword="access_log",
+        .create=(void *(*)())new_logger_builder,
+        .parse_arg=(int(*)(void *, const char *))accept_logger_filename,
+        .block_grammar=logger_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_listener_access_logger_stanza,
+    },
+    {
+        .keyword="bad_requests",
+        .parse_arg= (int(*)(void *, const char *))accept_listener_bad_request_action,
+    },
+    { NULL },
 };
 
 static struct Keyword table_stanza_grammar[] = {
-    { NULL,
-            (void *(*)())new_backend,
-            (int(*)(void *, char *))accept_backend_arg,
-            NULL,
-            (int(*)(void *, void *))end_backend},
+    {
+        .create=(void *(*)())new_backend,
+        .parse_arg=(int(*)(void *, const char *))accept_backend_arg,
+        .finalize=(int(*)(void *, void *))end_backend,
+    },
+    { NULL },
 };
 
 static struct Keyword global_grammar[] = {
-    { "username",
-            NULL,
-            (int(*)(void *, char *))accept_username,
-            NULL,
-            NULL},
-    { "groupname",
-            NULL,
-            (int(*)(void *, char *))accept_groupname,
-            NULL,
-            NULL},
-    { "pidfile",
-            NULL,
-            (int(*)(void *, char *))accept_pidfile,
-            NULL,
-            NULL},
-    { "resolver",
-            (void *(*)())new_resolver_config,
-            NULL,
-            resolver_stanza_grammar,
-            (int(*)(void *, void *))end_resolver_stanza},
-    { "error_log",
-            (void *(*)())new_logger_builder,
-            NULL,
-            logger_stanza_grammar,
-            (int(*)(void *, void *))end_error_logger_stanza},
-    { "access_log",
-            (void *(*)())new_logger_builder,
-            NULL,
-            logger_stanza_grammar,
-            (int(*)(void *, void *))end_global_access_logger_stanza},
-    { "listener",
-            (void *(*)())new_listener,
-            (int(*)(void *, char *))accept_listener_arg,
-            listener_stanza_grammar,
-            (int(*)(void *, void *))end_listener_stanza},
-    { "table",
-            (void *(*)())new_table,
-            (int(*)(void *, char *))accept_table_arg,
-            table_stanza_grammar,
-            (int(*)(void *, void *))end_table_stanza},
-    { NULL, NULL, NULL, NULL, NULL }
+    {
+        .keyword="username",
+        .parse_arg=(int(*)(void *, const char *))accept_username,
+    },
+    {
+        .keyword="groupname",
+        .parse_arg=    (int(*)(void *, const char *))accept_groupname,
+    },
+    {
+        .keyword="pidfile",
+        .parse_arg=(int(*)(void *, const char *))accept_pidfile,
+    },
+    {
+        .keyword="resolver",
+        .create=(void *(*)())new_resolver_config,
+        .block_grammar=resolver_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_resolver_stanza,
+    },
+    {
+        .keyword="error_log",
+        .create=(void *(*)())new_logger_builder,
+        .block_grammar=logger_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_error_logger_stanza,
+    },
+    {
+        .keyword="access_log",
+        .create=(void *(*)())new_logger_builder,
+        .block_grammar=logger_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_global_access_logger_stanza,
+    },
+    {
+        .keyword="listener",
+        .create=(void *(*)())new_listener,
+        .parse_arg=(int(*)(void *, const char *))accept_listener_arg,
+        .block_grammar=listener_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_listener_stanza,
+    },
+    {
+        .keyword="table",
+        .create=(void *(*)())new_table,
+        .parse_arg=(int(*)(void *, const char *))accept_table_arg,
+        .block_grammar=table_stanza_grammar,
+        .finalize=(int(*)(void *, void *))end_table_stanza,
+    },
+    { NULL },
 };
 
-static const char *resolver_mode_names[] = {
+static const char *const resolver_mode_names[] = {
     "DEFAULT",
     "ipv4_only",
     "ipv6_only",
@@ -208,20 +202,12 @@ static const char *resolver_mode_names[] = {
 
 struct Config *
 init_config(const char *filename, struct ev_loop *loop) {
-    struct Config *config = malloc(sizeof(struct Config));
+    struct Config *config = calloc(1, sizeof(struct Config));
     if (config == NULL) {
         err("%s: malloc", __func__);
         return NULL;
     }
 
-    config->filename = NULL;
-    config->user = NULL;
-    config->group = NULL;
-    config->pidfile = NULL;
-    config->access_log = NULL;
-    config->resolver.nameservers = NULL;
-    config->resolver.search = NULL;
-    config->resolver.mode = 0;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -242,12 +228,12 @@ init_config(const char *filename, struct ev_loop *loop) {
 
     if (parse_config(config, file, global_grammar) <= 0) {
         intmax_t whence = ftell(file);
-        char buffer[256];
+        char line[256];
 
         err("error parsing %s at %jd near:", filename, whence);
         fseek(file, -20, SEEK_CUR);
         for (int i = 0; i < 5; i++)
-            err("%ld\t%s", ftell(file), fgets(buffer, sizeof(buffer), file));
+            err(" %jd\t%s", ftell(file), fgets(line, sizeof(line), file));
 
         free_config(config, loop);
         config = NULL;
@@ -335,7 +321,7 @@ print_config(FILE *file, struct Config *config) {
 }
 
 static int
-accept_username(struct Config *config, char *username) {
+accept_username(struct Config *config, const char *username) {
     if (config->user != NULL) {
         err("Duplicate username: %s", username);
         return 0;
@@ -350,7 +336,7 @@ accept_username(struct Config *config, char *username) {
 }
 
 static int
-accept_groupname(struct Config *config, char *groupname) {
+accept_groupname(struct Config *config, const char *groupname) {
     if (config->group != NULL) {
         err("Duplicate groupname: %s", groupname);
         return 0;
@@ -365,7 +351,7 @@ accept_groupname(struct Config *config, char *groupname) {
 }
 
 static int
-accept_pidfile(struct Config *config, char *pidfile) {
+accept_pidfile(struct Config *config, const char *pidfile) {
     if (config->pidfile != NULL) {
         err("Duplicate pidfile: %s", pidfile);
         return 0;
@@ -434,7 +420,7 @@ new_logger_builder() {
 }
 
 static int
-accept_logger_filename(struct LoggerBuilder *lb, char *filename) {
+accept_logger_filename(struct LoggerBuilder *lb, const char *filename) {
     lb->filename = strdup(filename);
     if (lb->filename == NULL) {
         err("%s: strdup", __func__);
@@ -445,7 +431,7 @@ accept_logger_filename(struct LoggerBuilder *lb, char *filename) {
 }
 
 static int
-accept_logger_syslog_facility(struct LoggerBuilder *lb, char *facility) {
+accept_logger_syslog_facility(struct LoggerBuilder *lb, const char *facility) {
     lb->syslog_facility = strdup(facility);
     if (lb->syslog_facility == NULL) {
         err("%s: strdup", __func__);
@@ -456,7 +442,7 @@ accept_logger_syslog_facility(struct LoggerBuilder *lb, char *facility) {
 }
 
 static int
-accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
+accept_logger_priority(struct LoggerBuilder *lb, const char *priority) {
     const struct {
         const char *name;
         int priority;
@@ -619,7 +605,7 @@ free_string_vector(char **vector) {
 }
 
 static int
-accept_resolver_nameserver(struct ResolverConfig *resolver, char *nameserver) {
+accept_resolver_nameserver(struct ResolverConfig *resolver, const char *nameserver) {
     /* Validate address is a valid IP */
     struct Address *ns_address = new_address(nameserver);
     if (!address_is_sockaddr(ns_address)) {
@@ -632,7 +618,7 @@ accept_resolver_nameserver(struct ResolverConfig *resolver, char *nameserver) {
 }
 
 static int
-accept_resolver_search(struct ResolverConfig *resolver, char *search) {
+accept_resolver_search(struct ResolverConfig *resolver, const char *search) {
     struct Address *search_address = new_address(search);
     if (!address_is_hostname(search_address)) {
         free(search_address);
@@ -644,7 +630,7 @@ accept_resolver_search(struct ResolverConfig *resolver, char *search) {
 }
 
 static int
-accept_resolver_mode(struct ResolverConfig *resolver, char *mode) {
+accept_resolver_mode(struct ResolverConfig *resolver, const char *mode) {
     for (size_t i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
         if (strncasecmp(resolver_mode_names[i], mode, strlen(mode)) == 0) {
             resolver->mode = i;

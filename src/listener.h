@@ -52,14 +52,14 @@ struct Listener {
 
 
 struct Listener *new_listener();
-int accept_listener_arg(struct Listener *, char *);
-int accept_listener_table_name(struct Listener *, char *);
-int accept_listener_fallback_address(struct Listener *, char *);
-int accept_listener_source_address(struct Listener *, char *);
-int accept_listener_protocol(struct Listener *, char *);
-int accept_listener_reuseport(struct Listener *, char *);
-int accept_listener_ipv6_v6only(struct Listener *, char *);
-int accept_listener_bad_request_action(struct Listener *, char *);
+int accept_listener_arg(struct Listener *, const char *);
+int accept_listener_table_name(struct Listener *, const char *);
+int accept_listener_fallback_address(struct Listener *, const char *);
+int accept_listener_source_address(struct Listener *, const char *);
+int accept_listener_protocol(struct Listener *, const char *);
+int accept_listener_reuseport(struct Listener *, const char *);
+int accept_listener_ipv6_v6only(struct Listener *, const char *);
+int accept_listener_bad_request_action(struct Listener *, const char *);
 
 void add_listener(struct Listener_head *, struct Listener *);
 void init_listeners(struct Listener_head *, const struct Table_head *, struct ev_loop *);

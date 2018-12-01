@@ -29,11 +29,11 @@
 #include <stdio.h>
 
 struct Keyword {
-    const char *keyword;
-    void *(*create)();
-    int (*parse_arg)(void *, char *);
-    struct Keyword *block_grammar;
-    int (*finalize)(void *, void *);
+    const char *const keyword;
+    void *(*const create)();
+    int (*const parse_arg)(void *, const char *);
+    const struct Keyword *const block_grammar;
+    int (*const finalize)(void *, void *);
 };
 
 

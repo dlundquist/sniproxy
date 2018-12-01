@@ -233,7 +233,7 @@ new_listener() {
 }
 
 int
-accept_listener_arg(struct Listener *listener, char *arg) {
+accept_listener_arg(struct Listener *listener, const char *arg) {
     if (listener->address == NULL && !is_numeric(arg)) {
         listener->address = new_address(arg);
 
@@ -267,7 +267,7 @@ accept_listener_arg(struct Listener *listener, char *arg) {
 }
 
 int
-accept_listener_table_name(struct Listener *listener, char *table_name) {
+accept_listener_table_name(struct Listener *listener, const char *table_name) {
     if (listener->table_name != NULL) {
         err("Duplicate table: %s", table_name);
         return 0;
@@ -282,7 +282,7 @@ accept_listener_table_name(struct Listener *listener, char *table_name) {
 }
 
 int
-accept_listener_protocol(struct Listener *listener, char *protocol) {
+accept_listener_protocol(struct Listener *listener, const char *protocol) {
     if (strncasecmp(protocol, http_protocol->name, strlen(protocol)) == 0)
         listener->protocol = http_protocol;
     else
@@ -295,7 +295,7 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 }
 
 int
-accept_listener_reuseport(struct Listener *listener, char *reuseport) {
+accept_listener_reuseport(struct Listener *listener, const char *reuseport) {
     listener->reuseport = parse_boolean(reuseport);
     if (listener->reuseport == -1) {
         return 0;
@@ -312,7 +312,7 @@ accept_listener_reuseport(struct Listener *listener, char *reuseport) {
 }
 
 int
-accept_listener_ipv6_v6only(struct Listener *listener, char *ipv6_v6only) {
+accept_listener_ipv6_v6only(struct Listener *listener, const char *ipv6_v6only) {
     listener->ipv6_v6only = parse_boolean(ipv6_v6only);
     if (listener->ipv6_v6only == -1) {
         return 0;
@@ -329,7 +329,7 @@ accept_listener_ipv6_v6only(struct Listener *listener, char *ipv6_v6only) {
 }
 
 int
-accept_listener_fallback_address(struct Listener *listener, char *fallback) {
+accept_listener_fallback_address(struct Listener *listener, const char *fallback) {
     if (listener->fallback_address == NULL) {
         struct Address *fallback_address = new_address(fallback);
         if (fallback_address == NULL) {
@@ -371,7 +371,7 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
 }
 
 int
-accept_listener_source_address(struct Listener *listener, char *source) {
+accept_listener_source_address(struct Listener *listener, const char *source) {
     if (listener->source_address != NULL || listener->transparent_proxy) {
         err("Duplicate source address: %s", source);
         return 0;
@@ -409,7 +409,7 @@ accept_listener_source_address(struct Listener *listener, char *source) {
 }
 
 int
-accept_listener_bad_request_action(struct Listener *listener, char *action) {
+accept_listener_bad_request_action(struct Listener *listener, const char *action) {
     if (strncmp("log", action, strlen(action)) == 0) {
         listener->log_bad_requests = 1;
     }
