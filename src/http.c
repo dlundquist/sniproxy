@@ -33,24 +33,25 @@
 
 #define SERVER_NAME_LEN 256
 
+
+static int parse_http_header(const char *, size_t, char **);
+static int get_header(const char *, const char *, size_t, char **);
+static size_t next_header(const char **, size_t *);
+
+
 static const char http_503[] =
     "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
     "Content-Type: text/html\r\n"
     "Connection: close\r\n\r\n"
     "Backend not available";
 
-static int parse_http_header(const char *, size_t, char **);
-static int get_header(const char *, const char *, size_t, char **);
-static size_t next_header(const char **, size_t *);
-
-static const struct Protocol http_protocol_st = {
+const struct Protocol *const http_protocol = &(struct Protocol){
     .name = "http",
     .default_port = 80,
     .parse_packet = &parse_http_header,
     .abort_message = http_503,
     .abort_message_len = sizeof(http_503) - 1,
 };
-const struct Protocol *const http_protocol = &http_protocol_st;
 
 /*
  * Parses a HTTP request for the Host: header

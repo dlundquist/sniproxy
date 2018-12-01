@@ -47,6 +47,12 @@
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #endif
 
+
+static int parse_tls_header(const uint8_t*, size_t, char **);
+static int parse_extensions(const uint8_t*, size_t, char **);
+static int parse_server_name_extension(const uint8_t*, size_t, char **);
+
+
 static const char tls_alert[] = {
     0x15, /* TLS Alert */
     0x03, 0x01, /* TLS version  */
@@ -54,18 +60,13 @@ static const char tls_alert[] = {
     0x02, 0x28, /* Fatal, handshake failure */
 };
 
-static int parse_tls_header(const uint8_t*, size_t, char **);
-static int parse_extensions(const uint8_t*, size_t, char **);
-static int parse_server_name_extension(const uint8_t*, size_t, char **);
-
-static const struct Protocol tls_protocol_st = {
+const struct Protocol *const tls_protocol = &(struct Protocol){
     .name = "tls",
     .default_port = 443,
     .parse_packet = (int (*const)(const char *, size_t, char **))&parse_tls_header,
     .abort_message = tls_alert,
     .abort_message_len = sizeof(tls_alert)
 };
-const struct Protocol *const tls_protocol = &tls_protocol_st;
 
 
 /* Parse a TLS packet for the Server Name Indication extension in the client
