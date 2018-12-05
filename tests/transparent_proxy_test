@@ -93,8 +93,8 @@ sub main {
 
     my $config = make_config($proxy_port, $httpd_port);
 
-    unless ($> == 0) {
-        print STDERR "This tests requires root privileges\n";
+    unless ($> == 0 and $^O eq 'linux') {
+        print STDERR "This test requires Linux and root privileges\n";
         exit 77;
     }
 
