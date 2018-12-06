@@ -165,6 +165,7 @@ static void test_buffer_coalesce() {
     assert(buffer->head != 0);
 
     len = buffer_coalesce(buffer, NULL);
+    assert(len == 0);
 }
 
 int main() {

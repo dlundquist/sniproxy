@@ -25,8 +25,8 @@ int main() {
 static int
 test_binder(int port) {
     int fd;
-    struct sockaddr_in addr;
-    struct sockaddr_storage addr_verify;
+    struct sockaddr_in addr = { 0 };
+    struct sockaddr_storage addr_verify = { 0 };
     socklen_t len;
 
     /* make valgrind happy by initializing to zero */
