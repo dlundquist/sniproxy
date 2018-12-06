@@ -1,3 +1,12 @@
+sniproxy (0.6.0) unstable; urgency=medium
+
+  * PROXY v1 protocol support
+  * SO_REUSEPORT support on Linux 3.9 and later
+  * Listener ipv6_only directive to accept only IPv6 connections
+  * TCP keepalive
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Wed, 05 Dec 2018 20:12:24 -0800
+
 sniproxy (0.5.0) unstable; urgency=medium
 
   * Transparent proxy support

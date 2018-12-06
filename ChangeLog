@@ -1,3 +1,11 @@
+2018-12-05  Dustin Lundquist <dustin@null-ptr.net>
+	0.6.0 Release
+
+	* PROXY v1 protocol support
+	* SO_REUSEPORT support on Linux 3.9 and later
+	* Listener ipv6_only directive to accept only IPv6 connections
+	* TCP keepalive
+
 2017-04-26  Dustin Lundquist <dustin@null-ptr.net>
 	0.5.0 Release
 
