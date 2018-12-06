@@ -31,6 +31,7 @@
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
+#include "connection.h"
 
 
 struct LoggerBuilder {
@@ -367,6 +368,8 @@ accept_pidfile(struct Config *config, const char *pidfile) {
 
 static int
 end_listener_stanza(struct Config *config, struct Listener *listener) {
+    listener->accept_cb = &accept_connection;
+
     if (valid_listener(listener) <= 0) {
         err("Invalid listener");
         print_listener_config(stderr, listener);

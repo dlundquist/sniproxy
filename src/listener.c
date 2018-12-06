@@ -42,7 +42,6 @@
 #include <assert.h>
 #include "address.h"
 #include "listener.h"
-#include "connection.h"
 #include "logger.h"
 #include "binder.h"
 #include "protocol.h"
@@ -452,6 +451,11 @@ remove_listener(struct Listener_head *listeners, struct Listener *listener, stru
 
 int
 valid_listener(const struct Listener *listener) {
+    if (listener->accept_cb == NULL) {
+        err("No accept callback not specified");
+        return 0;
+    }
+
     if (listener->address == NULL) {
         err("No address specified");
         return 0;
@@ -784,7 +788,7 @@ accept_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     struct Listener *listener = (struct Listener *)w->data;
 
     if (revents & EV_READ) {
-        int result = accept_connection(listener, loop);
+        int result = listener->accept_cb(listener, loop);
         if (result == 0 && (errno == EMFILE || errno == ENFILE)) {
             char address_buf[ADDRESS_BUFFER_SIZE];
             int backoff_time = 2;
