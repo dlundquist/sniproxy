@@ -128,6 +128,9 @@ listeners_reload(struct Listener_head *existing_listeners,
                     display_address(new_listener->address,
                             address, sizeof(address)));
 
+            /* Using SLIST_REMOVE rather than remove_listener to defer
+             * decrementing reference count until after adding to the running
+             * config */
             SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
             add_listener(existing_listeners, new_listener);
             init_listener(new_listener, tables, loop);
@@ -151,11 +154,7 @@ listeners_reload(struct Listener_head *existing_listeners,
                     display_address(removed_listener->address,
                             address, sizeof(address)));
 
-            SLIST_REMOVE(existing_listeners, removed_listener, Listener, entries);
-            close_listener(loop, removed_listener);
-
-            /* -1 for removing from existing_listeners */
-            listener_ref_put(removed_listener);
+            remove_listener(existing_listeners, removed_listener, loop);
         }
     }
 }
@@ -444,8 +443,8 @@ add_listener(struct Listener_head *listeners, struct Listener *listener) {
 
 void
 remove_listener(struct Listener_head *listeners, struct Listener *listener, struct ev_loop *loop) {
-    SLIST_REMOVE(listeners, listener, Listener, entries);
     close_listener(loop, listener);
+    SLIST_REMOVE(listeners, listener, Listener, entries);
     listener_ref_put(listener);
 }
 
@@ -603,7 +602,6 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
     listener->watcher.data = listener;
     listener->backoff_timer.data = listener;
-    listener_ref_get(listener);
 
     ev_io_start(loop, &listener->watcher);
 
@@ -717,13 +715,13 @@ print_listener_config(FILE *file, const struct Listener *listener) {
 
 static void
 close_listener(struct ev_loop *loop, struct Listener *listener) {
-    if (listener->watcher.fd < 0)
-        return;
-
     ev_timer_stop(loop, &listener->backoff_timer);
-    ev_io_stop(loop, &listener->watcher);
-    close(listener->watcher.fd);
-    listener_ref_put(listener);
+
+    if (listener->watcher.fd >= 0) {
+        ev_io_stop(loop, &listener->watcher);
+        close(listener->watcher.fd);
+        listener->watcher.fd = -1;
+    }
 }
 
 static void
@@ -762,9 +760,8 @@ free_listeners(struct Listener_head *listeners, struct ev_loop *loop) {
  * listeners list in the active configuration, and free them when their last
  * connection closes.
  *
- * Accomplishing this with reference counting, each connection counts as a one
- * reference, plus one for the active EV watchers and one for the listener
- * being a member on a configurations listeners list.
+ * Accomplishing this with reference counting: membership in a Config listener
+ * list counts as one as does each connection.
  */
 void
 listener_ref_put(struct Listener *listener) {
