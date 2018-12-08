@@ -62,7 +62,13 @@ static int valid_hostname(const char *);
 
 struct Address *
 new_address(const char *hostname_or_ip) {
-    struct sockaddr_storage sa;
+    union {
+        struct sockaddr a;
+        struct sockaddr_in in;
+        struct sockaddr_in6 in6;
+        struct sockaddr_un un;
+        struct sockaddr_storage s;
+    } s;
     char ip_buf[ADDRESS_BUFFER_SIZE];
     char *port;
     size_t len;
@@ -74,28 +80,29 @@ new_address(const char *hostname_or_ip) {
     /* we need to test for raw IPv6 address for IPv4 port combinations since a
      * colon would give false positives
      */
-    memset(&sa, 0, sizeof(sa));
+    memset(&s, 0, sizeof(s));
     if (inet_pton(AF_INET6, hostname_or_ip,
-                &((struct sockaddr_in6 *)&sa)->sin6_addr) == 1) {
-        ((struct sockaddr_in6 *)&sa)->sin6_family = AF_INET6;
+                &s.in6.sin6_addr) == 1) {
+        s.in6.sin6_family = AF_INET6;
 
-        return new_address_sa(
-                (struct sockaddr *)&sa,
-                sizeof(struct sockaddr_in6));
+        return new_address_sa(&s.a, sizeof(s.in6));
     }
 
     /* Unix socket */
-    memset(&sa, 0, sizeof(sa));
+    memset(&s, 0, sizeof(s));
     if (strncmp("unix:", hostname_or_ip, 5) == 0) {
-        /* XXX: only supporting pathname unix sockets */
-        ((struct sockaddr_un *)&sa)->sun_family = AF_UNIX;
-        strncpy(((struct sockaddr_un *)&sa)->sun_path,
-                hostname_or_ip + 5, sizeof(struct sockaddr_un) -
-                offsetof(struct sockaddr_un, sun_path));
+        if (strlen(hostname_or_ip) >=
+                sizeof(s.un.sun_path))
+            return NULL;
 
-        return new_address_sa(
-                (struct sockaddr *)&sa, offsetof(struct sockaddr_un, sun_path) +
-                strlen(((struct sockaddr_un *)&sa)->sun_path) + 1);
+        /* XXX: only supporting pathname unix sockets */
+        s.un.sun_family = AF_UNIX;
+        strncpy(s.un.sun_path,
+                hostname_or_ip + 5,
+                sizeof(s.un.sun_path) - 1);
+
+        return new_address_sa(&s.a, offsetof(struct sockaddr_un, sun_path) +
+                              strlen(s.un.sun_path) + 1);
     }
 
     /* Trailing port */
@@ -128,18 +135,16 @@ new_address(const char *hostname_or_ip) {
     }
 
     /* IPv4 address */
-    memset(&sa, 0, sizeof(sa));
+    memset(&s, 0, sizeof(s));
     if (inet_pton(AF_INET, hostname_or_ip,
-                &((struct sockaddr_in *)&sa)->sin_addr) == 1) {
-        ((struct sockaddr_in *)&sa)->sin_family = AF_INET;
+                  &s.in.sin_addr) == 1) {
+        s.in.sin_family = AF_INET;
 
-        return new_address_sa(
-                (struct sockaddr *)&sa,
-                sizeof(struct sockaddr_in));
+        return new_address_sa(&s.a, sizeof(s.in));
     }
 
     /* [IPv6 address] */
-    memset(&sa, 0, sizeof(sa));
+    memset(&s, 0, sizeof(s));
     if (hostname_or_ip[0] == '[' &&
             (port = strchr(hostname_or_ip, ']')) != NULL) {
         len = (size_t)(port - hostname_or_ip - 1);
@@ -151,12 +156,10 @@ new_address(const char *hostname_or_ip) {
         ip_buf[len] = '\0';
 
         if (inet_pton(AF_INET6, ip_buf,
-                    &((struct sockaddr_in6 *)&sa)->sin6_addr) == 1) {
-            ((struct sockaddr_in6 *)&sa)->sin6_family = AF_INET6;
+                      &s.in6.sin6_addr) == 1) {
+            s.in6.sin6_family = AF_INET6;
 
-            return new_address_sa(
-                    (struct sockaddr *)&sa,
-                    sizeof(struct sockaddr_in6));
+            return new_address_sa(&s.a, sizeof(s.in6));
         }
     }
 
@@ -185,9 +188,7 @@ new_address(const char *hostname_or_ip) {
 
 struct Address *
 new_address_sa(const struct sockaddr *sa, socklen_t sa_len) {
-    struct Address *addr = NULL;
-
-    addr = malloc(offsetof(struct Address, data) + sa_len);
+    struct Address *addr = malloc(offsetof(struct Address, data) + sa_len);
     if (addr != NULL) {
         addr->type = SOCKADDR;
         addr->len = sa_len;
@@ -363,7 +364,7 @@ address_set_port_str(struct Address *addr, const char* str) {
     if (port < 0 || port > 65535) {
         return 0;
     }
-    address_set_port(addr, (uint16_t) port);
+    address_set_port(addr, (uint16_t)port);
     return 1;
 }
 
@@ -406,8 +407,8 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
     switch (((const struct sockaddr *)sa)->sa_family) {
         case AF_INET:
             inet_ntop(AF_INET,
-                    &((const struct sockaddr_in *)sa)->sin_addr,
-                    ip, sizeof(ip));
+                      &((const struct sockaddr_in *)sa)->sin_addr,
+                      ip, sizeof(ip));
 
             if (((struct sockaddr_in *)sa)->sin_port != 0)
                 snprintf(buffer, buffer_len, "%s:%" PRIu16, ip,
@@ -418,19 +419,19 @@ display_sockaddr(const void *sa, char *buffer, size_t buffer_len) {
             break;
         case AF_INET6:
             inet_ntop(AF_INET6,
-                    &((const struct sockaddr_in6 *)sa)->sin6_addr,
-                    ip, sizeof(ip));
+                      &((const struct sockaddr_in6 *)sa)->sin6_addr,
+                      ip, sizeof(ip));
 
             if (((struct sockaddr_in6 *)sa)->sin6_port != 0)
                 snprintf(buffer, buffer_len, "[%s]:%" PRIu16, ip,
-                        ntohs(((struct sockaddr_in6 *)sa)->sin6_port));
+                         ntohs(((struct sockaddr_in6 *)sa)->sin6_port));
             else
                 snprintf(buffer, buffer_len, "[%s]", ip);
 
             break;
         case AF_UNIX:
             snprintf(buffer, buffer_len, "unix:%s",
-                    ((struct sockaddr_un *)sa)->sun_path);
+                     ((struct sockaddr_un *)sa)->sun_path);
             break;
         case AF_UNSPEC:
             snprintf(buffer, buffer_len, "NONE");
