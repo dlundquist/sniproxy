@@ -49,6 +49,7 @@
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
                                       _errno == EWOULDBLOCK || \
                                       _errno == EINTR)
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 
 struct resolv_cb_data {
@@ -277,7 +278,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
         }
     }
 
-    /* Handle any state specific logic */
+    /* Handle any state specific logic, note we may transition through several
+     * states during a single call */
     if (is_client && con->state == ACCEPTED)
         parse_client_request(con);
     if (is_client && con->state == PARSED)
@@ -571,7 +573,7 @@ resolv_cb(struct Address *result, void *data) {
     struct ev_loop *loop = cb_data->loop;
 
     if (con->state != RESOLVING) {
-        info("resolv_cb() called for connection not in RESOLVING state");
+        warn("resolv_cb() called for connection not in RESOLVING state");
         return;
     }
 
@@ -628,8 +630,8 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
-        int on = 1;
 #ifdef IP_TRANSPARENT
+        int on = 1;
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
 #else
         int result = -EPERM;
@@ -768,8 +770,7 @@ static void
 close_connection(struct Connection *con, struct ev_loop *loop) {
     assert(con->state != NEW); /* only used during initialization */
 
-    if (con->state == CONNECTED
-            || con->state == CLIENT_CLOSED)
+    if (server_socket_open(con))
         close_server_socket(con, loop);
 
     assert(con->state == ACCEPTED
@@ -779,11 +780,7 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
             || con->state == SERVER_CLOSED
             || con->state == CLOSED);
 
-    if (con->state == ACCEPTED
-            || con->state == PARSED
-            || con->state == RESOLVING
-            || con->state == RESOLVED
-            || con->state == SERVER_CLOSED)
+    if (client_socket_open(con))
         close_client_socket(con, loop);
 
     assert(con->state == CLOSED);
@@ -828,15 +825,13 @@ new_connection(struct ev_loop *loop) {
 
 static void
 log_connection(struct Connection *con) {
-    ev_tstamp duration;
+    ev_tstamp duration = MAX(con->client.buffer->last_recv,
+                             con->server.buffer->last_recv) -
+                         con->established_timestamp;
     char client_address[ADDRESS_BUFFER_SIZE];
     char listener_address[ADDRESS_BUFFER_SIZE];
     char server_address[ADDRESS_BUFFER_SIZE];
 
-    if (con->client.buffer->last_recv > con->server.buffer->last_recv)
-        duration = con->client.buffer->last_recv - con->established_timestamp;
-    else
-        duration = con->server.buffer->last_recv - con->established_timestamp;
 
     display_sockaddr(&con->client.addr, client_address, sizeof(client_address));
     display_sockaddr(&con->client.local_addr, listener_address, sizeof(listener_address));
