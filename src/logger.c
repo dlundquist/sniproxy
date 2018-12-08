@@ -401,24 +401,25 @@ obtain_file_sink(const char *filepath) {
             return sink;
     }
 
+    sink = malloc(sizeof(struct LogSink));
+    if (sink == NULL)
+        return NULL;
+
 
     FILE *fd = fopen(filepath, "a");
     if (fd == NULL) {
+        free(sink);
         err("Failed to open new log file: %s", filepath);
         return NULL;
     }
     setvbuf(fd, NULL, _IOLBF, 0);
 
+    sink->type = LOG_SINK_FILE;
+    sink->filepath = strdup(filepath);
+    sink->fd = fd;
+    sink->reference_count = 0;
 
-    sink = malloc(sizeof(struct LogSink));
-    if (sink != NULL) {
-        sink->type = LOG_SINK_FILE;
-        sink->filepath = strdup(filepath);
-        sink->fd = fd;
-        sink->reference_count = 0;
-
-        SLIST_INSERT_HEAD(&sinks, sink, entries);
-    }
+    SLIST_INSERT_HEAD(&sinks, sink, entries);
 
     return sink;
 }
