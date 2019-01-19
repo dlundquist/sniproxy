@@ -35,7 +35,7 @@
 
 
 static void free_backend(struct Backend *);
-static char *backend_config_options(const struct Backend *);
+static const char *backend_config_options(const struct Backend *);
 
 
 struct Backend *
@@ -146,7 +146,7 @@ print_backend_config(FILE *file, const struct Backend *backend) {
             backend_config_options(backend));
 }
 
-static char *
+static const char *
 backend_config_options(const struct Backend *backend) {
     if (backend->use_proxy_header)
         return " proxy_protocol";

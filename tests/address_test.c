@@ -6,8 +6,8 @@
 #include "address.h"
 
 struct Test {
-    char *input;
-    char *output;
+    const char *input;
+    const char *output;
     int expected_type;
     int port;
 };

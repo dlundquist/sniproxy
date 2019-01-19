@@ -6,11 +6,11 @@
 
 struct Result {
     enum Token type;
-    char *value;
+    const char *value;
 };
 
 struct Test {
-    char *config;
+    const char *config;
     struct Result *results;
     int len;
 };

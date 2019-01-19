@@ -10,7 +10,7 @@ install:
 script:
   - echo "Running unit and functional tests"
   - ./configure
-  - make all check
+  - make all check CFLAGS=-Werror
   - bash -c "cd tests && sudo ./transparent_proxy_test"
   - echo "Checking for memory leaks"
   - bash -c "cd tests && ./bad_dns_request_test valgrind --leak-check=full --error-exitcode=1"
@@ -43,4 +43,4 @@ script:
   - sudo apt-get remove sniproxy
   - echo "Rebuilding without DNS and rerunning unit tests"
   - ./configure --disable-dns
-  - make clean all check
+  - make clean all check CFLAGS="-Werror -Wno-error=unused-function"
