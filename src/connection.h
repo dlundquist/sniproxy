@@ -47,6 +47,7 @@ struct Connection {
 
     struct {
         struct sockaddr_storage addr, local_addr;
+        struct sockaddr_in * addr_once;
         socklen_t addr_len, local_addr_len;
         struct ev_io watcher;
         struct Buffer *buffer;
@@ -57,6 +58,7 @@ struct Connection {
     size_t header_len;
     struct ResolvQuery *query_handle;
     ev_tstamp established_timestamp;
+    int fast_open;
     int use_proxy_header;
 
     TAILQ_ENTRY(Connection) entries;

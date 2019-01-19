@@ -147,6 +147,28 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
     return bytes;
 }
 
+ssize_t
+buffer_sendto(struct Buffer *buffer, int sockfd, int flags,
+        const struct sockaddr *dest_addr, socklen_t dest_addr_len,
+        struct ev_loop *loop) {
+    struct iovec iov[2];
+    struct msghdr msg = {
+        .msg_name = (struct sockaddr *)dest_addr,
+        .msg_namelen = dest_addr_len,
+        .msg_iov = iov,
+        .msg_iovlen = setup_read_iov(buffer, iov, 0)
+    };
+
+    ssize_t bytes = sendmsg(sockfd, &msg, flags);
+
+    buffer->last_send = ev_now(loop);
+
+    if (bytes > 0)
+        advance_read_position(buffer, (size_t)bytes);
+
+    return bytes;
+}
+
 /*
  * Read data from file into buffer
  */

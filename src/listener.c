@@ -38,6 +38,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include "address.h"
@@ -536,6 +537,10 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
         return result;
     }
 
+#ifdef TCP_NODELAY
+    result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
+#endif
+
     if (listener->reuseport == 1) {
 #ifdef SO_REUSEPORT
         /* set SO_REUSEPORT on server socket to allow binding of multiple
@@ -566,6 +571,16 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
             return result;
         }
     }
+
+#ifdef TCP_FASTOPEN
+    int qlen = SOMAXCONN;
+    result = setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN, &qlen, sizeof(qlen));
+    if (result < 0) {
+        err("setsockopt TCP_FASTOPEN failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+#endif
 
     result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
