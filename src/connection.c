@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
 #include <fcntl.h>
@@ -48,6 +49,7 @@
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
                                       _errno == EWOULDBLOCK || \
+                                      _errno == EINPROGRESS || \
                                       _errno == EINTR)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -638,10 +640,15 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
+    int on = 1;
+#ifdef TCP_NODELAY
+    result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
+#endif
+    result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
 #ifdef IP_TRANSPARENT
-        int on = 1;
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
 #else
         int result = -EPERM;
