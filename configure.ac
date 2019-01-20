@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.60])
-AC_INIT([sniproxy], [0.6.0+git.12.g054fd40])
+AC_INIT([sniproxy], [0.6.0+git.13.ga01050e])
 AC_CONFIG_SRCDIR([src/sniproxy.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([subdir-objects])
