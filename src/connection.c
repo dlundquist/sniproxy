@@ -642,25 +642,25 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 
     int on = 1;
 #ifdef TCP_NODELAY
-    result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
+    int result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
+#else
+    /* XXX error: not implemented would be better, but this shouldn't be
+        * reached since it is prohibited in the configuration parser. */
+    int result = -EPERM;
 #endif
     result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
 #ifdef IP_TRANSPARENT
-        int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
-#else
-        int result = -EPERM;
-        /* XXX error: not implemented would be better, but this shouldn't be
-         * reached since it is prohibited in the configuration parser. */
-#endif
+        result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
         if (result < 0) {
             err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
             close(sockfd);
             abort_connection(con);
             return;
         }
+#endif
 
         result = bind(sockfd, (struct sockaddr *)&con->client.addr,
                 con->client.addr_len);
@@ -700,8 +700,10 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     /* TODO TCP Fast Open killswitch */
     con->fast_open = 1;
 
-#ifndef MSG_FASTOPEN
-    int result = connect(sockfd,
+#ifdef MSG_FASTOPEN
+    con->server.addr_once = (struct sockaddr *)&con->server.addr;
+#else
+    result = connect(sockfd,
             (struct sockaddr *)&con->server.addr,
             con->server.addr_len);
     /* TODO retry connect in EADDRNOTAVAIL case */
@@ -714,8 +716,6 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         abort_connection(con);
         return;
     }
-#else
-    con->server.addr_once = (struct sockaddr *)&con->server.addr;
 #endif
 
     if (getsockname(sockfd, (struct sockaddr *)&con->server.local_addr,
