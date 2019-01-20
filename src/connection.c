@@ -49,7 +49,6 @@
 
 #define IS_TEMPORARY_SOCKERR(_errno) (_errno == EAGAIN || \
                                       _errno == EWOULDBLOCK || \
-                                      _errno == EINPROGRESS || \
                                       _errno == EINTR)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -255,7 +254,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
-        if (!con->fast_open && bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        if (bytes_received < 0 && 
+            !IS_TEMPORARY_SOCKERR(errno) && !con->server.addr_once) {
             warn("recv(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -281,7 +281,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
             buffer_send(output_buffer, w->fd, 0, loop);
         }
 
-        if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        if (bytes_transmitted < 0 && 
+            errno != EINPROGRESS && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -700,23 +701,27 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     /* TODO TCP Fast Open killswitch */
     con->fast_open = 1;
 
+    if (con->fast_open) {
 #ifdef MSG_FASTOPEN
-    con->server.addr_once = (struct sockaddr *)&con->server.addr;
+        con->server.addr_once = (struct sockaddr *)&con->server.addr;
 #else
-    result = connect(sockfd,
-            (struct sockaddr *)&con->server.addr,
-            con->server.addr_len);
-    /* TODO retry connect in EADDRNOTAVAIL case */
-    if (result < 0 && errno != EINPROGRESS) {
-        close(sockfd);
-        char server[INET6_ADDRSTRLEN + 8];
-        warn("Failed to open connection to %s: %s",
-                display_sockaddr(&con->server.addr, server, sizeof(server)),
-                strerror(errno));
-        abort_connection(con);
-        return;
-    }
+        warn("TCP Fast Open not supported");
 #endif
+    } else {
+        result = connect(sockfd,
+                (struct sockaddr *)&con->server.addr,
+                con->server.addr_len);
+        /* TODO retry connect in EADDRNOTAVAIL case */
+        if (result < 0 && errno != EINPROGRESS) {
+            close(sockfd);
+            char server[INET6_ADDRSTRLEN + 8];
+            warn("Failed to open connection to %s: %s",
+                    display_sockaddr(&con->server.addr, server, sizeof(server)),
+                    strerror(errno));
+            abort_connection(con);
+            return;
+        }    
+    }
 
     if (getsockname(sockfd, (struct sockaddr *)&con->server.local_addr,
                 &con->server.local_addr_len) != 0) {
