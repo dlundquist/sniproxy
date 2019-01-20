@@ -255,7 +255,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
-        if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        if (!con->fast_open && bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("recv(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -271,7 +271,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
         ssize_t bytes_transmitted = -1;
-        if ((!is_client) && con->server.addr_once) {
+        if (!is_client && con->server.addr_once) {
             bytes_transmitted = 
                 buffer_sendto(output_buffer, w->fd,
                               MSG_FASTOPEN, con->server.addr_once,
@@ -644,9 +644,9 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 #ifdef TCP_NODELAY
     int result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
 #else
-    /* XXX error: not implemented would be better, but this shouldn't be
-        * reached since it is prohibited in the configuration parser. */
     int result = -EPERM;
+    /* XXX error: not implemented would be better, but this shouldn't be
+     * reached since it is prohibited in the configuration parser. */
 #endif
     result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 
