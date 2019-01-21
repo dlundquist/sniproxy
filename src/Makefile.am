@@ -1,4 +1,5 @@
 AM_CPPFLAGS = $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS)
+AM_CFLAGS = -Wall -Wwrite-strings -Wsign-compare
 
 sbin_PROGRAMS = sniproxy
 

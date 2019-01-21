@@ -1,4 +1,5 @@
 AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS)
+AM_CFLAGS = -Wall -Wwrite-strings -Wsign-compare
 
 TESTS = address_test \
         buffer_test \

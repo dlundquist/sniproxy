@@ -2,7 +2,7 @@
 #include "config.h"
 
 int main(int argc, char **argv) {
-    char *config_file = "../sniproxy.conf";
+    const char *config_file = "../sniproxy.conf";
     struct Config *config;
 
     if (argc >= 2)
