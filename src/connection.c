@@ -699,16 +699,14 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         }
     }
 
-    /* TODO TCP Fast Open killswitch */
-    con->server.fast_open = 1;
-
 #ifndef MSG_FASTOPEN
-    con->server.fast_open = 0;
+    con->listener->fastopen = 0;
     con->server.addr_once = NULL;
-    warn("TCP Fast Open not supported");
+    warn("TCP Fast Open for client sockets not supported in this build");
 #endif
 
-    if (con->server.fast_open) {
+    if (con->listener->fastopen == 1 || 
+        con->listener->fastopen == 3) {
         con->server.addr_once = (struct sockaddr *)&con->server.addr;
     } else {
         result = connect(sockfd,

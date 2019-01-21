@@ -217,6 +217,7 @@ new_listener() {
     listener->table_name = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
+    listener->fastopen = 0;
     listener->reuseport = 0;
     listener->ipv6_v6only = 0;
     listener->transparent_proxy = 0;
@@ -289,6 +290,27 @@ accept_listener_protocol(struct Listener *listener, const char *protocol) {
 
     if (address_port(listener->address) == 0)
         address_set_port(listener->address, listener->protocol->default_port);
+
+    return 1;
+}
+
+int
+accept_listener_fastopen(struct Listener *listener, const char *fastopen) {
+    if (listener->fastopen = parse_boolean(fastopen))
+        listener->fastopen = 3;
+    else if (strcasecmp(fastopen, "frontend") == 0)
+        listener->fastopen = 2;
+    else if (strcasecmp(fastopen, "backend") == 0)
+        listener->fastopen = 1;
+    else
+        return 0;
+
+#ifndef TCP_FASTOPEN
+    if (listener->fastopen != -1) {
+        err("TCP Fast Open not supported in this build");
+        return 0;
+    }
+#endif
 
     return 1;
 }
@@ -573,12 +595,15 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
     }
 
 #ifdef TCP_FASTOPEN
-    int qlen = SOMAXCONN;
-    result = setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN, &qlen, sizeof(qlen));
-    if (result < 0) {
-        err("setsockopt TCP_FASTOPEN failed: %s", strerror(errno));
-        close(sockfd);
-        return result;
+    if (listener->fastopen == 2 ||
+        listener->fastopen == 3) {
+        int qlen = SOMAXCONN;
+        result = setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN, &qlen, sizeof(qlen));
+        if (result < 0) {
+            err("setsockopt TCP_FASTOPEN failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }        
     }
 #endif
 

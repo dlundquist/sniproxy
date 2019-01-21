@@ -46,7 +46,6 @@ struct Connection {
     } state;
 
     struct {
-	int fast_open;
         struct sockaddr_storage addr, local_addr;
         struct sockaddr *addr_once;
         socklen_t addr_len, local_addr_len;

@@ -106,6 +106,10 @@ static const struct Keyword listener_stanza_grammar[] = {
         .parse_arg=(int(*)(void *, const char *))accept_listener_reuseport,
     },
     {
+        .keyword="fastopen",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_fastopen,
+    },
+    {
         .keyword="ipv6_v6only",
         .parse_arg=(int(*)(void *, const char *))accept_listener_ipv6_v6only,
     },
