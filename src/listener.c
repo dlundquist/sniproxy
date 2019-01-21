@@ -296,7 +296,8 @@ accept_listener_protocol(struct Listener *listener, const char *protocol) {
 
 int
 accept_listener_fastopen(struct Listener *listener, const char *fastopen) {
-    if (listener->fastopen = parse_boolean(fastopen))
+    listener->fastopen = parse_boolean(fastopen);
+    if (listener->fastopen)
         listener->fastopen = 3;
     else if (strcasecmp(fastopen, "frontend") == 0)
         listener->fastopen = 2;
