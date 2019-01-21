@@ -27,7 +27,6 @@
 #include <stdlib.h> /* malloc */
 #include <string.h> /* memcpy */
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/uio.h>
 #include <time.h>
 #include <errno.h>
