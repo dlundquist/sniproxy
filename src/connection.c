@@ -255,7 +255,8 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
         if (bytes_received < 0 && 
-            !IS_TEMPORARY_SOCKERR(errno) && !con->server.addr_once) {
+            !IS_TEMPORARY_SOCKERR(errno) && 
+            !con->server.addr_once) {
             warn("recv(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -278,7 +279,7 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
                               con->server.addr_len, loop);
             con->server.addr_once = NULL;
         } else {
-            buffer_send(output_buffer, w->fd, 0, loop);
+            bytes_transmitted = buffer_send(output_buffer, w->fd, 0, loop);
         }
 
         if (bytes_transmitted < 0 && 
