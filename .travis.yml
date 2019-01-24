@@ -43,4 +43,4 @@ script:
   - sudo apt-get remove sniproxy
   - echo "Rebuilding without DNS and rerunning unit tests"
   - ./configure --disable-dns
-  - make clean all check CFLAGS="-Werror -Wno-error=unused-function"
+  - make clean all check CFLAGS="-Werror -Wno-error=unused-function -Wno-error=unused-parameter"

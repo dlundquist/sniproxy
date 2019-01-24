@@ -24,23 +24,19 @@ int main() {
 
 static int
 test_binder(int port) {
-    int fd;
-    struct sockaddr_in addr = { 0 };
-    struct sockaddr_storage addr_verify = { 0 };
-    socklen_t len;
+    struct sockaddr_in addr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+        .sin_port = htons(port),
+    };
 
-    /* make valgrind happy by initializing to zero */
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-    fd = bind_socket((struct sockaddr *)&addr, sizeof(addr));
+    int fd = bind_socket((struct sockaddr *)&addr, sizeof(addr));
 
     assert(fd > 0);
 
     /* Verify we obtained the expected socket address */
-    len = sizeof(addr_verify);
+    struct sockaddr_storage addr_verify;
+    socklen_t len = sizeof(addr_verify);
     if (getsockname(fd, (struct sockaddr *)&addr_verify, &len) < 0) {
         perror("getsockname:");
         exit(1);

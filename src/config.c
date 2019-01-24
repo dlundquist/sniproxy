@@ -77,7 +77,9 @@ static const struct Keyword logger_stanza_grammar[] = {
         .keyword="priority",
         .parse_arg=(int(*)(void *, const char *))accept_logger_priority,
     },
-    { NULL },
+    {
+        .keyword = NULL,
+    },
 };
 
 static const struct Keyword resolver_stanza_grammar[] = {
@@ -93,7 +95,9 @@ static const struct Keyword resolver_stanza_grammar[] = {
         .keyword="mode",
         .parse_arg=(int(*)(void *, const char *))accept_resolver_mode,
     },
-    { NULL },
+    {
+        .keyword = NULL,
+    },
 };
 
 static const struct Keyword listener_stanza_grammar[] = {
@@ -132,7 +136,9 @@ static const struct Keyword listener_stanza_grammar[] = {
         .keyword="bad_requests",
         .parse_arg= (int(*)(void *, const char *))accept_listener_bad_request_action,
     },
-    { NULL },
+    {
+        .keyword = NULL,
+    },
 };
 
 static struct Keyword table_stanza_grammar[] = {
@@ -141,7 +147,9 @@ static struct Keyword table_stanza_grammar[] = {
         .parse_arg=(int(*)(void *, const char *))accept_backend_arg,
         .finalize=(int(*)(void *, void *))end_backend,
     },
-    { NULL },
+    {
+        .keyword = NULL,
+    },
 };
 
 static struct Keyword global_grammar[] = {
@@ -189,7 +197,9 @@ static struct Keyword global_grammar[] = {
         .block_grammar=table_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_table_stanza,
     },
-    { NULL },
+    {
+        .keyword = NULL,
+    },
 };
 
 static const char *const resolver_mode_names[] = {
