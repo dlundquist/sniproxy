@@ -247,7 +247,8 @@ drop_perms(const char *username, const char *groupname) {
         if (groups == NULL)
             fatal("malloc(): %s", strerror(errno));
 
-        if (getgrouplist(user->pw_name, user->pw_gid, groups, &ngroups) < 0)
+        ngroups = getgrouplist(user->pw_name, user->pw_gid, groups, &ngroups);
+        if (ngroups < 0)
             fatal("getgrouplist(): %s", strerror(errno));
 
         if (setgroups(ngroups, groups) < 0)
