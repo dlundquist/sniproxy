@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
 #include <fcntl.h>
@@ -253,7 +254,9 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
     /* Receive first in case the socket was closed */
     if (revents & EV_READ && buffer_room(input_buffer)) {
         ssize_t bytes_received = buffer_recv(input_buffer, w->fd, 0, loop);
-        if (bytes_received < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        if (bytes_received < 0 && 
+            !IS_TEMPORARY_SOCKERR(errno) && 
+            !con->server.addr_once) {
             warn("recv(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -268,8 +271,19 @@ connection_cb(struct ev_loop *loop, struct ev_io *w, int revents) {
 
     /* Transmit */
     if (revents & EV_WRITE && buffer_len(output_buffer)) {
-        ssize_t bytes_transmitted = buffer_send(output_buffer, w->fd, 0, loop);
-        if (bytes_transmitted < 0 && !IS_TEMPORARY_SOCKERR(errno)) {
+        ssize_t bytes_transmitted = -1;
+        if (!is_client && con->server.addr_once) {
+            bytes_transmitted = 
+                buffer_sendto(output_buffer, w->fd,
+                              MSG_FASTOPEN, con->server.addr_once,
+                              con->server.addr_len, loop);
+            con->server.addr_once = NULL;
+        } else {
+            bytes_transmitted = buffer_send(output_buffer, w->fd, 0, loop);
+        }
+
+        if (bytes_transmitted < 0 && 
+            errno != EINPROGRESS && !IS_TEMPORARY_SOCKERR(errno)) {
             warn("send(%s): %s, closing connection",
                     socket_name,
                     strerror(errno));
@@ -628,22 +642,27 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 #endif
 
+    int on = 1;
+#ifdef TCP_NODELAY
+    int result = setsockopt(sockfd, SOL_TCP, TCP_NODELAY, &on, sizeof(on));
+#else
+    int result = -EPERM;
+    /* XXX error: not implemented would be better, but this shouldn't be
+     * reached since it is prohibited in the configuration parser. */
+#endif
+    result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
 #ifdef IP_TRANSPARENT
-        int on = 1;
-        int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
-#else
-        int result = -EPERM;
-        /* XXX error: not implemented would be better, but this shouldn't be
-         * reached since it is prohibited in the configuration parser. */
-#endif
+        result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
         if (result < 0) {
             err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
             close(sockfd);
             abort_connection(con);
             return;
         }
+#endif
 
         result = bind(sockfd, (struct sockaddr *)&con->client.addr,
                 con->client.addr_len);
@@ -680,18 +699,29 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         }
     }
 
-    int result = connect(sockfd,
-            (struct sockaddr *)&con->server.addr,
-            con->server.addr_len);
-    /* TODO retry connect in EADDRNOTAVAIL case */
-    if (result < 0 && errno != EINPROGRESS) {
-        close(sockfd);
-        char server[INET6_ADDRSTRLEN + 8];
-        warn("Failed to open connection to %s: %s",
-                display_sockaddr(&con->server.addr, server, sizeof(server)),
-                strerror(errno));
-        abort_connection(con);
-        return;
+#ifndef MSG_FASTOPEN
+    con->listener->fastopen = 0;
+    con->server.addr_once = NULL;
+    warn("TCP Fast Open for client sockets not supported in this build");
+#endif
+
+    if (con->listener->fastopen == 1 || 
+        con->listener->fastopen == 3) {
+        con->server.addr_once = (struct sockaddr *)&con->server.addr;
+    } else {
+        result = connect(sockfd,
+                (struct sockaddr *)&con->server.addr,
+                con->server.addr_len);
+        /* TODO retry connect in EADDRNOTAVAIL case */
+        if (result < 0 && errno != EINPROGRESS) {
+            close(sockfd);
+            char server[INET6_ADDRSTRLEN + 8];
+            warn("Failed to open connection to %s: %s",
+                    display_sockaddr(&con->server.addr, server, sizeof(server)),
+                    strerror(errno));
+            abort_connection(con);
+            return;
+        }    
     }
 
     if (getsockname(sockfd, (struct sockaddr *)&con->server.local_addr,

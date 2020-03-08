@@ -28,6 +28,7 @@
 
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <ev.h>
 
 
@@ -47,6 +48,7 @@ void free_buffer(struct Buffer *);
 
 ssize_t buffer_recv(struct Buffer *, int, int, struct ev_loop *);
 ssize_t buffer_send(struct Buffer *, int, int, struct ev_loop *);
+ssize_t buffer_sendto(struct Buffer *, int, int, const struct sockaddr *, socklen_t, struct ev_loop *);
 ssize_t buffer_read(struct Buffer *, int);
 ssize_t buffer_write(struct Buffer *, int);
 ssize_t buffer_resize(struct Buffer *, size_t);
