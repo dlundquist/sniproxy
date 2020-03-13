@@ -233,11 +233,29 @@ drop_perms(const char *username, const char *groupname) {
         fatal("getgrnam(): group %s does not exist", groupname);
 
       gid = group->gr_gid;
-    }
 
-    /* drop any supplementary groups */
-    if (setgroups(1, &gid) < 0)
-        fatal("setgroups(): %s", strerror(errno));
+      /* drop any supplementary groups */
+      if (setgroups(1, &gid) < 0)
+          fatal("setgroups(): %s", strerror(errno));
+    } else {
+        /* if no group has been specified, load user's supplementary groups */
+        int ngroups = 0;
+        if (getgrouplist(user->pw_name, user->pw_gid, NULL, &ngroups) != -1)
+            fatal("getgrouplist(): %s", strerror(errno));
+
+        gid_t *groups = malloc(ngroups * sizeof(gid_t));
+        if (groups == NULL)
+            fatal("malloc(): %s", strerror(errno));
+
+        ngroups = getgrouplist(user->pw_name, user->pw_gid, groups, &ngroups);
+        if (ngroups < 0)
+            fatal("getgrouplist(): %s", strerror(errno));
+
+        if (setgroups(ngroups, groups) < 0)
+            fatal("setgroups(): %s", strerror(errno));
+
+        free(groups);
+    }
 
     /* set the main gid */
     if (setgid(gid) < 0)
