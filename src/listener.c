@@ -376,7 +376,7 @@ accept_listener_source_address(struct Listener *listener, const char *source) {
     }
 
     if (strcasecmp("client", source) == 0) {
-#ifdef IP_TRANSPARENT
+#if defined(IP_TRANSPARENT) || defined(IP_BINDANY) && defined(IPV6_BINDANY)
         listener->transparent_proxy = 1;
         return 1;
 #else

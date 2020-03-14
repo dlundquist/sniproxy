@@ -630,16 +630,29 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
-#ifdef IP_TRANSPARENT
+#if defined(IP_TRANSPARENT)
         int on = 1;
         int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+#elif defined(IP_BINDANY) && defined(IPV6_BINDANY)
+        int on = 1;
+        int result = -EINVAL;
+        switch(con->server.addr.ss_family) {
+            case AF_INET:
+                result = setsockopt(sockfd, IPPROTO_IP, IP_BINDANY, &on, sizeof(on));
+                break;
+            case AF_INET6:
+                result = setsockopt(sockfd, IPPROTO_IPV6, IPV6_BINDANY, &on, sizeof(on));
+                break;
+            default:
+                err("unsupported address family %d does not support transparent mode", con->server.addr.ss_family);
+        }
 #else
-        int result = -EPERM;
+        int result = -EINVAL;
         /* XXX error: not implemented would be better, but this shouldn't be
          * reached since it is prohibited in the configuration parser. */
 #endif
         if (result < 0) {
-            err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
+            err("setsockopt IP_TRANSPARENT/BINDANY failed: %s", strerror(errno));
             close(sockfd);
             abort_connection(con);
             return;
