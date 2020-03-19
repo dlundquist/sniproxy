@@ -38,6 +38,13 @@ PKG_CHECK_MODULES([LIBPCRE], [libpcre], HAVE_LIBPCRE=yes; AC_DEFINE(HAVE_LIBPCRE
  fi
 ])
 
+PKG_CHECK_MODULES([LIBCAP], [libcap], HAVE_LIBCAP=yes; AC_DEFINE(HAVE_LIBCAP, 1),
+[AC_LIB_HAVE_LINKFLAGS(pcre,, [#include <sys/capability.h>], [cap_get_proc();])
+ if test x$ac_cv_libcap = xyes; then
+  AC_SUBST([LIBCAP_LIBS], [$LIBCAP])
+ fi
+])
+
 AC_ARG_ENABLE([dns],
   [AS_HELP_STRING([--disable-dns], [Disable DNS resolution])],
   [dns="$withval"], [dns=yes])
