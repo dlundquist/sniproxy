@@ -42,8 +42,9 @@
 #include "logger.h"
 
 #define DTLS_HANDSHAKE_CONTENT_TYPE      0x16
-#define DTLS_VERSION_12                  0xfefd
-#define DTLS_HEADER_LEN                  3
+#define DTLS_VERSION_12_MAJOR            0xfe
+#define DTLS_VERSION_12_MINOR            0xfd
+#define DTLS_HEADER_LEN                  13
 #define DTLS_HANDSHAKE_TYPE_CLIENT_HELLO 0x01
 
 #ifndef MIN
@@ -54,7 +55,7 @@ static int parse_dtls_header(const uint8_t*, size_t, char **);
 
 static const char dtls_alert[] = {
     0x15, /* DTLS Alert */
-    0x02, 0x01, /* DTLS version  */
+    0xfe, 0xfd, /* DTLS version  */
     0x00, 0x02, /* Payload length */
     0x02, 0x28, /* Fatal, handshake failure */
 };
@@ -84,7 +85,8 @@ const struct Protocol *const dtls_protocol = &(struct Protocol){
 static int
 parse_dtls_header(const uint8_t *data, size_t data_len, char **hostname) {
     uint8_t dtls_content_type;
-    uint16_t dtls_version;
+    uint8_t dtls_version_major;
+    uint8_t dtls_version_minor;
     size_t pos = DTLS_HEADER_LEN;
     size_t len;
 
@@ -102,9 +104,11 @@ parse_dtls_header(const uint8_t *data, size_t data_len, char **hostname) {
         return -5;
     }
 
-    dtls_version = data[1];
-    if (dtls_version != DTLS_VERSION_12) {
-        debug("Requested version of DTLS not supported.");
+    dtls_version_major = data[1];
+    dtls_version_minor = data[2];
+    if (dtls_version_major != DTLS_VERSION_12_MAJOR &&
+        dtls_version_minor != DTLS_VERSION_12_MINOR) {
+        debug("Requested version of DTLS not supported");
         return -5;
     }
 
@@ -112,18 +116,21 @@ parse_dtls_header(const uint8_t *data, size_t data_len, char **hostname) {
      * Skip epoch (2 bytes) and sequence number (6 bytes).
      * We want the length of this packet.
      */
-    len = ((size_t)data[9] << 8) +
-        (size_t)data[10] + DTLS_HEADER_LEN;
+    len = ((size_t)data[11] << 8) +
+        (size_t)data[12] + DTLS_HEADER_LEN;
     data_len = MIN(data_len, len);
 
     /* Check we received entire DTLS record length */
-    if (data_len < len)
+    if (data_len < len) {
+        debug("Failed to receive entire packet: len %zu data_len %zu", len, data_len);
         return -1;
+    }
 
     /*
      * Handshake
      */
     if (pos + 1 > data_len) {
+        debug("handshake");
         return -5;
     }
     if (data[pos] != DTLS_HANDSHAKE_TYPE_CLIENT_HELLO) {
@@ -141,36 +148,47 @@ parse_dtls_header(const uint8_t *data, size_t data_len, char **hostname) {
      * Version                 2
      * Random                 32
      */
-    pos += 45;
+    pos += 46;
 
     /* Session ID */
-    if (pos + 1 > data_len)
+    if (pos + 1 > data_len) {
+        debug("Session ID incorrect");
         return -5;
+    }
     len = (size_t)data[pos];
+    debug("session ID length: 0x%zx", len);
     pos += 1 + len;
 
     /* Cookie length */
     pos += 1;
 
     /* Cipher Suites */
-    if (pos + 2 > data_len)
+    if (pos + 2 > data_len) {
+        debug("cipher suites");
         return -5;
+    }
     len = ((size_t)data[pos] << 8) + (size_t)data[pos + 1];
     pos += 2 + len;
 
     /* Compression Methods */
-    if (pos + 1 > data_len)
+    if (pos + 1 > data_len) {
+        debug("compression methods");
         return -5;
+    }
     len = (size_t)data[pos];
     pos += 1 + len;
 
     /* Extensions */
-    if (pos + 2 > data_len)
+    if (pos + 2 > data_len) {
+        printf("extensions");
         return -5;
+    }
     len = ((size_t)data[pos] << 8) + (size_t)data[pos + 1];
     pos += 2;
 
-    if (pos + len > data_len)
+    if (pos + len > data_len) {
+        debug("length error");
         return -5;
+    }
     return parse_extensions(data + pos, len, hostname);
 }

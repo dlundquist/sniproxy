@@ -7,6 +7,7 @@ http_test
 resolv_test
 table_test
 tls_test
+dtls_test
 *.log
 *.trs
 *.pcap

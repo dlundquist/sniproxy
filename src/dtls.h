@@ -29,6 +29,6 @@
 
 #include "protocol.h"
 
-extern const struct Protocol *const dls_protocol;
+extern const struct Protocol *const dtls_protocol;
 
 #endif
