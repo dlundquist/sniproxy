@@ -44,6 +44,7 @@ static int parse_ancillary_data(struct msghdr *);
 
 
 struct binder_request {
+    int type;
     size_t address_len;
     struct sockaddr address[];
 };
@@ -82,7 +83,7 @@ start_binder() {
 }
 
 int
-bind_socket(const struct sockaddr *addr, size_t addr_len) {
+bind_socket(int type, const struct sockaddr *addr, size_t addr_len) {
     struct binder_request *request;
     struct msghdr msg;
     struct iovec iov[1];
@@ -99,6 +100,7 @@ bind_socket(const struct sockaddr *addr, size_t addr_len) {
     if (request_len > sizeof(data_buf))
         fatal("bind_socket: request length %zu exceeds buffer", request_len);
     request = (struct binder_request *)data_buf;
+    request->type = type;
     request->address_len = addr_len;
     memcpy(&request->address, addr, addr_len);
 
@@ -159,7 +161,7 @@ binder_main(int sockfd) {
 
         struct binder_request *req = (struct binder_request *)buffer;
 
-        int fd = socket(req->address[0].sa_family, SOCK_STREAM, 0);
+        int fd = socket(req->address[0].sa_family, req->type, 0);
         if (fd < 0) {
             memset(buffer, 0, sizeof(buffer));
             snprintf(buffer, sizeof(buffer), "socket(): %s", strerror(errno));

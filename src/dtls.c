@@ -65,7 +65,8 @@ const struct Protocol *const dtls_protocol = &(struct Protocol){
     .default_port = 443,
     .parse_packet = (int (*const)(const char *, size_t, char **))&parse_dtls_header,
     .abort_message = dtls_alert,
-    .abort_message_len = sizeof(dtls_alert)
+    .abort_message_len = sizeof(dtls_alert),
+    .sock_type = SOCK_DGRAM,
 };
 
 
