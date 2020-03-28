@@ -603,6 +603,24 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
             close(sockfd);
             return result;
         }
+    } else if (listener->protocol->sock_type == SOCK_DGRAM) {
+        /* For UDP arrange to receive the local socket address so we can bind
+         * to it and established a connected UDP socket */
+        switch (address_sa(listener->address)->sa_family) {
+            case AF_INET:
+                result = setsockopt(sockfd, IPPROTO_IP, IP_PKTINFO, &on, sizeof(on));
+                break;
+            case AF_INET6:
+                result = setsockopt(sockfd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &on, sizeof(on));
+                break;
+            default:
+                result = 0;
+        }
+        if (result < 0) {
+            err("setsockopt IP_PKTINFO/IPV6_RECVPKTINFO failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
     }
 
 #ifndef HAVE_ACCEPT4

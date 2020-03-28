@@ -109,17 +109,23 @@ free_buffer(struct Buffer *buf) {
 
 ssize_t
 buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
+    struct msghdr msg = { 0 };
+
+    return buffer_recvmsg(buffer, sockfd, &msg, flags, loop);
+}
+
+ssize_t
+buffer_recvmsg(struct Buffer *buffer, int sockfd, struct msghdr *msg,
+        int flags, struct ev_loop *loop) {
     /* coalesce when reading into an empty buffer */
     if (buffer->len == 0)
         buffer->head = 0;
 
     struct iovec iov[2];
-    struct msghdr msg = {
-        .msg_iov = iov,
-        .msg_iovlen = setup_write_iov(buffer, iov, 0)
-    };
+    msg->msg_iov = iov;
+    msg->msg_iovlen = setup_write_iov(buffer, iov, 0);
 
-    ssize_t bytes = recvmsg(sockfd, &msg, flags);
+    ssize_t bytes = recvmsg(sockfd, msg, flags);
 
     buffer->last_recv = ev_now(loop);
 
@@ -131,13 +137,18 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
 
 ssize_t
 buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) {
-    struct iovec iov[2];
-    struct msghdr msg = {
-        .msg_iov = iov,
-        .msg_iovlen = setup_read_iov(buffer, iov, 0)
-    };
+    struct msghdr msg = { 0 };
 
-    ssize_t bytes = sendmsg(sockfd, &msg, flags);
+    return buffer_sendmsg(buffer, sockfd, &msg, flags, loop);
+}
+
+ssize_t
+buffer_sendmsg(struct Buffer *buffer, int sockfd, struct msghdr *msg, int flags, struct ev_loop *loop) {
+    struct iovec iov[2];
+    msg->msg_iov = iov;
+    msg->msg_iovlen = setup_read_iov(buffer, iov, 0);
+
+    ssize_t bytes = sendmsg(sockfd, msg, flags);
 
     buffer->last_send = ev_now(loop);
 
