@@ -28,6 +28,7 @@
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
 #include <ctype.h> /* isblank(), isdigit() */
+#include <sys/socket.h> /* SOCK_STREAM */
 #include "http.h"
 #include "protocol.h"
 
@@ -51,6 +52,7 @@ const struct Protocol *const http_protocol = &(struct Protocol){
     .parse_packet = &parse_http_header,
     .abort_message = http_503,
     .abort_message_len = sizeof(http_503) - 1,
+    .sock_type = SOCK_STREAM,
 };
 
 /*

@@ -47,6 +47,7 @@
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
+#include "dtls.h"
 
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
@@ -281,10 +282,15 @@ accept_listener_table_name(struct Listener *listener, const char *table_name) {
 
 int
 accept_listener_protocol(struct Listener *listener, const char *protocol) {
+    /* TODO(dl): come up with a better protocol registration method */
     if (strncasecmp(protocol, http_protocol->name, strlen(protocol)) == 0)
         listener->protocol = http_protocol;
-    else
+    else if (strncasecmp(protocol, dtls_protocol->name, strlen(protocol)) == 0)
+        listener->protocol = dtls_protocol;
+    else if (strncasecmp(protocol, tls_protocol->name, strlen(protocol)) == 0)
         listener->protocol = tls_protocol;
+    else
+        return 0;
 
     if (address_port(listener->address) == 0)
         address_set_port(listener->address, listener->protocol->default_port);
@@ -481,7 +487,7 @@ valid_listener(const struct Listener *listener) {
             return 0;
     }
 
-    if (listener->protocol != tls_protocol && listener->protocol != http_protocol) {
+    if (listener->protocol == NULL) {
         err("Invalid protocol");
         return 0;
     }
@@ -509,9 +515,11 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
                 address_port(listener->address));
 
 #ifdef HAVE_ACCEPT4
-    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    int sockfd = socket(address_sa(listener->address)->sa_family,
+            listener->protocol->sock_type | SOCK_NONBLOCK, 0);
 #else
-    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+    int sockfd = socket(address_sa(listener->address)->sa_family,
+            listener->protocol->sock_type, 0);
 #endif
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
@@ -572,7 +580,8 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
     if (result < 0 && errno == EACCES) {
         /* Retry using binder module */
         close(sockfd);
-        sockfd = bind_socket(address_sa(listener->address),
+        sockfd = bind_socket(listener->protocol->sock_type,
+                address_sa(listener->address),
                 address_sa_len(listener->address));
         if (sockfd < 0) {
             err("binder failed to bind to %s",
@@ -587,11 +596,13 @@ init_listener(struct Listener *listener, const struct Table_head *tables,
         return result;
     }
 
-    result = listen(sockfd, SOMAXCONN);
-    if (result < 0) {
-        err("listen failed: %s", strerror(errno));
-        close(sockfd);
-        return result;
+    if (listener->protocol->sock_type == SOCK_STREAM) {
+        result = listen(sockfd, SOMAXCONN);
+        if (result < 0) {
+            err("listen failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
     }
 
 #ifndef HAVE_ACCEPT4

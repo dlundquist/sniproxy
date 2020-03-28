@@ -64,7 +64,8 @@ const struct Protocol *const tls_protocol = &(struct Protocol){
     .default_port = 443,
     .parse_packet = (int (*const)(const char *, size_t, char **))&parse_tls_header,
     .abort_message = tls_alert,
-    .abort_message_len = sizeof(tls_alert)
+    .abort_message_len = sizeof(tls_alert),
+    .sock_type = SOCK_STREAM,
 };
 
 

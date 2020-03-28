@@ -34,6 +34,7 @@ struct Protocol {
     int (*const parse_packet)(const char*, size_t, char **);
     const char *const abort_message;
     const size_t abort_message_len;
+    const int sock_type;
 };
 
 #endif
