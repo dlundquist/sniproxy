@@ -248,9 +248,10 @@ int main() {
         result = dtls_protocol->parse_packet(bad[i].packet, bad[i].len, &hostname);
 
         // parse failure or not "localhost"
-        assert(result < 0 ||
-               hostname == NULL ||
-               strcmp(bad[0].hostname, hostname) != 0);
+        if (bad[i].hostname != NULL)
+            assert(result < 0 ||
+                   hostname == NULL ||
+                   strcmp(bad[i].hostname, hostname) != 0);
 
         free(hostname);
     }
