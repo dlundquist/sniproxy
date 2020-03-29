@@ -50,13 +50,14 @@ static inline void advance_read_position(struct Buffer *, size_t);
 
 
 struct Buffer *
-new_buffer(size_t size, struct ev_loop *loop) {
+new_buffer(int type, size_t size, struct ev_loop *loop) {
     if (NOT_POWER_OF_2(size))
         return NULL;
     struct Buffer *buf = malloc(sizeof(struct Buffer));
     if (buf == NULL)
         return NULL;
 
+    buf->type = type;
     buf->size_mask = size - 1;
     buf->len = 0;
     buf->head = 0;

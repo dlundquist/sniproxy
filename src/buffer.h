@@ -34,6 +34,7 @@
 
 struct Buffer {
     char *buffer;
+    int type ;              /* STREAM or DGRAM */
     size_t size_mask;       /* bit mask for buffer size */
     size_t head;            /* index of first byte of content */
     size_t len;             /* size of content */
@@ -43,7 +44,7 @@ struct Buffer {
     size_t rx_bytes;
 };
 
-struct Buffer *new_buffer(size_t, struct ev_loop *);
+struct Buffer *new_buffer(int, size_t, struct ev_loop *);
 void free_buffer(struct Buffer *);
 
 ssize_t buffer_recv(struct Buffer *, int, int, struct ev_loop *);

@@ -80,7 +80,7 @@ static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void abort_connection(struct Connection *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
-static struct Connection *new_connection(struct ev_loop *);
+static struct Connection *new_connection(int type, struct ev_loop *);
 static void log_connection(struct Connection *);
 static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
@@ -100,7 +100,7 @@ init_connections() {
  */
 int
 accept_stream_connection(struct Listener *listener, struct ev_loop *loop) {
-    struct Connection *con = new_connection(loop);
+    struct Connection *con = new_connection(listener->protocol->sock_type, loop);
     if (con == NULL) {
         err("new_connection failed");
         return 0;
@@ -168,7 +168,7 @@ accept_stream_connection(struct Listener *listener, struct ev_loop *loop) {
  */
 int
 accept_dgram_connection(struct Listener *listener, struct ev_loop *loop) {
-    struct Connection *con = new_connection(loop);
+    struct Connection *con = new_connection(listener->protocol->sock_type, loop);
     if (con == NULL) {
         err("new_connection failed");
         return 0;
@@ -733,9 +733,9 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 #ifdef HAVE_ACCEPT4
-    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    int sockfd = socket(con->server.addr.ss_family, con->listener->protocol->sock_type| SOCK_NONBLOCK, 0);
 #else
-    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
+    int sockfd = socket(con->server.addr.ss_family, con->listener->protocol->sock_type, 0);
 #endif
     if (sockfd < 0) {
         char client[INET6_ADDRSTRLEN + 8];
@@ -913,7 +913,7 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
  * Allocate and initialize a new connection
  */
 static struct Connection *
-new_connection(struct ev_loop *loop) {
+new_connection(int type, struct ev_loop *loop) {
     struct Connection *con = calloc(1, sizeof(struct Connection));
     if (con == NULL)
         return NULL;
@@ -930,14 +930,15 @@ new_connection(struct ev_loop *loop) {
     con->header_len = 0;
     con->query_handle = NULL;
     con->use_proxy_header = 0;
+    con->type = type;
 
-    con->client.buffer = new_buffer(4096, loop);
+    con->client.buffer = new_buffer(con->type, 4096, loop);
     if (con->client.buffer == NULL) {
         free_connection(con);
         return NULL;
     }
 
-    con->server.buffer = new_buffer(4096, loop);
+    con->server.buffer = new_buffer(con->type, 4096, loop);
     if (con->server.buffer == NULL) {
         free_connection(con);
         return NULL;
