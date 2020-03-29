@@ -33,8 +33,10 @@
 struct test_packet {
     const char *packet;
     size_t len;
+    const char *hostname;
 };
 
+const char good_hostname_1[] = "nginx1.umbrella.com";
 const unsigned char good_data_1[] = {
     // DTLS Record Layer
     0x16, // Content Type: Handshake
@@ -208,13 +210,13 @@ const unsigned char bad_data_3[] = {
 };
 
 static struct test_packet good[] = {
-    { (char *)good_data_1, sizeof(good_data_1) },
+    { (char *)good_data_1, sizeof(good_data_1), good_hostname_1 },
 };
 
 static struct test_packet bad[] = {
-    { (char *)bad_data_1, sizeof(bad_data_1) },
-    { (char *)bad_data_2, sizeof(bad_data_2) },
-    { (char *)bad_data_3, sizeof(bad_data_3) }
+    { (char *)bad_data_1, sizeof(bad_data_1), NULL },
+    { (char *)bad_data_2, sizeof(bad_data_2), NULL },
+    { (char *)bad_data_3, sizeof(bad_data_3), NULL }
 };
 
 int main() {
@@ -232,7 +234,7 @@ int main() {
 
         assert(NULL != hostname);
 
-        assert(0 == strcmp("nginx1.umbrella.com", hostname));
+        assert(0 == strcmp(good[i].hostname, hostname));
 
         free(hostname);
     }
@@ -248,7 +250,7 @@ int main() {
         // parse failure or not "localhost"
         assert(result < 0 ||
                hostname == NULL ||
-               strcmp("localhost", hostname) != 0);
+               strcmp(bad[0].hostname, hostname) != 0);
 
         free(hostname);
     }
