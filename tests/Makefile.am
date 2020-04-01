@@ -7,21 +7,17 @@ TESTS = address_test \
         table_test \
         http_test \
         tls_test \
-        dtls_test \
-        binder_test
+        dtls_test
 
 TESTS += functional_test \
          bad_request_test \
-         bind_source_test \
          connection_reset_test \
          fallback_test \
          fd_limit_test \
          ipv6_v6only_test \
-         proxy_header_test \
          reload_test \
          reuseport_test \
-         slow_client_test \
-         transparent_proxy_test
+         slow_client_test
 if DNS_ENABLED
   TESTS += config_test \
            resolv_test \
@@ -32,7 +28,6 @@ check_PROGRAMS = http_test \
                  tls_test \
                  dtls_test \
                  table_test \
-                 binder_test \
                  buffer_test \
                  cfg_tokenizer_test \
                  address_test \
