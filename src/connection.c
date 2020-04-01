@@ -489,68 +489,68 @@ insert_proxy_v1_header(struct Connection *con) {
     char buf[INET6_ADDRSTRLEN] = { '\0' };
     size_t buf_len;
 
-    con->header_len += buffer_push(con->client.buffer, "PROXY ", 6);
+    con->header_len += buffer_push(con->client.buffer, "PROXY ", 6, BUFFER_DGRAM_LENGTH_ADD);
 
     switch (con->client.addr.ss_family) {
         case AF_INET:
-            con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5);
+            con->header_len += buffer_push(con->client.buffer, "TCP4 ", 5, BUFFER_DGRAM_LENGTH_ADD);
 
             inet_ntop(AF_INET,
                       &((const struct sockaddr_in *)&con->client.addr)->
                       sin_addr, buf, sizeof(buf));
             buf_len = strlen(buf);
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
-            con->header_len += buffer_push(con->client.buffer, " ", 1);
+            con->header_len += buffer_push(con->client.buffer, " ", 1, BUFFER_DGRAM_LENGTH_ADD);
 
             inet_ntop(AF_INET,
                       &((const struct sockaddr_in *)&con->client.local_addr)->
                       sin_addr, buf, sizeof(buf));
             buf_len = strlen(buf);
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.addr)->sin_port));
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in *)&con->
                               client.local_addr)->sin_port));
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             break;
         case AF_INET6:
-            con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5);
+            con->header_len += buffer_push(con->client.buffer, "TCP6 ", 5, BUFFER_DGRAM_LENGTH_ADD);
             inet_ntop(AF_INET6,
                     &((const struct sockaddr_in6 *)&con->client.addr)->
                     sin6_addr, buf, sizeof(buf));
             buf_len = strlen(buf);
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
-            con->header_len += buffer_push(con->client.buffer, " ", 1);
+            con->header_len += buffer_push(con->client.buffer, " ", 1, BUFFER_DGRAM_LENGTH_ADD);
 
             inet_ntop(AF_INET6,
                       &((const struct sockaddr_in6 *)&con->
                       client.local_addr)->sin6_addr, buf, sizeof(buf));
             buf_len = strlen(buf);
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.addr)->sin6_port));
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             buf_len = snprintf(buf, sizeof(buf), " %" PRIu16,
                               ntohs(((const struct sockaddr_in6 *)&con->
                               client.local_addr)->sin6_port));
-            con->header_len += buffer_push(con->client.buffer, buf, buf_len);
+            con->header_len += buffer_push(con->client.buffer, buf, buf_len, BUFFER_DGRAM_LENGTH_ADD);
 
             break;
         default:
-            con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7);
+            con->header_len += buffer_push(con->client.buffer, "UNKNOWN", 7, BUFFER_DGRAM_LENGTH_ADD);
     }
-    con->header_len += buffer_push(con->client.buffer, "\r\n", 2);
+    con->header_len += buffer_push(con->client.buffer, "\r\n", 2, BUFFER_DGRAM_LENGTH_ADD);
 }
 
 static void
@@ -606,7 +606,7 @@ abort_connection(struct Connection *con) {
 
     buffer_push(con->server.buffer,
             con->listener->protocol->abort_message,
-            con->listener->protocol->abort_message_len);
+            con->listener->protocol->abort_message_len, BUFFER_DGRAM_LENGTH_ADD);
 
     con->state = SERVER_CLOSED;
 }
