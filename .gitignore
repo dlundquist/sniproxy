@@ -29,3 +29,4 @@ INSTALL
 sniproxy-*.tar.gz
 tags
 test-driver
+.DS_Store
