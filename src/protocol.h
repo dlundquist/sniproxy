@@ -32,7 +32,7 @@ struct Protocol {
     const char *const name;
     const uint16_t default_port;
     int (*const parse_packet)(const char*, size_t, char **);
-    const char *const abort_message;
+    const unsigned char *const abort_message;
     const size_t abort_message_len;
     const int sock_type;
 };

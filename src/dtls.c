@@ -53,8 +53,8 @@
 
 static int parse_dtls_header(const uint8_t*, size_t, char **);
 
-static const char dtls_alert[] = {
-    0x15, /* DTLS Alert */
+static const unsigned char dtls_alert[] = {
+    0x21, /* DTLS Alert */
     0xfe, 0xfd, /* DTLS version  */
     0x00, 0x02, /* Payload length */
     0x02, 0x28, /* Fatal, handshake failure */

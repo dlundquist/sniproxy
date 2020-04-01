@@ -52,7 +52,7 @@
 static int parse_tls_header(const uint8_t*, size_t, char **);
 
 
-static const char tls_alert[] = {
+static const unsigned char tls_alert[] = {
     0x15, /* TLS Alert */
     0x03, 0x01, /* TLS version  */
     0x00, 0x02, /* Payload length */

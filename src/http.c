@@ -40,7 +40,7 @@ static int get_header(const char *, const char *, size_t, char **);
 static size_t next_header(const char **, size_t *);
 
 
-static const char http_503[] =
+static const unsigned char http_503[] =
     "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
     "Content-Type: text/html\r\n"
     "Connection: close\r\n\r\n"
