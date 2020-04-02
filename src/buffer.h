@@ -44,13 +44,6 @@ struct Buffer {
     size_t rx_bytes;
 };
 
-/*
- * Used by buffer_push to determine if we should populate the length
- * in the buffer object or not when dealing with SOCK_DGRAM buffers.
- */
-#define BUFFER_DGRAM_LENGTH_ADD    1
-#define BUFFER_DGRAM_LENGTH_SKIP   0
-
 struct Buffer *new_buffer(int, size_t, struct ev_loop *);
 void free_buffer(struct Buffer *);
 
@@ -64,7 +57,7 @@ ssize_t buffer_resize(struct Buffer *, size_t);
 size_t buffer_peek(struct Buffer *, void *, size_t);
 size_t buffer_coalesce(struct Buffer *, const void **);
 size_t buffer_pop(struct Buffer *, void *, size_t);
-size_t buffer_push(struct Buffer *, const void *, size_t, int);
+size_t buffer_push(struct Buffer *, const void *, size_t);
 static inline size_t buffer_size(const struct Buffer *b) {
     return b->size_mask + 1;
 }

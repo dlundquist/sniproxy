@@ -39,15 +39,13 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define NOT_POWER_OF_2(x) (x == 0 || (x & (x - 1)))
-
-/* How much extra data to store for SOCK_DGRAM reads */
-#define EXTRA_SOCK_DGRAM 2
-
+#define ALIGN_16BIT(x) ((x + 1) & ~((typeof(x))1))
 
 static const size_t BUFFER_MAX_SIZE = 1024 * 1024 * 1024;
 
 
-static size_t setup_write_iov(const struct Buffer *, struct iovec *, size_t, size_t *);
+static uint16_t *reserve_dgram_length(struct Buffer *);
+static size_t setup_write_iov(const struct Buffer *, struct iovec *, size_t);
 static size_t setup_read_iov(const struct Buffer *, struct iovec *, size_t);
 static inline void advance_write_position(struct Buffer *, size_t);
 static inline void advance_read_position(struct Buffer *, size_t);
@@ -127,28 +125,38 @@ buffer_recvmsg(struct Buffer *buffer, int sockfd, struct msghdr *msg,
         buffer->head = 0;
 
     struct iovec iov[2];
-    size_t start = 0; /* Where to save the size for SOCK_DGRAM sockets */
-    msg->msg_iov = iov;
-    msg->msg_iovlen = setup_write_iov(buffer, iov, 0, &start);
+    ssize_t bytes;
 
-    ssize_t bytes = recvmsg(sockfd, msg, flags);
-
-    size_t extra_bytes = 0;
-    /*
-     * If this is a DGRAM socket, save the size as a uint16_t in the first
-     * 2 bytes, represented by buffer->head.
-     */
     if (buffer->type == SOCK_DGRAM) {
-        buffer->buffer[buffer->head+start] = (unsigned char)bytes >> 8;
-        buffer->buffer[buffer->head+start+1] = (unsigned char)bytes;
-        /* Move past the 2 bytes of UDP length we just wrote */
-        extra_bytes = EXTRA_SOCK_DGRAM;
+        uint16_t *dgram_len = reserve_dgram_length(buffer);
+
+        msg->msg_iov = iov;
+        msg->msg_iovlen = setup_write_iov(buffer, iov, 0);
+
+        bytes = recvmsg(sockfd, msg, flags);
+
+        buffer->last_recv = ev_now(loop);
+
+        if (bytes < 0)
+            /* Release dgram length prefix space */
+            buffer->len -= sizeof(uint16_t);
+        else
+            /* Store the dgram length */
+            *dgram_len = (uint16_t)bytes;
+
+        if (bytes > 0)
+            advance_write_position(buffer, (size_t)ALIGN_16BIT(bytes));
+    } else {
+        msg->msg_iov = iov;
+        msg->msg_iovlen = setup_write_iov(buffer, iov, 0);
+
+        bytes = recvmsg(sockfd, msg, flags);
+
+        buffer->last_recv = ev_now(loop);
+
+        if (bytes > 0)
+            advance_write_position(buffer, bytes);
     }
-
-    buffer->last_recv = ev_now(loop);
-
-    if (bytes > 0)
-        advance_write_position(buffer, (size_t)bytes+extra_bytes);
 
     return bytes;
 }
@@ -162,24 +170,55 @@ buffer_send(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
 
 ssize_t
 buffer_sendmsg(struct Buffer *buffer, int sockfd, struct msghdr *msg, int flags, struct ev_loop *loop) {
+    ssize_t bytes;
     struct iovec iov[2];
     msg->msg_iov = iov;
-    msg->msg_iovlen = setup_read_iov(buffer, iov, 0);
 
-    ssize_t bytes = sendmsg(sockfd, msg, flags);
-
-    buffer->last_send = ev_now(loop);
-
-    size_t extra_bytes = 0;
     if (buffer->type == SOCK_DGRAM) {
-        /* Move past the 2 bytes of UDP length we just read */
-        extra_bytes = EXTRA_SOCK_DGRAM;
+        uint16_t *dgram_len = (uint16_t *)&buffer->buffer[buffer->head];
+        buffer->head = (buffer->head + sizeof(uint16_t)) & buffer->size_mask;
+        buffer->len -= sizeof(uint16_t);
+
+        msg->msg_iovlen = setup_read_iov(buffer, iov, *dgram_len);
+
+        bytes = sendmsg(sockfd, msg, flags);
+
+        if (bytes < 0) {
+            /* restore dgram length prefix */
+            buffer->head = (buffer->head - sizeof(uint16_t)) & buffer->size_mask;
+            buffer->len += sizeof(uint16_t);
+        }
+
+        buffer->last_send = ev_now(loop);
+
+        if (bytes > 0)
+            advance_read_position(buffer, (size_t)ALIGN_16BIT(bytes));
+    } else {
+        msg->msg_iovlen = setup_read_iov(buffer, iov, 0);
+
+        bytes = sendmsg(sockfd, msg, flags);
+
+        buffer->last_send = ev_now(loop);
+
+        if (bytes > 0)
+            advance_read_position(buffer, (size_t)bytes);
     }
 
-    if (bytes > 0)
-        advance_read_position(buffer, (size_t)bytes + extra_bytes);
-
     return bytes;
+}
+
+static uint16_t *
+reserve_dgram_length(struct Buffer *buffer) {
+    if (buffer_size(buffer) - buffer->len < sizeof(uint16_t) + 1)
+        return NULL; /* insufficient room */
+
+    /* Reserve remove for dgram length prefix */
+    uint16_t *dgram_len = (uint16_t *)&buffer->buffer[
+        (buffer->head + buffer->len) & buffer->size_mask];
+
+    buffer->len += sizeof(uint16_t);
+
+    return dgram_len;
 }
 
 /*
@@ -192,12 +231,30 @@ buffer_read(struct Buffer *buffer, int fd) {
         buffer->head = 0;
 
     struct iovec iov[2];
-    size_t start = 0;
-    size_t iov_len = setup_write_iov(buffer, iov, 0, &start);
-    ssize_t bytes = readv(fd, iov, iov_len);
+    ssize_t bytes;
 
-    if (bytes > 0)
-        advance_write_position(buffer, (size_t)bytes);
+    if (buffer->type == SOCK_DGRAM) {
+        uint16_t *dgram_len = reserve_dgram_length(buffer);
+
+        size_t iov_len = setup_write_iov(buffer, iov, 0);
+        bytes = readv(fd, iov, iov_len);
+
+        if (bytes < 0)
+            /* Release dgram length prefix space */
+            buffer->len -= sizeof(uint16_t);
+        else
+            /* Store the dgram length */
+            *dgram_len = (uint16_t)bytes;
+
+        if (bytes > 0)
+            advance_write_position(buffer, (size_t)ALIGN_16BIT(bytes));
+    } else {
+        size_t iov_len = setup_write_iov(buffer, iov, 0);
+        bytes = readv(fd, iov, iov_len);
+
+        if (bytes > 0)
+            advance_write_position(buffer, (size_t)bytes);
+    }
 
     return bytes;
 }
@@ -208,11 +265,31 @@ buffer_read(struct Buffer *buffer, int fd) {
 ssize_t
 buffer_write(struct Buffer *buffer, int fd) {
     struct iovec iov[2];
-    size_t iov_len = setup_read_iov(buffer, iov, 0);
-    ssize_t bytes = writev(fd, iov, iov_len);
+    ssize_t bytes;
 
-    if (bytes > 0)
-        advance_read_position(buffer, (size_t)bytes);
+    if (buffer->type == SOCK_DGRAM) {
+        uint16_t *dgram_len = (uint16_t *)&buffer->buffer[buffer->head];
+        buffer->head = (buffer->head + sizeof(uint16_t)) & buffer->size_mask;
+        buffer->len -= sizeof(uint16_t);
+
+        size_t iov_len = setup_read_iov(buffer, iov, *dgram_len);
+        bytes = writev(fd, iov, iov_len);
+
+        if (bytes < 0) {
+            /* restore dgram length prefix */
+            buffer->head = (buffer->head - sizeof(uint16_t)) & buffer->size_mask;
+            buffer->len += sizeof(uint16_t);
+        }
+
+        if (bytes > 0)
+            advance_read_position(buffer, (size_t)ALIGN_16BIT(bytes));
+    } else {
+        size_t iov_len = setup_read_iov(buffer, iov, 0);
+        bytes = writev(fd, iov, iov_len);
+
+        if (bytes > 0)
+            advance_read_position(buffer, (size_t)bytes);
+    }
 
     return bytes;
 }
@@ -230,20 +307,10 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
     if (buffer_tail <= buffer->head) {
         /* buffer not wrapped */
 
-        if (buffer->type == SOCK_STREAM) {
-            if (dst != NULL)
-                *dst = &buffer->buffer[buffer->head];
+        if (dst != NULL)
+            *dst = &buffer->buffer[buffer->head];
 
-            return buffer->len;
-        } else {
-            size_t dgram_read = (unsigned char)buffer->buffer[buffer->head] << 8 |
-                                (unsigned char)buffer->buffer[buffer->head+1];
-
-            if (dst != NULL)
-                *dst = &buffer->buffer[buffer->head+EXTRA_SOCK_DGRAM];
-
-            return dgram_read;
-        }
+        return buffer->len;
     } else {
         /* buffer wrapped */
 
@@ -253,27 +320,17 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
             buffer_pop(buffer, temp, len);
             assert(buffer->len == 0);
 
-            buffer_push(buffer, temp, len, BUFFER_DGRAM_LENGTH_SKIP);
+            buffer_push(buffer, temp, len);
             assert(buffer->head == 0);
             assert(buffer->len == len);
 
             free(temp);
         }
 
-        if (buffer->type == SOCK_STREAM) {
-            if (dst != NULL)
-                *dst = buffer->buffer;
+        if (dst != NULL)
+            *dst = buffer->buffer;
 
-            return buffer->len;
-        } else {
-            size_t dgram_read = (unsigned char)buffer->buffer[buffer->head] << 8 |
-                                (unsigned char)buffer->buffer[buffer->head+1];
-
-            if (dst != NULL)
-              *dst = &buffer->buffer[buffer->head+EXTRA_SOCK_DGRAM];
-
-          return dgram_read+EXTRA_SOCK_DGRAM;
-        }
+        return buffer->len;
     }
 }
 
@@ -290,32 +347,58 @@ buffer_peek(struct Buffer *src, void *dst, size_t len) {
 
         bytes_copied += iov[i].iov_len;
     }
+#if 0
+    if (src->type == SOCK_DGRAM) {
+        if (src->len == 0)
+            return 0;
+        else {
+            /* Skip the 2 bytes we use to store the UDP length for a peek */
+            //src->head = (src->head + sizeof(uint16_t)) & src->size_mask;
+            //src->len -= sizeof(uint16_t);
+
+            size_t iov_len = setup_read_iov(src, iov, len);
+
+            for (size_t i = 0; i < iov_len; i++) {
+                if (dst != NULL)
+                    memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
+
+                bytes_copied += iov[i].iov_len;
+            }
+
+            //src->head = (src->head - sizeof(uint16_t)) & src->size_mask;
+            //src->len += sizeof(uint16_t);
+        }
+    } else {
+        size_t iov_len = setup_read_iov(src, iov, len);
+
+        for (size_t i = 0; i < iov_len; i++) {
+            if (dst != NULL)
+                memcpy((char *)dst + bytes_copied, iov[i].iov_base, iov[i].iov_len);
+
+            bytes_copied += iov[i].iov_len;
+        }
+    }
+#endif
 
     return bytes_copied;
 }
 
 size_t
 buffer_pop(struct Buffer *src, void *dst, size_t len) {
-    size_t bytes = 0;
+    size_t bytes = buffer_peek(src, dst, len);
 
-    while (src->len != 0) {
-        bytes = buffer_peek(src, dst, len);
-
-        size_t extra_bytes = 0;
-        if (src->type == SOCK_DGRAM) {
-            /* Move past the 2 bytes of UDP length we just read */
-            extra_bytes = EXTRA_SOCK_DGRAM;
-        }
-
-        if (bytes > 0)
-            advance_read_position(src, bytes+extra_bytes);
+    if (bytes > 0) {
+        if (src->type == SOCK_DGRAM)
+            advance_read_position(src, (size_t)ALIGN_16BIT(bytes));
+        else
+            advance_read_position(src, bytes);
     }
 
     return bytes;
 }
 
 size_t
-buffer_push(struct Buffer *dst, const void *src, size_t len, int add_length) {
+buffer_push(struct Buffer *dst, const void *src, size_t len) {
     struct iovec iov[2];
     size_t bytes_appended = 0;
 
@@ -326,28 +409,32 @@ buffer_push(struct Buffer *dst, const void *src, size_t len, int add_length) {
     if (buffer_size(dst) - dst->len < len)
         return 0; /* insufficient room */
 
-    size_t start;
-    size_t iov_len = setup_write_iov(dst, iov, len, &start);
+    if (dst->type == SOCK_DGRAM) {
+        //uint16_t *dgram_len = reserve_dgram_length(dst);
 
-    size_t extra_bytes = 0;
-    /*
-     * If this is a DGRAM socket, save the size as a uint16_t in the first
-     * 2 bytes, represented by buffer->head.
-     */
-    if (dst->type == SOCK_DGRAM && add_length == BUFFER_DGRAM_LENGTH_ADD) {
-        dst->buffer[dst->head+start] = (unsigned char)len >> 8;
-        dst->buffer[dst->head+start+1] = (unsigned char)len;
-        /* Move past the 2 bytes of UDP length we just wrote */
-        extra_bytes = EXTRA_SOCK_DGRAM;
+        size_t iov_len = setup_write_iov(dst, iov, len);
+
+        for (size_t i = 0; i < iov_len; i++) {
+            memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
+            bytes_appended += iov[i].iov_len;
+        }
+
+        /* Store the dgram length */
+        //*dgram_len = (uint16_t)bytes_appended;
+
+        if (bytes_appended > 0)
+            advance_write_position(dst, (size_t)ALIGN_16BIT(bytes_appended));
+    } else {
+        size_t iov_len = setup_write_iov(dst, iov, len);
+
+        for (size_t i = 0; i < iov_len; i++) {
+            memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
+            bytes_appended += iov[i].iov_len;
+        }
+
+        if (bytes_appended > 0)
+            advance_write_position(dst, bytes_appended);
     }
-
-    for (size_t i = 0; i < iov_len; i++) {
-        memcpy(iov[i].iov_base, (char *)src + bytes_appended, iov[i].iov_len);
-        bytes_appended += iov[i].iov_len;
-    }
-
-    if (bytes_appended > 0)
-        advance_write_position(dst, bytes_appended+extra_bytes);
 
     return bytes_appended;
 }
@@ -358,13 +445,10 @@ buffer_push(struct Buffer *dst, const void *src, size_t len, int add_length) {
  * returns the number of entries setup
  */
 static size_t
-setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len, size_t *start) {
+setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
     size_t room = buffer_size(buffer) - buffer->len;
 
     if (room == 0) /* trivial case: no room */
-        return 0;
-
-    if (start == NULL)
         return 0;
 
     size_t write_len = room;
@@ -372,18 +456,10 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len, size
     if (len != 0)
         write_len = MIN(room, len);
 
-    size_t extra = 0;
+    size_t start = (buffer->head + buffer->len) & buffer->size_mask;
 
-    /* Save some room for UDP length for SOCK_DGRAM buffers */
-    if (buffer->type == SOCK_DGRAM) {
-        /* Save room for UDP packet length */
-        extra += EXTRA_SOCK_DGRAM;
-    }
-
-    *start = (buffer->head + buffer->len + extra) & buffer->size_mask;
-
-    if (*start + write_len <= buffer_size(buffer)) {
-        iov[0].iov_base = buffer->buffer + *start;
+    if (start + write_len <= buffer_size(buffer)) {
+        iov[0].iov_base = buffer->buffer + start;
         iov[0].iov_len = write_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
@@ -391,12 +467,10 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len, size
         assert((char *)iov[0].iov_base >= buffer->buffer);
         assert((char *)iov[0].iov_base + iov[0].iov_len <= buffer->buffer + buffer_size(buffer));
 
-        /* For SOCK_DGRAM, remove the 2 bytes of the length so we write into the correct spot */
-        *start -= extra;
         return 1;
     } else {
-        iov[0].iov_base = buffer->buffer + *start;
-        iov[0].iov_len = buffer_size(buffer) - *start;
+        iov[0].iov_base = buffer->buffer + start;
+        iov[0].iov_len = buffer_size(buffer) - start;
         iov[1].iov_base = buffer->buffer;
         iov[1].iov_len = write_len - iov[0].iov_len;
 
@@ -408,8 +482,6 @@ setup_write_iov(const struct Buffer *buffer, struct iovec *iov, size_t len, size
         assert((char *)iov[1].iov_base >= buffer->buffer);
         assert((char *)iov[1].iov_base + iov[1].iov_len <= (char *)iov[0].iov_base);
 
-        /* For SOCK_DGRAM, remove the 2 bytes of the length so we write into the correct spot */
-        *start -= extra;
         return 2;
     }
 }
@@ -420,24 +492,11 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
         return 0;
 
     size_t read_len = buffer->len;
-    size_t extra_bytes = 0;
-    if (buffer->type == SOCK_STREAM) {
-        if (len != 0)
-            read_len = MIN(len, buffer->len);
-    }
-
-    else { /* SOCK_DGRAM */
-        size_t dgram_read = (unsigned char)buffer->buffer[buffer->head] << 8 |
-                            (unsigned char)buffer->buffer[buffer->head+1];
-        extra_bytes = EXTRA_SOCK_DGRAM;
-        read_len = dgram_read;
-
-        if (len != 0)
-            read_len = MIN(len, read_len);
-    }
+    if (len != 0)
+        read_len = MIN(len, buffer->len);
 
     if (buffer->head + read_len <= buffer_size(buffer)) {
-        iov[0].iov_base = buffer->buffer + buffer->head + extra_bytes;
+        iov[0].iov_base = buffer->buffer + buffer->head;
         iov[0].iov_len = read_len;
 
         /* assert iov are within bounds, non-zero length and non-overlapping */
@@ -447,7 +506,7 @@ setup_read_iov(const struct Buffer *buffer, struct iovec *iov, size_t len) {
 
         return 1;
     } else {
-        iov[0].iov_base = buffer->buffer + buffer->head + extra_bytes;
+        iov[0].iov_base = buffer->buffer + buffer->head;
         iov[0].iov_len = buffer_size(buffer) - buffer->head;
         iov[1].iov_base = buffer->buffer;
         iov[1].iov_len = read_len - iov[0].iov_len;
