@@ -104,6 +104,15 @@ buffer_resize(struct Buffer *buf, size_t new_size) {
     return (ssize_t)buf->len;
 }
 
+ssize_t
+buffer_copy_data(struct Buffer *src, struct Buffer *dst, size_t len)
+{
+    /* Raw copy the entire buffer */
+    memcpy(src->buffer, dst->buffer, len);
+
+    return 0;
+}
+
 void
 free_buffer(struct Buffer *buf) {
     if (buf == NULL)
@@ -122,7 +131,7 @@ buffer_recv(struct Buffer *buffer, int sockfd, int flags, struct ev_loop *loop) 
 
 ssize_t
 buffer_recvmsg(struct Buffer *buffer, int sockfd, struct msghdr *msg,
-        int flags, struct ev_loop *loop) {
+    int flags, struct ev_loop *loop) {
     /* coalesce when reading into an empty buffer */
     if (buffer->len == 0)
         buffer->head = 0;
@@ -218,18 +227,47 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
 
         return buffer->len;
     } else {
-        /* buffer wrapped */
-        size_t len = buffer->len;
-        char *temp = malloc(len);
-        if (temp != NULL) {
-            buffer_pop(buffer, temp, len);
-            assert(buffer->len == 0);
+        if (buffer->type == SOCK_STREAM) {
+            /* buffer wrapped */
+            size_t len = buffer->len;
+            char *temp = malloc(len);
+            if (temp != NULL) {
+                buffer_pop(buffer, temp, len);
+                assert(buffer->len == 0);
 
-            buffer_push(buffer, temp, len);
-            assert(buffer->head == 0);
-            //assert(buffer->len == len);
+                buffer_push(buffer, temp, len);
+                assert(buffer->head == 0);
+                assert(buffer->len == len);
 
-            free(temp);
+                free(temp);
+            }
+        } else { /* SOCK_DGRAM */
+            /* buffer wrapped */
+            size_t len = buffer->len;
+            char *temp = malloc(len);
+            size_t bytes = 0, total = 0;
+            struct Buffer *newbuf = new_buffer(SOCK_DGRAM, len, EV_DEFAULT);
+            if (temp != NULL && newbuf != NULL) {
+                do {
+                    /* Read each datagram, one at a time, and populate in new buffer */
+                    bytes = buffer_peek(buffer, NULL, len);
+                    //bytes = *(uint16_t *)&buffer->buffer[buffer->head];
+                    total += bytes+sizeof(uint16_t);
+
+                    buffer_pop(buffer, temp, bytes);
+                    assert(buffer->len == len-bytes-sizeof(uint16_t));
+
+                    buffer_push(newbuf, temp, bytes);
+                    assert(newbuf->head == total);
+                    assert(newbuf->len == len);
+                } while (bytes != 0 && total < len);
+
+                /* Copy the data across */
+                buffer_copy_data(newbuf, buffer, len);
+                free_buffer(newbuf);
+
+                free(temp);
+            }
         }
 
         if (dst != NULL) {
@@ -263,25 +301,14 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
 
 size_t
 buffer_pop(struct Buffer *src, void *dst, size_t len) {
-    size_t total = 0, bytes = 0;;
+    size_t bytes = 0;;
 
-    if (src->type == SOCK_DGRAM) {
-        do {
-            bytes = buffer_peek(src, (char *)dst+bytes, len);
+    bytes = buffer_peek(src, (char *)dst+bytes, len);
 
-            if (bytes > 0)
-                advance_read_position(src, bytes);
+    if (bytes > 0)
+        advance_read_position(src, bytes);
 
-            total += bytes;
-        } while (bytes != 0 && bytes < len);
-    } else {
-        total = buffer_peek(src, (char *)dst+bytes, len);
-
-        if (total > 0)
-            advance_read_position(src, total);
-    }
-
-    return total;
+    return bytes;
 }
 
 size_t
