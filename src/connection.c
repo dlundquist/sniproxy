@@ -281,6 +281,9 @@ accept_dgram_connection(struct Listener *listener, struct ev_loop *loop) {
 
     ev_io_start(loop, client_watcher);
 
+    /* Since this is a datagram socket, we should read any data sent right away */
+    connection_cb(loop, client_watcher, EV_READ);
+
     return 1;
 }
 
