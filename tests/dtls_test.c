@@ -39,7 +39,7 @@ struct test_packet {
 const char good_hostname_1[] = "nginx1.umbrella.com";
 const unsigned char good_data_1[] = {
     // UDP payload length
-    0x00, 0xdd,
+    //0x00, 0xdd,
     // DTLS Record Layer
     0x16, // Content Type: Handshake
     0xfe, 0xfd, // Version: DTLS 1.2

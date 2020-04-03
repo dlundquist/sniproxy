@@ -84,13 +84,13 @@ const struct Protocol *const dtls_protocol = &(struct Protocol){
  *  < -4 - Invalid TLS client hello
  */
 static int
-parse_dtls_header(const uint8_t *input_data, size_t data_len, char **hostname) {
+parse_dtls_header(const uint8_t *data, size_t data_len, char **hostname) {
     uint8_t dtls_content_type;
     uint8_t dtls_version_major;
     uint8_t dtls_version_minor;
     size_t pos = DTLS_HEADER_LEN;
     size_t len;
-    const uint8_t *data = &input_data[2]; /* Skip UDP length */
+    //const uint8_t *data = &input_data[2]; /* Skip UDP length */
 
     if (hostname == NULL)
         return -3;

@@ -207,11 +207,14 @@ buffer_write(struct Buffer *buffer, int fd) {
 size_t
 buffer_coalesce(struct Buffer *buffer, const void **dst) {
     size_t buffer_tail = (buffer->head + buffer->len) & buffer->size_mask;
+    size_t head = buffer->head;
 
     if (buffer_tail <= buffer->head) {
         /* buffer not wrapped */
+        if (buffer->type == SOCK_DGRAM)
+            head += sizeof(uint16_t);
         if (dst != NULL)
-            *dst = &buffer->buffer[buffer->head];
+            *dst = &buffer->buffer[head];
 
         return buffer->len;
     } else {
@@ -220,19 +223,22 @@ buffer_coalesce(struct Buffer *buffer, const void **dst) {
         char *temp = malloc(len);
         if (temp != NULL) {
             buffer_pop(buffer, temp, len);
-DBG_DUMP(buffer, fprintf(stderr, "%s/%d: buffer->len %ld len %ld\n", __FILE__, __LINE__, buffer->len, len));
             assert(buffer->len == 0);
 
             buffer_push(buffer, temp, len);
-DBG_DUMP(buffer, fprintf(stderr, "%s/%d: buffer->len %ld len %ld\n", __FILE__, __LINE__, buffer->len, len));
             assert(buffer->head == 0);
             //assert(buffer->len == len);
 
             free(temp);
         }
 
-        if (dst != NULL)
-            *dst = buffer->buffer;
+        if (dst != NULL) {
+            if (buffer->type == SOCK_DGRAM) {
+                *dst = buffer->buffer+sizeof(uint16_t);
+            } else {
+                *dst = buffer->buffer;
+            }
+        }
 
         return buffer->len;
     }
