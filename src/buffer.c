@@ -301,9 +301,7 @@ buffer_peek(const struct Buffer *src, void *dst, size_t len) {
 
 size_t
 buffer_pop(struct Buffer *src, void *dst, size_t len) {
-    size_t bytes = 0;;
-
-    bytes = buffer_peek(src, (char *)dst+bytes, len);
+    size_t bytes = buffer_peek(src, dst, len);
 
     if (bytes > 0)
         advance_read_position(src, bytes);
