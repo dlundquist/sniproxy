@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <ev.h>
 
+#define HDR_LEN(b) (((b)->type == SOCK_DGRAM) ? sizeof(uint16_t) : 0)
 
 struct Buffer {
     char *buffer;
