@@ -58,12 +58,14 @@ struct Connection {
     struct ResolvQuery *query_handle;
     ev_tstamp established_timestamp;
     int use_proxy_header;
+    int type;
 
     TAILQ_ENTRY(Connection) entries;
 };
 
 void init_connections();
-int accept_connection(struct Listener *, struct ev_loop *);
+int accept_stream_connection(struct Listener *, struct ev_loop *);
+int accept_dgram_connection(struct Listener *, struct ev_loop *);
 void free_connections(struct ev_loop *);
 void print_connections();
 

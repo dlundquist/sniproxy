@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2020 Cisco and/or its affiliates.
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,18 +24,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef DTLS_H
+#define DTLS_H
 
-#include <inttypes.h>
+#include "protocol.h"
 
-struct Protocol {
-    const char *const name;
-    const uint16_t default_port;
-    int (*const parse_packet)(const char*, size_t, char **);
-    const unsigned char *const abort_message;
-    const size_t abort_message_len;
-    const int sock_type;
-};
+extern const struct Protocol *const dtls_protocol;
 
 #endif
