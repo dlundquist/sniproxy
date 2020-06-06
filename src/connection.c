@@ -84,7 +84,7 @@ static struct Connection *new_connection(struct ev_loop *);
 static void log_connection(struct Connection *);
 static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
-static void print_connection(FILE *, const struct Connection *);
+static void print_connection(int, const struct Connection *);
 static void free_resolv_cb_data(struct resolv_cb_data *);
 
 
@@ -161,6 +161,42 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     return 1;
 }
 
+/**
+ * Accept a new incoming connection that will report the status
+ *
+ * Returns 1 on success or 0 on error;
+ */
+int
+accept_statusconnection(struct Listener *listener, struct ev_loop * loop) {
+    (void)loop;
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+
+    #ifdef HAVE_ACCEPT4
+        int sockfd = accept4(listener->watcher.fd,
+                        (struct sockaddr *)&addr,
+                        &addr_len,
+                        SOCK_NONBLOCK);
+    #else
+        int sockfd = accept(listener->watcher.fd,
+                        (struct sockaddr *)&addr,
+                        &addr_len);
+    #endif
+    if (sockfd < 0) {
+        int saved_errno = errno;
+
+        warn("accept failed: %s", strerror(errno));
+
+        errno = saved_errno;
+        return 0;
+    }
+    const char *header = "HTTP/1.1 200 OK\n\n";
+    write(sockfd , header , strlen(header));
+    print_connections(sockfd);
+    close(sockfd);
+    return 1;
+}
+
 /*
  * Close and free all connections
  */
@@ -174,9 +210,18 @@ free_connections(struct ev_loop *loop) {
     }
 }
 
-/* dumps a list of all connections for debugging */
+/* dumps a list of all connections to the file descriptor*/
 void
-print_connections() {
+print_connections(int fd) {
+    struct Connection *iter;
+    TAILQ_FOREACH(iter, &connections, entries)
+        print_connection(fd, iter);
+    return;
+}
+
+/* dumps a list of all connections for debugging to a temporary file */
+void
+print_connections_file() {
     char filename[] = "/tmp/sniproxy-connections-XXXXXX";
 
     int fd = mkstemp(filename);
@@ -185,19 +230,11 @@ print_connections() {
         return;
     }
 
-    FILE *temp = fdopen(fd, "w");
-    if (temp == NULL) {
-        warn("fdopen failed: %s", strerror(errno));
-        return;
-    }
+    dprintf(fd, "Running connections:\n");
+    print_connections(fd);
 
-    fprintf(temp, "Running connections:\n");
-    struct Connection *iter;
-    TAILQ_FOREACH(iter, &connections, entries)
-        print_connection(temp, iter);
-
-    if (fclose(temp) < 0)
-        warn("fclose failed: %s", strerror(errno));
+    if (close(fd) < 0)
+        warn("close failed: %s", strerror(errno));
 
     notice("Dumped connections to %s", filename);
 }
@@ -896,53 +933,54 @@ free_connection(struct Connection *con) {
 }
 
 static void
-print_connection(FILE *file, const struct Connection *con) {
+print_connection(int file, const struct Connection *con) {
     char client[INET6_ADDRSTRLEN + 8];
     char server[INET6_ADDRSTRLEN + 8];
 
     switch (con->state) {
         case NEW:
-            fprintf(file, "NEW           -\t-\n");
+            dprintf(file, "NEW\t-\t-\n");
             break;
         case ACCEPTED:
-            fprintf(file, "ACCEPTED      %s %zu/%zu\t-\n",
+            dprintf(file, "ACCEPTED\t%s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case PARSED:
-            fprintf(file, "PARSED        %s %zu/%zu\t-\n",
+            dprintf(file, "PARSED\t%s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case RESOLVING:
-            fprintf(file, "RESOLVING      %s %zu/%zu\t-\n",
+            dprintf(file, "RESOLVING\t%s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case RESOLVED:
-            fprintf(file, "RESOLVED      %s %zu/%zu\t-\n",
+            dprintf(file, "RESOLVED\t%s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case CONNECTED:
-            fprintf(file, "CONNECTED     %s %zu/%zu\t%s %zu/%zu\n",
+            dprintf(file, "CONNECTED\t%s %zu/%zu\t%s %zu/%zu\t%s\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer),
                     display_sockaddr(&con->server.addr, server, sizeof(server)),
-                    buffer_len(con->server.buffer), buffer_size(con->server.buffer));
+                    buffer_len(con->server.buffer), buffer_size(con->server.buffer),
+                    con->hostname);
             break;
         case SERVER_CLOSED:
-            fprintf(file, "SERVER_CLOSED %s %zu/%zu\t-\n",
+            dprintf(file, "SERVER_CLOSED\t%s %zu/%zu\t-\n",
                     display_sockaddr(&con->client.addr, client, sizeof(client)),
                     buffer_len(con->client.buffer), buffer_size(con->client.buffer));
             break;
         case CLIENT_CLOSED:
-            fprintf(file, "CLIENT_CLOSED -\t%s %zu/%zu\n",
+            dprintf(file, "CLIENT_CLOSED\t-\t%s %zu/%zu\n",
                     display_sockaddr(&con->server.addr, server, sizeof(server)),
                     buffer_len(con->server.buffer), buffer_size(con->server.buffer));
             break;
         case CLOSED:
-            fprintf(file, "CLOSED        -\t-\n");
+            dprintf(file, "CLOSED\t-\t-\n");
             break;
     }
 }
