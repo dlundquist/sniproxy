@@ -53,6 +53,7 @@ struct Listener {
 
 
 struct Listener *new_listener();
+struct Listener *new_statuslistener();
 int accept_listener_arg(struct Listener *, const char *);
 int accept_listener_table_name(struct Listener *, const char *);
 int accept_listener_fallback_address(struct Listener *, const char *);
