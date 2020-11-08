@@ -20,6 +20,11 @@ static const char *good[] = {
         "HOST:\t     localhost:8080\r\n"
         "Accept: */*\r\n"
         "\r\n",
+    "GET / HTTP/1.1\n"
+        "User-Agent: curl/7.21.0 (x86_64-pc-linux-gnu) libcurl/7.21.0 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18\n"
+        "Host: localhost\n"
+        "Accept: */*\n"
+        "\n"
 };
 static const char *bad[] = {
     "GET / HTTP/1.0\r\n"
