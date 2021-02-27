@@ -631,8 +631,44 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
 #ifdef IP_TRANSPARENT
-        int on = 1;
-        int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+        int result;
+        /* Make an IPv6 socket if necessary and purge ::ffff: from the v6-mapped address
+         * We need to take out the ffff because otherwise it'll be IPv4 on the wire.
+         * The result is a connection from IPv6 address ::<ipv4>,
+         * The return traffic can be marked with nftables in ip6 mangle PREROUTING:
+         * socket transparent 1 mark set 0x1
+         * and then routed to sniproxy using a separate routing table (e.g table 100):
+         * ip -6 rule add fwmark 0x1 lookup 100
+         * ip -6 route add local ::/96 dev lo table 100
+         */
+        struct in6_addr *saddr = &((struct sockaddr_in6 *)&con->client.addr)->sin6_addr;
+        if (con->client.addr.ss_family == AF_INET6 &&
+                con->server.addr.ss_family == AF_INET6 &&
+                saddr->s6_addr[0] == 0 &&
+                saddr->s6_addr[1] == 0 &&
+                saddr->s6_addr[2] == 0 &&
+                saddr->s6_addr[3] == 0 &&
+                saddr->s6_addr[4] == 0 &&
+                saddr->s6_addr[5] == 0 &&
+                saddr->s6_addr[6] == 0 &&
+                saddr->s6_addr[7] == 0 &&
+                saddr->s6_addr[8] == 0 &&
+                saddr->s6_addr[9] == 0 &&
+                saddr->s6_addr[10] == 0xff &&
+                saddr->s6_addr[11] == 0xff) {
+
+            /* Turn (e.g.) IPv4 ::ffff:192.0.2.1 into IPv6 ::192.0.2.1 */
+            saddr->s6_addr[10] = 0;
+            saddr->s6_addr[11] = 0;
+
+            /* We want an IPv6 transparent socket */
+            int on = 1;
+            result = setsockopt(sockfd, SOL_IPV6, IPV6_TRANSPARENT, &on, sizeof(on));
+        } else {
+            /* We want an IPv4 transparent socket */
+            int on = 1;
+            result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+        }
 #else
         int result = -EPERM;
         /* XXX error: not implemented would be better, but this shouldn't be
