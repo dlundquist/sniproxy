@@ -630,23 +630,45 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 
     if (con->listener->transparent_proxy &&
             con->client.addr.ss_family == con->server.addr.ss_family) {
+        int result;
+
+        if (address_addr_eq(con->listener->address,
+                    (struct sockaddr *)&con->client.addr)) {
+            /* Client is the same host as the listener, bind to a new port. */
+            struct sockaddr_storage self = con->client.addr;
+
+            switch (con->client.addr.ss_family) {
+                case AF_INET:
+                    ((struct sockaddr_in *)&self)->sin_port = 0;
+                    break;
+
+                case AF_INET6:
+                    ((struct sockaddr_in6 *)&self)->sin6_port = 0;
+                    break;
+            }
+
+            result = bind(sockfd, (struct sockaddr *)&self,
+                    con->client.addr_len);
+        } else {
 #ifdef IP_TRANSPARENT
-        int on = 1;
-        int result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
+            int on = 1;
+            result = setsockopt(sockfd, SOL_IP, IP_TRANSPARENT, &on, sizeof(on));
 #else
-        int result = -EPERM;
-        /* XXX error: not implemented would be better, but this shouldn't be
-         * reached since it is prohibited in the configuration parser. */
+            result = -EPERM;
+            /* XXX error: not implemented would be better, but this shouldn't be
+             * reached since it is prohibited in the configuration parser. */
 #endif
-        if (result < 0) {
-            err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
-            close(sockfd);
-            abort_connection(con);
-            return;
+            if (result < 0) {
+                err("setsockopt IP_TRANSPARENT failed: %s", strerror(errno));
+                close(sockfd);
+                abort_connection(con);
+                return;
+            }
+
+            result = bind(sockfd, (struct sockaddr *)&con->client.addr,
+                    con->client.addr_len);
         }
 
-        result = bind(sockfd, (struct sockaddr *)&con->client.addr,
-                con->client.addr_len);
         if (result < 0) {
             err("bind failed: %s", strerror(errno));
             close(sockfd);
