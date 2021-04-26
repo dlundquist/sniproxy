@@ -627,6 +627,51 @@ listener_lookup_server_address(const struct Listener *listener,
             .address = listener->fallback_address,
             .use_proxy_header = listener->fallback_use_proxy_header
         };
+    } else if (address_is_pattern(table_result.address)) {
+        /* Pattern table entry, create a new address from hostname */
+        char replacement[1024];
+        if (apply_pattern(name, address_pattern(table_result.address) ,table_result.matches, replacement, 1024) == 0) {
+            warn("Failed pattern %.*s in client request",
+                    (int)name_len, name);
+
+            return (struct LookupResult){
+                .address = listener->fallback_address,
+                .use_proxy_header = listener->fallback_use_proxy_header
+            };
+        }  
+        struct Address *new_addr = new_address(replacement);
+        if (new_addr == NULL) {
+            warn("Failed pattern%.*s in client request",
+                    (int)name_len, name);
+
+            return (struct LookupResult){
+                .address = listener->fallback_address,
+                .use_proxy_header = listener->fallback_use_proxy_header
+            };
+        } else if (address_is_sockaddr(new_addr)) {
+            warn("Refusing to proxy to socket address literal %.*s in request",
+                    (int)name_len, name);
+            free(new_addr);
+
+            return (struct LookupResult){
+                .address = listener->fallback_address,
+                .use_proxy_header = listener->fallback_use_proxy_header
+            };
+        }
+
+        /* We created a valid new_addr, use the port from wildcard address if
+         * present otherwise the listener */
+        address_set_port(new_addr, address_port(table_result.address) != 0 ?
+                                   address_port(table_result.address) :
+                                   address_port(listener->address));
+
+
+        return (struct LookupResult){
+            .address = new_addr,
+            .caller_free_address = 1,
+            .use_proxy_header = table_result.use_proxy_header
+        };
+    
     } else if (address_is_wildcard(table_result.address)) {
         /* Wildcard table entry, create a new address from hostname */
         struct Address *new_addr = new_address(name);

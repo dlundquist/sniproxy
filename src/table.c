@@ -37,7 +37,7 @@
 static void free_table(struct Table *);
 
 
-static inline struct Backend *
+static inline struct BackendLookupResult
 table_lookup_backend(const struct Table *table, const char *name, size_t name_len) {
     return lookup_backend(&table->backends, name, name_len);
 }
@@ -130,14 +130,20 @@ remove_table(struct Table_head *tables, struct Table *table) {
 
 struct LookupResult
 table_lookup_server_address(const struct Table *table, const char *name, size_t name_len) {
-    struct Backend *b = table_lookup_backend(table, name, name_len);
-    if (b == NULL) {
+    struct BackendLookupResult b = table_lookup_backend(table, name, name_len);
+    if (b.backend == NULL) {
         info("No match found for %.*s", (int)name_len, name);
         return (struct LookupResult){.address = NULL};
     }
 
-    return (struct LookupResult){.address = b->address,
-                                 .use_proxy_header = b->use_proxy_header};
+    struct LookupResult result;
+    result.address = b.backend->address;
+    result.caller_free_address = 0;
+    result.use_proxy_header = b.backend->use_proxy_header;
+    for(int i = 0; i < 32; ++i)	{
+        result.matches[i] = b.matches[i];
+    }
+    return result;
 }
 
 void

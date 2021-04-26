@@ -42,6 +42,7 @@ struct Address {
         HOSTNAME,
         SOCKADDR,
         WILDCARD,
+        PATTERN,
     } type;
 
     size_t len;     /* length of data */
@@ -121,6 +122,20 @@ new_address(const char *hostname_or_ip) {
 
             return addr;
         }
+    }
+
+    if (strchr(hostname_or_ip, '$') != NULL) {
+        len = strlen(hostname_or_ip);
+        struct Address *addr = malloc(
+                offsetof(struct Address, data) + len + 1);
+        if (addr != NULL) {
+            addr->type = PATTERN;
+            addr->port = 0;
+            addr->len = len;
+            memcpy(addr->data, hostname_or_ip, len);
+            addr->data[addr->len] = '\0';
+        }
+        return addr;
     }
 
     /* Wildcard */
@@ -214,6 +229,7 @@ size_t
 address_len(const struct Address *addr) {
     switch (addr->type) {
         case HOSTNAME:
+        case PATTERN:
             /* include trailing null byte */
             return offsetof(struct Address, data) + addr->len + 1;
         case SOCKADDR:
@@ -274,9 +290,22 @@ address_is_wildcard(const struct Address *addr) {
     return addr != NULL && addr->type == WILDCARD;
 }
 
+int
+address_is_pattern(const struct Address * addr) {
+    return addr != NULL && addr->type == PATTERN;
+}
+
 const char *
 address_hostname(const struct Address *addr) {
     if (addr->type != HOSTNAME)
+        return NULL;
+
+    return addr->data;
+}
+
+const char *
+address_pattern(const struct Address *addr) {
+    if (addr->type != PATTERN)
         return NULL;
 
     return addr->data;
@@ -319,6 +348,7 @@ address_port(const struct Address *addr) {
                     return 0;
             }
         case WILDCARD:
+        case PATTERN:
             return addr->port;
         default:
             /* invalid Address type */
@@ -350,6 +380,7 @@ address_set_port(struct Address *addr, uint16_t port) {
             /* fall through */
         case HOSTNAME:
         case WILDCARD:
+        case PATTERN:
             addr->port = port;
             break;
         default:
@@ -375,6 +406,7 @@ display_address(const struct Address *addr, char *buffer, size_t buffer_len) {
 
     switch (addr->type) {
         case HOSTNAME:
+        case PATTERN:
             if (addr->port != 0)
                 snprintf(buffer, buffer_len, "%s:%" PRIu16,
                         addr->data,
