@@ -49,6 +49,7 @@ struct LookupResult {
     const struct Address *address;
     int caller_free_address;
     int use_proxy_header;
+    int matches[32];
 };
 
 struct Table *new_table();
