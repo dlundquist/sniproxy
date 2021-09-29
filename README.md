@@ -29,11 +29,13 @@ Usage: Binary
 Usage: Docker
 -----
 
+    docker build -t sniproxy .
+
     docker run \
         -it \
         --network host \
         --volume /etc/sniproxy.conf:/etc/sniproxy.conf:ro \
-        moghaddas/sniproxy:latest -c /etc/sniproxy.conf
+        sniproxy:latest -c /etc/sniproxy.conf
 
 Installation
 ------------
