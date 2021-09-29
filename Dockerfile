@@ -5,7 +5,6 @@
 FROM ubuntu:20.04 AS builder
 
 ENV DEBIAN_FRONTEND noninteractive
-ENV TZ Asia/Tehran
 
 # Build Stage
 RUN apt-get update && \
@@ -38,11 +37,7 @@ FROM ubuntu:20.04
 COPY --from=builder /*.deb /tmp/
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libev-dev \
-        libudns-dev \
-        libpcre3-dev && \
-    dpkg -i /tmp/sniproxy_*.deb && \
+    apt install -y --no-install-recommends /tmp/sniproxy_*.deb && \
     rm -f /tmp/sniproxy_*.deb
 
 ENTRYPOINT ["sniproxy", "-f"]
