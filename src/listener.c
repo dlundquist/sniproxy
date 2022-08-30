@@ -40,6 +40,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <linux/vm_sockets.h>
 #include "address.h"
 #include "listener.h"
 #include "logger.h"
@@ -52,7 +53,8 @@ static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
 static void backoff_timer_cb(struct ev_loop *, struct ev_timer *, int);
 static int init_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
-static void listener_update(struct Listener *, struct Listener *,  const struct Table_head *);
+static int init_vsock_listener(struct Listener *, const struct Table_head *, struct ev_loop *);
+static void listener_update(struct Listener *, struct Listener *, const struct Table_head *);
 static void free_listener(struct Listener *);
 static int parse_boolean(const char *);
 
@@ -91,12 +93,9 @@ void
 init_listeners(struct Listener_head *listeners,
         const struct Table_head *tables, struct ev_loop *loop) {
     struct Listener *iter;
-    char address[ADDRESS_BUFFER_SIZE];
-
     SLIST_FOREACH(iter, listeners, entries) {
-        if (init_listener(iter, tables, loop) < 0) {
-            err("Failed to initialize listener %s",
-                    display_address(iter->address, address, sizeof(address)));
+        if (init_vsock_listener(iter, tables, loop) < 0) {
+            err("Failed to initialize vsock listener");
             exit(1);
         }
     }
@@ -133,7 +132,7 @@ listeners_reload(struct Listener_head *existing_listeners,
              * config */
             SLIST_REMOVE(new_listeners, new_listener, Listener, entries);
             add_listener(existing_listeners, new_listener);
-            init_listener(new_listener, tables, loop);
+            init_vsock_listener(new_listener, tables, loop);
 
             /* -1 for removing from new_listeners */
             listener_ref_put(new_listener);
@@ -487,6 +486,101 @@ valid_listener(const struct Listener *listener) {
     }
 
     return 1;
+}
+
+static int init_vsock_listener(struct Listener *listener, const struct Table_head *tables,
+                               struct ev_loop *loop)
+{
+
+    struct Table *table = table_lookup(tables, listener->table_name);
+    if (table == NULL)
+    {
+        err("Table \"%s\" not defined", listener->table_name);
+        return -1;
+    }
+    init_table(table);
+    listener->table = table_ref_get(table);
+    int sockfd = socket(AF_VSOCK, SOCK_STREAM, 0);
+    if (sockfd < 0)
+    {
+        err("socket failed: %s", strerror(errno));
+        return sockfd;
+    }
+
+    /* set SO_REUSEADDR on server socket to facilitate restart */
+    int on = 1;
+    int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (result < 0)
+    {
+        err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+    /* set SO_KEEPALIVE on the server socket so that abandoned client connections
+     * do not linger behind forever */
+    result = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+    if (result < 0)
+    {
+        err("setsockopt SO_KEEPALIVE failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+    if (listener->reuseport == 1)
+    {
+#ifdef SO_REUSEPORT
+        /* set SO_REUSEPORT on server socket to allow binding of multiple
+         * processes on the same ip:port */
+        result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#else
+        result = -ENOSYS;
+#endif
+        if (result < 0)
+        {
+            err("setsockopt SO_REUSEPORT failed: %s", strerror(errno));
+            close(sockfd);
+            return result;
+        }
+    }
+
+    struct sockaddr_vm addr;
+    memset(&addr, 0, sizeof(struct sockaddr_vm));
+    addr.svm_family = AF_VSOCK;
+    addr.svm_port = 8000;
+    addr.svm_cid = VMADDR_CID_ANY;
+    result = bind(sockfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_vm));
+
+    printf("%d\n", errno);
+    if (result < 0)
+    {
+        err("bind failed: %s\n",
+               strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+    result = listen(sockfd, 1);
+
+    if (result < 0)
+    {
+
+        err("listen failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+#ifndef HAVE_ACCEPT4
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+    ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
+    listener->watcher.data = listener;
+    listener->backoff_timer.data = listener;
+
+    ev_io_start(loop, &listener->watcher);
+
+    return sockfd;
 }
 
 static int
