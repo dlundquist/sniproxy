@@ -31,11 +31,16 @@ sub slow_client($$) {
     my $socket = IO::Socket::INET->new(PeerAddr => '127.0.0.1',
             PeerPort => $port,
             Proto => "tcp",
-            Type => SOCK_STREAM)
+            Type => SOCK_STREAM,
+            Timeout => 5)
         or die "couldn't connect $!";
 
     $socket->send($request);
     foreach (split("\r\n", $request)) {
+        unless ($socket->connected()) {
+            print "Disconnected\n";
+            exit(0);
+        }
         $socket->send("$_\r\n");
         sleep(1);
     }

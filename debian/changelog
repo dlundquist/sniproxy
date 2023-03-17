@@ -1,3 +1,10 @@
+sniproxy (0.6.1) unstable; urgency=high
+
+  * Fix buffer overflow in address module
+  * Fix tests
+
+ -- Dustin Lundquist <dustin@null-ptr.net>  Thu, 16 Mar 2023 21:53:48 -0700
+
 sniproxy (0.6.0) unstable; urgency=medium
 
   * PROXY v1 protocol support
@@ -10,7 +17,7 @@ sniproxy (0.6.0) unstable; urgency=medium
 sniproxy (0.5.0) unstable; urgency=medium
 
   * Transparent proxy support
-  * Use accept4() on Linix
+  * Use accept4() on Linux
   * Run as group specified in config
 
  -- Dustin Lundquist <dustin@null-ptr.net>  Wed, 26 Apr 2017 07:17:13 -0700

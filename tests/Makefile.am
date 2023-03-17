@@ -1,6 +1,8 @@
 AM_CPPFLAGS = -I$(top_srcdir)/src -g $(LIBEV_CFLAGS) $(LIBPCRE_CFLAGS) $(LIBUDNS_CFLAGS)
 AM_CFLAGS = -fno-strict-aliasing -Wall -Wextra -Wpedantic -Wwrite-strings
 
+.NOTPARALLEL:
+
 TESTS = address_test \
         buffer_test \
         cfg_tokenizer_test \

@@ -1,3 +1,9 @@
+2023-03-16  Dustin Lundquist <dustin@null-ptr.net>
+	0.6.1 Release
+
+	* Fix buffer overflow in address module
+	* Fix tests
+
 2018-12-05  Dustin Lundquist <dustin@null-ptr.net>
 	0.6.0 Release
 

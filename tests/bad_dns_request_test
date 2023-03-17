@@ -36,6 +36,11 @@ my $bad_requests = [
         client => \&http_client,
     },
     {
+        # Exceed hostname buffer size
+        request => "GET / HTTP/1.1\r\nHost: [" . 'long.' x 60 . "example.com]\r\n\r\n",
+        client => \&http_client,
+    },
+    {
         # Test client aborting connection before DNS response received
         request => "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
         client => \&http_client_abort,

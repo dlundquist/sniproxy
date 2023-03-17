@@ -148,6 +148,8 @@ new_address(const char *hostname_or_ip) {
     if (hostname_or_ip[0] == '[' &&
             (port = strchr(hostname_or_ip, ']')) != NULL) {
         len = (size_t)(port - hostname_or_ip - 1);
+        if (len >= INET6_ADDRSTRLEN)
+            return NULL;
 
         /* inet_pton() will not parse the IP correctly unless it is in a
          * separate string.
