@@ -35,6 +35,10 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#ifdef HAVE_LIBCAP
+#include <sys/prctl.h>
+#include <sys/capability.h>
+#endif
 #include <signal.h>
 #include <errno.h>
 #include <ev.h>
@@ -235,6 +239,30 @@ drop_perms(const char *username, const char *groupname) {
       gid = group->gr_gid;
     }
 
+#ifdef HAVE_LIBCAP
+    cap_t caps;
+    cap_value_t cap_list[1];
+
+    /* add permitted flag to capability needed for IP_TRANSPARENT */
+    if (CAP_IS_SUPPORTED(CAP_NET_RAW)) {
+        caps = cap_get_proc();
+        if (caps == NULL)
+            fatal("cap_get_proc(): %s", strerror(errno));
+
+        cap_list[0] = CAP_NET_RAW;
+        if (cap_set_flag(caps, CAP_PERMITTED, 1, cap_list, CAP_SET) == -1)
+            fatal("cap_set_flags(): %s", strerror(errno));
+
+        if (cap_set_proc(caps) == -1)
+            fatal("cap_set_proc(): %s", strerror(errno));
+
+        cap_free(caps);
+
+        /* keep capabilities after setuid */
+        prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0);
+    }
+#endif
+
     /* drop any supplementary groups */
     if (setgroups(1, &gid) < 0)
         fatal("setgroups(): %s", strerror(errno));
@@ -245,6 +273,35 @@ drop_perms(const char *username, const char *groupname) {
 
     if (setuid(user->pw_uid) < 0)
         fatal("setuid(): %s", strerror(errno));
+
+#ifdef HAVE_LIBCAP
+    /* enable capability needed for IP_TRANSPARENT */
+    if (CAP_IS_SUPPORTED(CAP_NET_RAW)) {
+        caps = cap_get_proc();
+        if (caps == NULL)
+            fatal("cap_get_proc(): %s", strerror(errno));
+
+        /* remove every capability from the list */
+        cap_clear(caps);
+        cap_list[0] = CAP_NET_RAW;
+        /* take back capability */
+        if (cap_set_flag(caps, CAP_PERMITTED, 1, cap_list, CAP_SET) == -1)
+            fatal("cap_set_flags(): %s", strerror(errno));
+        /* take back capability */
+        if (cap_set_flag(caps, CAP_EFFECTIVE, 1, cap_list, CAP_SET) == -1)
+            fatal("cap_set_flags(): %s", strerror(errno));
+
+        if (cap_set_proc(caps) == -1)
+            fatal("back cap_set_proc(): %s", strerror(errno));
+        /* from now on it the new capability list is active,
+         * no other capabilities may be enabled */
+
+        cap_free(caps);
+
+        /* disable keeping capabilities across setuid */
+        prctl(PR_SET_KEEPCAPS, 0, 0, 0, 0);
+    }
+#endif
 }
 
 static void
