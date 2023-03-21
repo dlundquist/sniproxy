@@ -12,7 +12,7 @@ static void test1() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(256, EV_DEFAULT);
+    buffer = new_buffer(SOCK_STREAM, 256, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
@@ -51,7 +51,7 @@ static void test2() {
     char output[sizeof(input)];
     int len, i = 0;
 
-    buffer = new_buffer(256, EV_DEFAULT);
+    buffer = new_buffer(SOCK_STREAM, 256, EV_DEFAULT);
     assert(buffer != NULL);
 
     while (i < 236) {
@@ -100,7 +100,7 @@ static void test3() {
     char output[sizeof(input)];
     int len, i;
 
-    buffer = new_buffer(256, EV_DEFAULT);
+    buffer = new_buffer(SOCK_STREAM, 256, EV_DEFAULT);
     assert(buffer != NULL);
 
     len = buffer_push(buffer, input, sizeof(input));
@@ -127,7 +127,7 @@ static void test4() {
     struct Buffer *buffer;
     int read_fd, write_fd;
 
-    buffer = new_buffer(4096, EV_DEFAULT);
+    buffer = new_buffer(SOCK_STREAM, 4096, EV_DEFAULT);
 
     read_fd = open("/dev/zero", O_RDONLY);
     if (read_fd < 0) {
@@ -155,7 +155,124 @@ static void test_buffer_coalesce() {
     char output[sizeof(input)];
     int len;
 
-    buffer = new_buffer(4096, EV_DEFAULT);
+    buffer = new_buffer(SOCK_STREAM, 4096, EV_DEFAULT);
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == sizeof(output));
+    assert(buffer_len(buffer) == 0);
+    assert(buffer->head != 0);
+
+    len = buffer_coalesce(buffer, NULL);
+    assert(len == 0);
+}
+
+static void test5_udp1() {
+    struct Buffer *buffer;
+    char input[] = "This is a UDP test.";
+    char output[sizeof(input)];
+    int len, i;
+
+    buffer = new_buffer(SOCK_DGRAM, 256, EV_DEFAULT);
+    assert(buffer != NULL);
+
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+
+    len = buffer_peek(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++) {
+        assert(input[i] == output[i]);
+    }
+
+    /* second peek to ensure the first didn't permute the state of the buffer */
+    len = buffer_peek(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++)
+        assert(input[i] == output[i]);
+
+    /* test pop */
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++)
+        assert(input[i] == output[i]);
+
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == 0);
+
+    free_buffer(buffer);
+}
+
+static void test6_udp2() {
+    struct Buffer *buffer;
+    char input[] = "Testing wrap around behaviour.";
+    char output[sizeof(input)];
+    int len, i = 0;
+
+    buffer = new_buffer(SOCK_DGRAM, 256, EV_DEFAULT);
+    assert(buffer != NULL);
+
+    while (i < 204) {
+        len = buffer_push(buffer, input, sizeof(input));
+        assert(len == sizeof(input));
+
+        i += len;
+    }
+
+    while (len) {
+        len = buffer_pop(buffer, output, sizeof(output));
+    }
+
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+
+    len = buffer_peek(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++) {
+        assert(input[i] == output[i]);
+    }
+
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++)
+        assert(input[i] == output[i]);
+
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+
+    len = buffer_peek(buffer, output, sizeof(output));
+    assert(len == sizeof(input));
+
+    for (i = 0; i < len; i++)
+        assert(input[i] == output[i]);
+
+    free_buffer(buffer);
+}
+
+static void test_buffer_coalesce_udp() {
+    struct Buffer *buffer;
+    char input[] = "Test buffer resizing.";
+    char output[sizeof(input)];
+    int len;
+
+    buffer = new_buffer(SOCK_DGRAM, 64, EV_DEFAULT);
+    len = buffer_push(buffer, input, sizeof(input));
+    assert(len == sizeof(input));
+
+    len = buffer_pop(buffer, output, sizeof(output));
+    assert(len == sizeof(output));
+    assert(buffer_len(buffer) == 0);
+    assert(buffer->head != 0);
+
     len = buffer_push(buffer, input, sizeof(input));
     assert(len == sizeof(input));
 
@@ -178,4 +295,10 @@ int main() {
     test4();
 
     test_buffer_coalesce();
+
+    test5_udp1();
+
+    test6_udp2();
+
+    test_buffer_coalesce_udp();
 }

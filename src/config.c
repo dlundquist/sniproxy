@@ -32,6 +32,7 @@
 #include "config.h"
 #include "logger.h"
 #include "connection.h"
+#include "protocol.h"
 
 
 struct LoggerBuilder {
@@ -378,7 +379,10 @@ accept_pidfile(struct Config *config, const char *pidfile) {
 
 static int
 end_listener_stanza(struct Config *config, struct Listener *listener) {
-    listener->accept_cb = &accept_connection;
+    if (listener->protocol && listener->protocol->sock_type == SOCK_STREAM)
+        listener->accept_cb = &accept_stream_connection;
+    if (listener->protocol && listener->protocol->sock_type == SOCK_DGRAM)
+        listener->accept_cb = &accept_dgram_connection;
 
     if (valid_listener(listener) <= 0) {
         err("Invalid listener");

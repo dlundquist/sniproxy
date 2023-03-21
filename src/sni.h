@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2014, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2020 Cisco and/or its affiliates.
+ * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,18 +24,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef SNI_H
+#define SNI_H
 
-#include <inttypes.h>
-
-struct Protocol {
-    const char *const name;
-    const uint16_t default_port;
-    int (*const parse_packet)(const char*, size_t, char **);
-    const unsigned char *const abort_message;
-    const size_t abort_message_len;
-    const int sock_type;
-};
+int parse_extensions(const uint8_t*, size_t, char **);
+int parse_server_name_extension(const uint8_t*, size_t, char **);
 
 #endif

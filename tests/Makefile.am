@@ -9,20 +9,17 @@ TESTS = address_test \
         table_test \
         http_test \
         tls_test \
-        binder_test
+        dtls_test
 
 TESTS += functional_test \
          bad_request_test \
-         bind_source_test \
          connection_reset_test \
          fallback_test \
          fd_limit_test \
          ipv6_v6only_test \
-         proxy_header_test \
          reload_test \
          reuseport_test \
-         slow_client_test \
-         transparent_proxy_test
+         slow_client_test
 if DNS_ENABLED
   TESTS += config_test \
            resolv_test \
@@ -31,8 +28,8 @@ endif
 
 check_PROGRAMS = http_test \
                  tls_test \
+                 dtls_test \
                  table_test \
-                 binder_test \
                  buffer_test \
                  cfg_tokenizer_test \
                  address_test \
@@ -44,6 +41,12 @@ http_test_SOURCES = http_test.c \
 
 tls_test_SOURCES = tls_test.c \
                    ../src/tls.c \
+                   ../src/sni.c \
+                   ../src/logger.c
+
+dtls_test_SOURCES = dtls_test.c \
+                   ../src/dtls.c \
+                   ../src/sni.c \
                    ../src/logger.c
 
 binder_test_SOURCES = binder_test.c \
@@ -76,6 +79,8 @@ config_test_SOURCES = config_test.c \
                       ../src/resolv.c \
                       ../src/resolv.h \
                       ../src/tls.c \
+                      ../src/dtls.c \
+                      ../src/sni.c \
                       ../src/http.c
 
 config_test_LDADD = $(LIBEV_LIBS) $(LIBPCRE_LIBS) $(LIBUDNS_LIBS)

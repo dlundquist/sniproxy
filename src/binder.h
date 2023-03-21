@@ -29,7 +29,7 @@
 #include <sys/socket.h>
 
 void start_binder();
-int bind_socket(const struct sockaddr *, size_t);
+int bind_socket(int type, const struct sockaddr *, size_t);
 void stop_binder();
 
 #endif

@@ -32,6 +32,9 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef __APPLE__
+#define __APPLE_USE_RFC_3542
+#endif
 #include <netinet/in.h>
 #include <netdb.h> /* getaddrinfo */
 #include <unistd.h> /* close */
@@ -80,7 +83,7 @@ static void close_connection(struct Connection *, struct ev_loop *);
 static void close_client_socket(struct Connection *, struct ev_loop *);
 static void abort_connection(struct Connection *);
 static void close_server_socket(struct Connection *, struct ev_loop *);
-static struct Connection *new_connection(struct ev_loop *);
+static struct Connection *new_connection(int type, struct ev_loop *);
 static void log_connection(struct Connection *);
 static void log_bad_request(struct Connection *, const char *, size_t, int);
 static void free_connection(struct Connection *);
@@ -99,8 +102,8 @@ init_connections() {
  * Returns 1 on success or 0 on error;
  */
 int
-accept_connection(struct Listener *listener, struct ev_loop *loop) {
-    struct Connection *con = new_connection(loop);
+accept_stream_connection(struct Listener *listener, struct ev_loop *loop) {
+    struct Connection *con = new_connection(listener->protocol->sock_type, loop);
     if (con == NULL) {
         err("new_connection failed");
         return 0;
@@ -157,6 +160,132 @@ accept_connection(struct Listener *listener, struct ev_loop *loop) {
     if (con->listener->table->use_proxy_header ||
             con->listener->fallback_use_proxy_header)
         insert_proxy_v1_header(con);
+
+    return 1;
+}
+
+/**
+ * Accept a new UDP incoming connection
+ *
+ * Returns 1 on success or 0 on error;
+ */
+int
+accept_dgram_connection(struct Listener *listener, struct ev_loop *loop) {
+    struct Connection *con = new_connection(listener->protocol->sock_type, loop);
+    if (con == NULL) {
+        err("new_connection failed");
+        return 0;
+    }
+    con->listener = listener_ref_get(listener);
+
+    char cbuf[CMSG_SPACE(sizeof(struct in6_pktinfo))];
+
+    struct msghdr msg = {
+        .msg_name       = &con->client.addr,
+        .msg_namelen    = sizeof(con->client.addr),
+        .msg_control    = cbuf,
+        .msg_controllen = sizeof(cbuf),
+    };
+
+    ssize_t bytes_received = buffer_recvmsg(con->client.buffer, listener->watcher.fd, &msg, 0, loop);
+    if (bytes_received < 0) {
+        int saved_errno = errno;
+
+        warn("recvmsg failed: %s", strerror(errno));
+        free_connection(con);
+
+        errno = saved_errno;
+        return 0;
+    }
+
+    con->client.addr_len = msg.msg_namelen;
+
+    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
+            cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        if (cmsg->cmsg_level == IPPROTO_IP
+                && cmsg->cmsg_type == IP_PKTINFO) {
+            const struct in_pktinfo *pi = (void *)CMSG_DATA(cmsg);
+            struct sockaddr_in *local_addr = (void *)&con->client.local_addr;
+            local_addr->sin_family = AF_INET;
+            local_addr->sin_port = htons(address_port(listener->address));
+            memcpy(&local_addr->sin_addr, &pi->ipi_spec_dst, sizeof(struct in_addr));
+            con->client.local_addr_len = sizeof(struct sockaddr_in);
+        } else if (cmsg->cmsg_level == IPPROTO_IPV6
+                && cmsg->cmsg_type == IPV6_PKTINFO) {
+            const struct in6_pktinfo *pi = (void *)CMSG_DATA(cmsg);
+            struct sockaddr_in6 *local_addr = (void *)&con->client.local_addr;
+            local_addr->sin6_family = AF_INET6;
+            local_addr->sin6_port = htons(address_port(listener->address));
+            memcpy(&local_addr->sin6_addr, &pi->ipi6_addr, sizeof(struct in6_addr));
+            con->client.local_addr_len = sizeof(struct sockaddr_in6);
+        }
+    }
+
+
+#ifdef HAVE_ACCEPT4
+    int sockfd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+#else
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+#endif
+    if (sockfd < 0) {
+        int saved_errno = errno;
+
+        warn("accept failed: %s", strerror(errno));
+        free_connection(con);
+
+        errno = saved_errno;
+        return 0;
+    }
+
+    int on = 1;
+    int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (result < 0) {
+        err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+    result = bind(sockfd, (struct sockaddr *)&con->client.local_addr,
+            con->client.local_addr_len);
+    if (result < 0) {
+        char address[INET6_ADDRSTRLEN + 8];
+        err("bind %s failed: %s",
+                display_sockaddr(&con->client.local_addr, address, sizeof(address)),
+                strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+    result = connect(sockfd,
+            (struct sockaddr *)&con->client.addr,
+            con->client.addr_len);
+    if (result < 0) {
+        char address[INET6_ADDRSTRLEN + 8];
+        err("connect %s failed: %s",
+            display_sockaddr(&con->client.addr, address, sizeof(address)),
+            strerror(errno));
+        close(sockfd);
+        return result;
+    }
+
+#ifndef HAVE_ACCEPT4
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+    /* Avoiding type-punned pointer warning */
+    struct ev_io *client_watcher = &con->client.watcher;
+    ev_io_init(client_watcher, connection_cb, sockfd, EV_READ);
+    con->client.watcher.data = con;
+    con->state = ACCEPTED;
+    con->established_timestamp = ev_now(loop);
+
+    TAILQ_INSERT_HEAD(&connections, con, entries);
+
+    ev_io_start(loop, client_watcher);
+
+    /* Since this is a datagram socket, we should process data received */
+    connection_cb(loop, client_watcher, EV_READ);
 
     return 1;
 }
@@ -610,9 +739,9 @@ free_resolv_cb_data(struct resolv_cb_data *cb_data) {
 static void
 initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
 #ifdef HAVE_ACCEPT4
-    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    int sockfd = socket(con->server.addr.ss_family, con->listener->protocol->sock_type| SOCK_NONBLOCK, 0);
 #else
-    int sockfd = socket(con->server.addr.ss_family, SOCK_STREAM, 0);
+    int sockfd = socket(con->server.addr.ss_family, con->listener->protocol->sock_type, 0);
 #endif
     if (sockfd < 0) {
         char client[INET6_ADDRSTRLEN + 8];
@@ -790,7 +919,7 @@ close_connection(struct Connection *con, struct ev_loop *loop) {
  * Allocate and initialize a new connection
  */
 static struct Connection *
-new_connection(struct ev_loop *loop) {
+new_connection(int type, struct ev_loop *loop) {
     struct Connection *con = calloc(1, sizeof(struct Connection));
     if (con == NULL)
         return NULL;
@@ -807,14 +936,15 @@ new_connection(struct ev_loop *loop) {
     con->header_len = 0;
     con->query_handle = NULL;
     con->use_proxy_header = 0;
+    con->type = type;
 
-    con->client.buffer = new_buffer(4096, loop);
+    con->client.buffer = new_buffer(con->type, 4096, loop);
     if (con->client.buffer == NULL) {
         free_connection(con);
         return NULL;
     }
 
-    con->server.buffer = new_buffer(4096, loop);
+    con->server.buffer = new_buffer(con->type, 4096, loop);
     if (con->server.buffer == NULL) {
         free_connection(con);
         return NULL;

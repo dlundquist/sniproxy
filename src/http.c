@@ -28,6 +28,7 @@
 #include <string.h> /* strncpy() */
 #include <strings.h> /* strncasecmp() */
 #include <ctype.h> /* isblank(), isdigit() */
+#include <sys/socket.h> /* SOCK_STREAM */
 #include "http.h"
 #include "protocol.h"
 
@@ -39,7 +40,7 @@ static int get_header(const char *, const char *, size_t, char **);
 static size_t next_header(const char **, size_t *);
 
 
-static const char http_503[] =
+static const unsigned char http_503[] =
     "HTTP/1.1 503 Service Temporarily Unavailable\r\n"
     "Content-Type: text/html\r\n"
     "Connection: close\r\n\r\n"
@@ -51,6 +52,7 @@ const struct Protocol *const http_protocol = &(struct Protocol){
     .parse_packet = &parse_http_header,
     .abort_message = http_503,
     .abort_message_len = sizeof(http_503) - 1,
+    .sock_type = SOCK_STREAM,
 };
 
 /*
