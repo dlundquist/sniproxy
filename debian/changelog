@@ -1,3 +1,9 @@
+sniproxy (0.6.1) UNRELEASED; urgency=medium
+
+  * New git revision
+
+ -- Dustin Lundquist <dustin@m3-debian12.overthere.org>  Thu, 14 Dec 2023 09:40:47 -0800
+
 sniproxy (0.6.1) unstable; urgency=high
 
   * Fix buffer overflow in address module

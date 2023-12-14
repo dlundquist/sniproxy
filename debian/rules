@@ -1,12 +1,14 @@
 #!/usr/bin/make -f
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/autotools.mk
-include /usr/share/cdbs/1/rules/autoreconf.mk
+%:
+	dh $@
 
-CDBS_BUILD_DEPENDS += , dh-autoreconf
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-dns
 
-install/sniproxy::
+override_dh_auto_test:
+
+execute_after_dh_install-indep:
 	install -D -m 644 debian/sniproxy.conf debian/sniproxy/etc/sniproxy.conf
 	install -D -m 644 debian/logrotate.conf debian/sniproxy/etc/logrotate.d/sniproxy.conf
 	install -d -m 750 -o daemon -g adm debian/sniproxy/var/log/sniproxy

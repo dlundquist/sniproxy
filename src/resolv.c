@@ -48,22 +48,35 @@
 int
 resolv_init(struct ev_loop *loop, char **nameservers, char **search_domains,
         int mode) {
+    (void)loop;
+    (void)nameservers;
+    (void)search_domains;
+    (void)mode;
+
     return 0;
 }
 
 void
 resolv_shutdown(struct ev_loop *loop) {
+    (void)loop;
 }
 
 struct ResolvQuery *
 resolv_query(const char *hostname, int mode,
         void (*client_cb)(struct Address *, void *),
         void (*client_free_cb)(void *), void *client_cb_data) {
+    (void)hostname;
+    (void)mode;
+    (void)client_cb;
+    (void)client_free_cb;
+    (void)client_cb_data;
+
     return NULL;
 }
 
 void
 resolv_cancel(struct ResolvQuery *query_handle) {
+    (void)query_handle;
 }
 
 #else

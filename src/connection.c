@@ -504,6 +504,10 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
             free((void *)result.address);
 
         abort_connection(con);
+        (void)loop;
+        (void)free_resolv_cb_data;
+        (void)resolv_cb;
+
         return;
 #else
         struct resolv_cb_data *cb_data = malloc(sizeof(struct resolv_cb_data));
