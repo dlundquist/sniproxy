@@ -6,16 +6,45 @@ the initial request of the TCP session. This enables HTTPS name-based virtual
 hosting to separate backend servers without installing the private key on the
 proxy machine.
 
+Status: Deprecated
+------------------
+2023-12-13
+
+When I started this project, there wasn't another proxy that filled this niche.
+Now, there are many proxies available to proxy layer-4 based on the TLS SNI
+extension, including Nginx. Additionally, web traffic is evolving: with HTTP/2,
+multiple hostnames can be multiplexed in a single TCP stream [preventing SNI
+Proxy](https://github.com/dlundquist/sniproxy/issues/178) from routing it
+correctly based on hostname, and HTTP/3 (QUIC) uses UDP transport. SNI Proxy
+just doesn't support these protocols, and adding support for them would
+complicate it significantly. For these reasons, I'm transitioning SNI Proxy to
+a deprecated status.
+
+Honestly, this has been the case for last several years, and I hadn't published
+anything to that affect. With CVE-2023-25076 it became clear that this
+situation needs to be communicated clearly.
+
+In some cases, SNI Proxy might be a better fit than a more general purpose
+proxy, so I'm not going to abandon the project completely. I'll still monitor
+issues and email requests; however, unless it is a significant security or
+reliablity issue, don't expect a response.
+
+Going forward, I'm not sure about the value of libpcre3 to libpcre2 migration.
+I see benefits of migrating to the modern version of the library, but I don't
+want to break SNI proxy on older platforms. Also, libpcre3 is still widely
+available. C++17 std::regex would be another option, but it adds a difficult
+dependency for running on older platforms.
+
 Features
 --------
 + Name-based proxying of HTTPS without decrypting traffic. No keys or
   certificates required.
 + Supports both TLS and HTTP protocols.
-+ Supports IPv4, IPv6 and Unix domain sockets for both back end servers and
++ Supports IPv4, IPv6 and Unix domain sockets for both back-end servers and
   listeners.
 + Supports multiple listening sockets per instance.
 + Supports HAProxy proxy protocol to propagate original source address to
-  backend servers.
+  back-end servers.
 
 Usage
 -----
@@ -40,7 +69,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 
 **Install**
 
-    ./autogen.sh && ./configure && make check && sudo make install
+    ./autogen.sh && ./checonfigure --enable-dns && make check && sudo make install
 
 **Building Debian/Ubuntu package**
 
@@ -68,7 +97,7 @@ This is the preferred installation method for modern Fedora based distributions.
 
 2. Build a distribution tarball:
 
-        ./autogen.sh && ./configure && make dist
+        ./autogen.sh && ./configure --enable-dns && make dist
 
 3. Build a RPM package
 
@@ -95,7 +124,7 @@ may not even work.
 
 3. Make it so
 
-        ./autogen.sh && ./configure && make
+        ./autogen.sh && ./configure --enable-dns && make
 
 OS X support is a best effort, and isn't a primary target platform.
 
