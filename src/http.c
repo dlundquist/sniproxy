@@ -130,24 +130,27 @@ static size_t
 next_header(const char **data, size_t *len) {
     size_t header_len;
 
+    if (*len == 0)
+        return 0;
+
     /* perhaps we can optimize this to reuse the value of header_len, rather
      * than scanning twice.
      * Walk our data stream until the end of the header */
-    while (*len > 2 && (*data)[0] != '\r' && (*data)[1] != '\n') {
+    while (*len > 1 && (*data)[0] != '\n') {
         (*len)--;
         (*data)++;
     }
 
-    /* advanced past the <CR><LF> pair */
-    *data += 2;
-    *len -= 2;
+    /* advanced past the <LF> */
+    (*data)++;
+    (*len)--;
 
     /* Find the length of the next header */
     header_len = 0;
-    while (*len > header_len + 1
-            && (*data)[header_len] != '\r'
-            && (*data)[header_len + 1] != '\n')
+    while (*len > header_len && (*data)[header_len] != '\n')
         header_len++;
-
+    /* ignore preceding <CR> */
+    if (header_len > 0 && (*data)[header_len - 1] == '\r')
+        header_len--;
     return header_len;
 }
