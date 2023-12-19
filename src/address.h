@@ -44,6 +44,7 @@ struct Address *new_address_sa(const struct sockaddr *, socklen_t);
 struct Address *copy_address(const struct Address *);
 size_t address_len(const struct Address *);
 int address_compare(const struct Address *, const struct Address *);
+int address_addr_eq(const struct Address *, const struct sockaddr *);
 int address_is_hostname(const struct Address *);
 int address_is_sockaddr(const struct Address *);
 int address_is_wildcard(const struct Address *);
