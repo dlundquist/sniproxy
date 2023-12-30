@@ -160,6 +160,8 @@ Configuration Syntax
         # Combining regular expression and wildcard will resolve the hostname
         # client requested and proxy to it
         .*\\.edu    *:443
+	# Also possible to rewrite target from source using capture groups
+	([a-z]+)\.public\.com   $1.internal.local
     }
 
 DNS Resolution
