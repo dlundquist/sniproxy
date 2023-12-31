@@ -28,6 +28,21 @@ username daemon
 Specify the user sniproxy will run as. When sniproxy is launched as super user,
 it will drop permissions to this user.
 
+.SS GROUPNAME
+
+.PP
+.nf
+groupname daemon
+.fi
+.PP
+
+Overrides the group sniproxy will run as. When sniproxy is launched as super
+user, it will change its primary group to this, and drop all supplementary
+groups.
+
+If this parameter is not specified, the primary group and supplementary groups
+will be taken from the user sniproxy is running as.
+
 .SS PIDFILE
 
 .PP
