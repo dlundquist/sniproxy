@@ -280,7 +280,7 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
                 reload_config(config, loop);
                 break;
             case SIGUSR1:
-                print_connections();
+                print_connections_file();
                 break;
             case SIGINT:
             case SIGTERM:
