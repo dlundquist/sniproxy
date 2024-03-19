@@ -28,7 +28,8 @@
 #define BACKEND_H
 
 #include <sys/queue.h>
-#include <pcre.h>
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 #include "address.h"
 
 STAILQ_HEAD(Backend_head, Backend);
@@ -39,7 +40,8 @@ struct Backend {
     int use_proxy_header;
 
     /* Runtime fields */
-    pcre *pattern_re;
+    pcre2_code *pattern_re;
+    pcre2_match_data *pattern_md;
     STAILQ_ENTRY(Backend) entries;
 };
 

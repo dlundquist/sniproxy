@@ -64,7 +64,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 **Prerequisites**
 
 + Autotools (autoconf, automake, gettext and libtool)
-+ libev4, libpcre and libudns development headers
++ libev4, libpcre2 and libudns development headers
 + Perl and cURL for test suite
 
 **Install**
@@ -77,7 +77,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config fakeroot devscripts
+        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre-dev libudns-dev pkg-config fakeroot devscripts
 
 2. Build a Debian package
 
@@ -93,7 +93,7 @@ This is the preferred installation method for modern Fedora based distributions.
 
 1. Install required packages
 
-        sudo yum install autoconf automake curl gettext-devel libev-devel pcre-devel perl pkgconfig rpm-build udns-devel
+        sudo yum install autoconf automake curl gettext-devel libev-devel pcre2-devel perl pkgconfig rpm-build udns-devel
 
 2. Build a distribution tarball:
 
@@ -116,7 +116,7 @@ may not even work.
 
 1. install dependencies.
 
-        brew install libev pcre udns autoconf automake gettext libtool
+        brew install libev pcre2 udns autoconf automake gettext libtool
 
 2. Read the warning about gettext and force link it so autogen.sh works. We need the GNU gettext for the macro `AC_LIB_HAVE_LINKFLAGS` which isn't present in the default OS X package.
 

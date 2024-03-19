@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/queue.h>
-#include <pcre.h>
 #include <assert.h>
 #include "backend.h"
 #include "address.h"
@@ -96,16 +95,18 @@ add_backend(struct Backend_head *backends, struct Backend *backend) {
 int
 init_backend(struct Backend *backend) {
     if (backend->pattern_re == NULL) {
-        const char *reerr;
-        int reerroffset;
+        int reerr;
+        PCRE2_SIZE reerroffset;
 
         backend->pattern_re =
-            pcre_compile(backend->pattern, 0, &reerr, &reerroffset, NULL);
+            pcre2_compile((PCRE2_SPTR8)(backend->pattern),
+                    PCRE2_ZERO_TERMINATED, 0, &reerr, &reerroffset, NULL);
         if (backend->pattern_re == NULL) {
-            err("Regex compilation of \"%s\" failed: %s, offset %d",
+            err("Regex compilation of \"%s\" failed: %d, offset %zd",
                     backend->pattern, reerr, reerroffset);
             return 0;
         }
+        backend->pattern_md = pcre2_match_data_create_from_pattern(backend->pattern_re,NULL);
 
         char address[ADDRESS_BUFFER_SIZE];
         debug("Parsed %s %s",
@@ -128,9 +129,11 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
 
     STAILQ_FOREACH(iter, head, entries) {
         assert(iter->pattern_re != NULL);
-        if (pcre_exec(iter->pattern_re, NULL,
-                    name, name_len, 0, 0, NULL, 0) >= 0)
+        if (pcre2_match(iter->pattern_re, (PCRE2_SPTR8)name, name_len, 0, 0,
+                    iter->pattern_md, 0) >= 0)
+        {
             return iter;
+        }
     }
 
     return NULL;
@@ -168,6 +171,9 @@ free_backend(struct Backend *backend) {
     free(backend->pattern);
     free(backend->address);
     if (backend->pattern_re != NULL)
-        pcre_free(backend->pattern_re);
+    {
+        pcre2_match_data_free(backend->pattern_md);
+        pcre2_code_free(backend->pattern_re);
+    }
     free(backend);
 }
