@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/queue.h>
-#include <pcre.h>
 #include <assert.h>
 #include "backend.h"
 #include "address.h"
@@ -96,6 +95,19 @@ add_backend(struct Backend_head *backends, struct Backend *backend) {
 int
 init_backend(struct Backend *backend) {
     if (backend->pattern_re == NULL) {
+
+#if defined(HAVE_LIBPCRE2_8)
+        int reerr;
+        size_t reerroffset;
+
+        backend->pattern_re =
+            pcre2_compile((const uint8_t *)backend->pattern, PCRE2_ZERO_TERMINATED, 0, &reerr, &reerroffset, NULL);
+        if (backend->pattern_re == NULL) {
+            err("Regex compilation of \"%s\" failed: %d, offset %zu",
+                    backend->pattern, reerr, reerroffset);
+            return 0;
+        }
+#elif defined(HAVE_LIBPCRE)
         const char *reerr;
         int reerroffset;
 
@@ -106,6 +118,7 @@ init_backend(struct Backend *backend) {
                     backend->pattern, reerr, reerroffset);
             return 0;
         }
+#endif
 
         char address[ADDRESS_BUFFER_SIZE];
         debug("Parsed %s %s",
@@ -128,9 +141,17 @@ lookup_backend(const struct Backend_head *head, const char *name, size_t name_le
 
     STAILQ_FOREACH(iter, head, entries) {
         assert(iter->pattern_re != NULL);
+#if defined(HAVE_LIBPCRE2_8)
+	pcre2_match_data *md = pcre2_match_data_create_from_pattern(iter->pattern_re, NULL);
+	int ret = pcre2_match(iter->pattern_re, (const uint8_t *)name, name_len, 0, 0, md, NULL);
+	pcre2_match_data_free(md);
+	if (ret >= 0)
+            return iter;
+#elif defined(HAVE_LIBPCRE)
         if (pcre_exec(iter->pattern_re, NULL,
                     name, name_len, 0, 0, NULL, 0) >= 0)
             return iter;
+#endif
     }
 
     return NULL;
@@ -167,7 +188,12 @@ free_backend(struct Backend *backend) {
 
     free(backend->pattern);
     free(backend->address);
+#if defined(HAVE_LIBPCRE2_8)
+    if (backend->pattern_re != NULL)
+        pcre2_code_free(backend->pattern_re);
+#elif defined(HAVE_LIBPCRE)
     if (backend->pattern_re != NULL)
         pcre_free(backend->pattern_re);
+#endif
     free(backend);
 }

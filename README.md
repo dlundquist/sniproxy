@@ -29,12 +29,6 @@ proxy, so I'm not going to abandon the project completely. I'll still monitor
 issues and email requests; however, unless it is a significant security or
 reliablity issue, don't expect a response.
 
-Going forward, I'm not sure about the value of libpcre3 to libpcre2 migration.
-I see benefits of migrating to the modern version of the library, but I don't
-want to break SNI proxy on older platforms. Also, libpcre3 is still widely
-available. C++17 std::regex would be another option, but it adds a difficult
-dependency for running on older platforms.
-
 Features
 --------
 + Name-based proxying of HTTPS without decrypting traffic. No keys or
@@ -64,7 +58,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 **Prerequisites**
 
 + Autotools (autoconf, automake, gettext and libtool)
-+ libev4, libpcre and libudns development headers
++ libev4, libpcre2 (or libpcre) and libudns development headers
 + Perl and cURL for test suite
 
 **Install**
@@ -77,7 +71,7 @@ This is the preferred installation method on recent Debian based distributions:
 
 1. Install required packages
 
-        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre3-dev libudns-dev pkg-config fakeroot devscripts
+        sudo apt-get install autotools-dev cdbs debhelper dh-autoreconf dpkg-dev gettext libev-dev libpcre2-dev libudns-dev pkg-config fakeroot devscripts
 
 2. Build a Debian package
 

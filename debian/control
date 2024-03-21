@@ -2,7 +2,7 @@ Source: sniproxy
 Section: web
 Priority: optional
 Maintainer: Dustin Lundquist <dustin@null-ptr.net>
-Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, gettext, pkg-config, libev-dev (>= 4.0), libpcre3-dev, libudns-dev
+Build-Depends: cdbs, debhelper (>= 8.0.0), dh-autoreconf, autotools-dev, gettext, pkg-config, libev-dev (>= 4.0), libpcre2-dev | libpcre3-dev, libudns-dev
 Standards-Version: 3.9.5
 Vcs-Git: https://github.com/dlundquist/sniproxy.git
 Vcs-Browser: https://github.com/dlundquist/sniproxy
