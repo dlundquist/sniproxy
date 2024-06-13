@@ -198,6 +198,12 @@ static struct Keyword global_grammar[] = {
         .finalize=(int(*)(void *, void *))end_table_stanza,
     },
     {
+        .keyword="statuslistener",
+        .create=(void *(*)())new_statuslistener,
+        .parse_arg=(int(*)(void *, const char *))accept_listener_arg,
+        .finalize=(int(*)(void *, void *))end_listener_stanza,
+    },
+    {
         .keyword = NULL,
     },
 };
@@ -378,8 +384,6 @@ accept_pidfile(struct Config *config, const char *pidfile) {
 
 static int
 end_listener_stanza(struct Config *config, struct Listener *listener) {
-    listener->accept_cb = &accept_connection;
-
     if (valid_listener(listener) <= 0) {
         err("Invalid listener");
         print_listener_config(stderr, listener);
