@@ -34,6 +34,7 @@
 #include <arpa/inet.h> /* inet_pton */
 #include <sys/un.h>
 #include <assert.h>
+#include <string.h>
 #include "address.h"
 
 
@@ -259,6 +260,30 @@ address_compare(const struct Address *addr_1, const struct Address *addr_2) {
     }
 
     return result;
+}
+
+int
+address_addr_eq(const struct Address *addr, const struct sockaddr *sa) {
+    if (addr->type != SOCKADDR)
+        return 0;
+
+    if (address_sa(addr)->sa_family != sa->sa_family)
+        return 0;
+
+    switch (address_sa(addr)->sa_family) {
+        case AF_INET:
+            return !memcmp(&((struct sockaddr_in *)addr->data)->sin_addr,
+                    &((struct sockaddr_in *)sa)->sin_addr,
+                    sizeof(((struct sockaddr_in *)sa)->sin_addr));
+
+        case AF_INET6:
+            return !memcmp(&((struct sockaddr_in6 *)addr->data)->sin6_addr,
+                    &((struct sockaddr_in6 *)sa)->sin6_addr,
+                    sizeof(((struct sockaddr_in6 *)sa)->sin6_addr));
+
+        default:
+            return 0;
+    }
 }
 
 int
