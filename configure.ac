@@ -13,12 +13,14 @@ AM_PROG_CC_C_O
 
 
 # Checks for libraries.
-AC_CHECK_LIB([ev], [ev_run])
+AC_CHECK_LIB([ev], [ev_run], [],
+	     [AC_MSG_ERROR([libev is required])])
 AC_CHECK_LIB([pcre2-8], [pcre2_compile_8], [],
-	     [AC_CHECK_LIB([pcre], [pcre_exec])])
+	     [AC_CHECK_LIB([pcre], [pcre_exec], [],
+			   [AC_MSG_ERROR([libpcre is required])])])
 
 AC_ARG_ENABLE([dns],
-  [AS_HELP_STRING([--enable-dns], [Enable DNS resolution])])
+	      [AS_HELP_STRING([--enable-dns], [Enable DNS resolution])])
 
 AM_CONDITIONAL([DNS_ENABLED], [test "$enable_dns"])
 
