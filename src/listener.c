@@ -47,6 +47,7 @@
 #include "protocol.h"
 #include "tls.h"
 #include "http.h"
+#include "connection.h"
 
 static void close_listener(struct ev_loop *, struct Listener *);
 static void accept_cb(struct ev_loop *, struct ev_io *, int);
@@ -226,7 +227,15 @@ new_listener() {
     ev_io_init(&listener->watcher, accept_cb, -1, EV_READ);
     ev_timer_init(&listener->backoff_timer, backoff_timer_cb, 0.0, 0.0);
     listener->table = NULL;
+    listener->accept_cb = &accept_connection;
 
+    return listener;
+}
+
+struct Listener *
+new_statuslistener() {
+    struct Listener * listener = new_listener();
+    listener->accept_cb = &accept_statusconnection;
     return listener;
 }
 
@@ -493,13 +502,17 @@ static int
 init_listener(struct Listener *listener, const struct Table_head *tables,
         struct ev_loop *loop) {
     char address[ADDRESS_BUFFER_SIZE];
-    struct Table *table = table_lookup(tables, listener->table_name);
-    if (table == NULL) {
-        err("Table \"%s\" not defined", listener->table_name);
-        return -1;
+
+    if (listener->accept_cb != &accept_statusconnection) {
+        struct Table *table = table_lookup(tables, listener->table_name);
+        if (table == NULL) {
+            err("Table \"%s\" not defined", listener->table_name);
+            return -1;
+        }
+
+        init_table(table);
+        listener->table = table_ref_get(table);
     }
-    init_table(table);
-    listener->table = table_ref_get(table);
 
     /* If no port was specified on the fallback address, inherit the address
      * from the listening address */
