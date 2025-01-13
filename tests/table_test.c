@@ -6,16 +6,16 @@
 #include "backend.h"
 
 
-static void test_empty_table();
-static void test_single_entry_table();
+static void test_empty_table(void);
+static void test_single_entry_table(void);
 static void append_entry(struct Table *, const char *, const char *);
 static void add_new_table(struct Table_head *, const char *, const char **);
-static void test_add_table();
-static void test_tables_reload();
+static void test_add_table(void);
+static void test_tables_reload(void);
 static int count_tables(const struct Table_head *);
 
 
-int main() {
+int main(void) {
     test_empty_table();
     test_single_entry_table();
     test_add_table();
@@ -23,7 +23,7 @@ int main() {
 }
 
 static void
-test_empty_table() {
+test_empty_table(void) {
     struct Table *table = new_table();
     assert(table != NULL);
 
@@ -56,7 +56,7 @@ append_entry(struct Table *table, const char *pattern, const char *address) {
 }
 
 static void
-test_single_entry_table() {
+test_single_entry_table(void) {
     struct Table *table = new_table();
     assert(table != NULL);
 
@@ -110,7 +110,7 @@ count_tables(const struct Table_head *tables) {
 }
 
 static void
-test_add_table() {
+test_add_table(void) {
     struct Table_head tables = SLIST_HEAD_INITIALIZER();
 
     add_new_table(&tables, "foo", (const char *[]){
@@ -145,7 +145,7 @@ test_add_table() {
 }
 
 static void
-test_tables_reload() {
+test_tables_reload(void) {
     struct Table_head existing = SLIST_HEAD_INITIALIZER();
     struct Table_head new = SLIST_HEAD_INITIALIZER();
     struct Table *table = NULL;

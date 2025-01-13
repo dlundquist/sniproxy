@@ -51,7 +51,7 @@ struct LookupResult {
     int use_proxy_header;
 };
 
-struct Table *new_table();
+struct Table *new_table(void);
 int accept_table_arg(struct Table *, const char *);
 void add_table(struct Table_head *, struct Table *);
 struct Table *table_lookup(const struct Table_head *, const char *);

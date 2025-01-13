@@ -54,7 +54,7 @@ static pid_t binder_pid = -1;
 
 
 void
-start_binder() {
+start_binder(void) {
     int sockets[2];
 
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) < 0) {
@@ -129,7 +129,7 @@ bind_socket(const struct sockaddr *addr, size_t addr_len) {
 }
 
 void
-stop_binder() {
+stop_binder(void) {
     close(binder_sock);
 
     int status;

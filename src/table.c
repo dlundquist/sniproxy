@@ -49,7 +49,7 @@ remove_table_backend(struct Table *table, struct Backend *backend) {
 
 
 struct Table *
-new_table() {
+new_table(void) {
     struct Table *table;
 
     table = malloc(sizeof(struct Table));

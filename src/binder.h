@@ -28,8 +28,8 @@
 
 #include <sys/socket.h>
 
-void start_binder();
+void start_binder(void);
 int bind_socket(const struct sockaddr *, size_t);
-void stop_binder();
+void stop_binder(void);
 
 #endif

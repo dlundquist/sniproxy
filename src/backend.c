@@ -39,7 +39,7 @@ static const char *backend_config_options(const struct Backend *);
 
 
 struct Backend *
-new_backend() {
+new_backend(void) {
     struct Backend *backend;
 
     backend = calloc(1, sizeof(struct Backend));

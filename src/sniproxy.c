@@ -46,7 +46,7 @@
 #include "logger.h"
 
 
-static void usage();
+static void usage(void);
 static void daemonize(void);
 static void write_pidfile(const char *, pid_t);
 static void set_limits(rlim_t);
@@ -254,7 +254,7 @@ perror_exit(const char *msg) {
 }
 
 static void
-usage() {
+usage(void) {
     fprintf(stderr, "Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>] [-V]\n");
 }
 

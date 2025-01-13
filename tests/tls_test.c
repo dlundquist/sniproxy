@@ -421,7 +421,7 @@ static struct test_packet bad[] = {
     { (char *)bad_data_3, sizeof(bad_data_3) }
 };
 
-int main() {
+int main(void) {
     unsigned int i;
     int result;
     char *hostname;

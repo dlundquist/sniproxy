@@ -46,14 +46,14 @@ static int accept_pidfile(struct Config *, const char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
-static struct LoggerBuilder *new_logger_builder();
+static struct LoggerBuilder *new_logger_builder(void);
 static int accept_logger_filename(struct LoggerBuilder *, const char *);
 static int accept_logger_syslog_facility(struct LoggerBuilder *, const char *);
 static int accept_logger_priority(struct LoggerBuilder *, const char *);
 static int end_error_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_global_access_logger_stanza(struct Config *, struct LoggerBuilder *);
 static int end_listener_access_logger_stanza(struct Listener *, struct LoggerBuilder *);
-static struct ResolverConfig *new_resolver_config();
+static struct ResolverConfig *new_resolver_config(void);
 static int accept_resolver_nameserver(struct ResolverConfig *, const char *);
 static int accept_resolver_search(struct ResolverConfig *, const char *);
 static int accept_resolver_mode(struct ResolverConfig *, const char *);
@@ -127,7 +127,7 @@ static const struct Keyword listener_stanza_grammar[] = {
     },
     {
         .keyword="access_log",
-        .create=(void *(*)())new_logger_builder,
+        .create=(void *(*)(void))new_logger_builder,
         .parse_arg=(int(*)(void *, const char *))accept_logger_filename,
         .block_grammar=logger_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_listener_access_logger_stanza,
@@ -143,7 +143,7 @@ static const struct Keyword listener_stanza_grammar[] = {
 
 static struct Keyword table_stanza_grammar[] = {
     {
-        .create=(void *(*)())new_backend,
+        .create=(void *(*)(void))new_backend,
         .parse_arg=(int(*)(void *, const char *))accept_backend_arg,
         .finalize=(int(*)(void *, void *))end_backend,
     },
@@ -167,32 +167,32 @@ static struct Keyword global_grammar[] = {
     },
     {
         .keyword="resolver",
-        .create=(void *(*)())new_resolver_config,
+        .create=(void *(*)(void))new_resolver_config,
         .block_grammar=resolver_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_resolver_stanza,
     },
     {
         .keyword="error_log",
-        .create=(void *(*)())new_logger_builder,
+        .create=(void *(*)(void))new_logger_builder,
         .block_grammar=logger_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_error_logger_stanza,
     },
     {
         .keyword="access_log",
-        .create=(void *(*)())new_logger_builder,
+        .create=(void *(*)(void))new_logger_builder,
         .block_grammar=logger_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_global_access_logger_stanza,
     },
     {
         .keyword="listener",
-        .create=(void *(*)())new_listener,
+        .create=(void *(*)(void))new_listener,
         .parse_arg=(int(*)(void *, const char *))accept_listener_arg,
         .block_grammar=listener_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_listener_stanza,
     },
     {
         .keyword="table",
-        .create=(void *(*)())new_table,
+        .create=(void *(*)(void))new_table,
         .parse_arg=(int(*)(void *, const char *))accept_table_arg,
         .block_grammar=table_stanza_grammar,
         .finalize=(int(*)(void *, void *))end_table_stanza,
@@ -418,7 +418,7 @@ end_backend(struct Table *table, struct Backend *backend) {
 }
 
 static struct LoggerBuilder *
-new_logger_builder() {
+new_logger_builder(void) {
     struct LoggerBuilder *lb = malloc(sizeof(struct LoggerBuilder));
     if (lb == NULL) {
         err("%s: malloc", __func__);
@@ -563,7 +563,7 @@ end_listener_access_logger_stanza(struct Listener *listener, struct LoggerBuilde
 }
 
 static struct ResolverConfig *
-new_resolver_config() {
+new_resolver_config(void) {
     struct ResolverConfig *resolver = malloc(sizeof(struct ResolverConfig));
 
     if (resolver != NULL) {

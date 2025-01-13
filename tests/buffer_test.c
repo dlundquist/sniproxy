@@ -6,7 +6,7 @@
 #include <ev.h>
 #include "buffer.h"
 
-static void test1() {
+static void test1(void) {
     struct Buffer *buffer;
     char input[] = "This is a test.";
     char output[sizeof(input)];
@@ -45,7 +45,7 @@ static void test1() {
     free_buffer(buffer);
 }
 
-static void test2() {
+static void test2(void) {
     struct Buffer *buffer;
     char input[] = "Testing wrap around behaviour.";
     char output[sizeof(input)];
@@ -94,7 +94,7 @@ static void test2() {
     free_buffer(buffer);
 }
 
-static void test3() {
+static void test3(void) {
     struct Buffer *buffer;
     char input[] = "Test buffer resizing.";
     char output[sizeof(input)];
@@ -123,7 +123,7 @@ static void test3() {
     free_buffer(buffer);
 }
 
-static void test4() {
+static void test4(void) {
     struct Buffer *buffer;
     int read_fd, write_fd;
 
@@ -149,7 +149,7 @@ static void test4() {
     free_buffer(buffer);
 }
 
-static void test_buffer_coalesce() {
+static void test_buffer_coalesce(void) {
     struct Buffer *buffer;
     char input[] = "Test buffer resizing.";
     char output[sizeof(input)];
@@ -168,7 +168,7 @@ static void test_buffer_coalesce() {
     assert(len == 0);
 }
 
-int main() {
+int main(void) {
     test1();
 
     test2();

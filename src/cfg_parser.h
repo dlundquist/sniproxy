@@ -30,7 +30,7 @@
 
 struct Keyword {
     const char *const keyword;
-    void *(*const create)();
+    void *(*const create)(void);
     int (*const parse_arg)(void *, const char *);
     const struct Keyword *const block_grammar;
     int (*const finalize)(void *, void *);

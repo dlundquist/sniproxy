@@ -10,10 +10,10 @@
 
 static int test_binder(int);
 
-int main() {
+int main(void) {
     int i;
 
-    start_binder("binder_test");
+    start_binder();
     for (i = 8080; i <= 8084; i++)
         test_binder(i);
 

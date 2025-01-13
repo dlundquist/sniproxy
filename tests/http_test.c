@@ -45,7 +45,7 @@ static const char *bad[] = {
         "\r\n",
 };
 
-int main() {
+int main(void) {
     unsigned int i;
     int result;
     char *hostname;

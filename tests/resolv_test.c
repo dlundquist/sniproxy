@@ -9,7 +9,7 @@ static int query_count = 0;
 
 
 static void query_cb(struct Address *result, void *data) {
-    int *query_count = (int *)data;
+    (void)data; /* unused */
     char ip_buf[INET6_ADDRSTRLEN];
 
     if (result != NULL &&
@@ -35,7 +35,7 @@ timeout_cb(struct ev_loop *loop, struct ev_timer *w __attribute__((unused)), int
 }
 
 
-int main() {
+int main(void) {
     struct ev_loop *loop = EV_DEFAULT;
     struct ev_timer timeout_watcher;
     struct ev_timer init_watcher;

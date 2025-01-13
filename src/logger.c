@@ -60,13 +60,13 @@ static SLIST_HEAD(LogSink_head, LogSink) sinks = SLIST_HEAD_INITIALIZER(sinks);
 
 
 static void free_logger(struct Logger *);
-static void init_default_logger();
+static void init_default_logger(void);
 static void vlog_msg(struct Logger *, int, const char *, va_list);
-static void free_at_exit();
+static void free_at_exit(void);
 static int lookup_syslog_facility(const char *);
 static const char *timestamp(char *, size_t);
-static struct LogSink *obtain_stderr_sink();
-static struct LogSink *obtain_syslog_sink();
+static struct LogSink *obtain_stderr_sink(void);
+static struct LogSink *obtain_syslog_sink(void);
 static struct LogSink *obtain_file_sink(const char *);
 static struct LogSink *log_sink_ref_get(struct LogSink *);
 static void log_sink_ref_put(struct LogSink *);
@@ -112,7 +112,7 @@ new_file_logger(const char *filepath) {
 }
 
 void
-reopen_loggers() {
+reopen_loggers(void) {
     struct LogSink *sink;
 
     SLIST_FOREACH(sink, &sinks, entries) {
@@ -276,7 +276,7 @@ vlog_msg(struct Logger *logger, int priority, const char *format, va_list args) 
 }
 
 static void
-init_default_logger() {
+init_default_logger(void) {
     struct Logger *logger = NULL;
 
     if (default_logger != NULL)
@@ -305,7 +305,7 @@ init_default_logger() {
 }
 
 static void
-free_at_exit() {
+free_at_exit(void) {
     logger_ref_put(default_logger);
     default_logger = NULL;
 }
@@ -343,7 +343,7 @@ lookup_syslog_facility(const char *facility) {
 }
 
 static struct LogSink *
-obtain_stderr_sink() {
+obtain_stderr_sink(void) {
     struct LogSink *sink;
 
     SLIST_FOREACH(sink, &sinks, entries) {
@@ -365,7 +365,7 @@ obtain_stderr_sink() {
 }
 
 static struct LogSink *
-obtain_syslog_sink() {
+obtain_syslog_sink(void) {
     struct LogSink *sink;
 
     SLIST_FOREACH(sink, &sinks, entries) {

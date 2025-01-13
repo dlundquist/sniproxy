@@ -89,7 +89,7 @@ static void free_resolv_cb_data(struct resolv_cb_data *);
 
 
 void
-init_connections() {
+init_connections(void) {
     TAILQ_INIT(&connections);
 }
 
@@ -176,7 +176,7 @@ free_connections(struct ev_loop *loop) {
 
 /* dumps a list of all connections for debugging */
 void
-print_connections() {
+print_connections(void) {
     char filename[] = "/tmp/sniproxy-connections-XXXXXX";
 
     int fd = mkstemp(filename);

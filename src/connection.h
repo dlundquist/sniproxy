@@ -62,9 +62,9 @@ struct Connection {
     TAILQ_ENTRY(Connection) entries;
 };
 
-void init_connections();
+void init_connections(void);
 int accept_connection(struct Listener *, struct ev_loop *);
 void free_connections(struct ev_loop *);
-void print_connections();
+void print_connections(void);
 
 #endif

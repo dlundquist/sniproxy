@@ -202,7 +202,7 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
 }
 
 struct Listener *
-new_listener() {
+new_listener(void) {
     struct Listener *listener = calloc(1, sizeof(struct Listener));
     if (listener == NULL) {
         err("calloc");

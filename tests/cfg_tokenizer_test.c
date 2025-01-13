@@ -44,7 +44,7 @@ static struct Test tests[] = {
     { NULL, NULL, 0 } /* End of tests */
 };
 
-int main() {
+int main(void) {
     FILE *cfg;
     char buffer[256];
     enum Token token;
