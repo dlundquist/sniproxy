@@ -1,8 +1,15 @@
-sniproxy (0.6.1) UNRELEASED; urgency=medium
+sniproxy (0.7.0) unstable; urgency=medium
 
-  * New git revision
+  * Deprecate project
+  * Cleanup autoconf
+  * Require autoconf 2.71
+  * Require explicit --enable-dns for DNS resolution functionality
+  * Add support for libpcre2 as an alternative to the older libpcre3
+  * Relax HTTP header parsing to accept CRLF or plain LF
+  * Fix missing stdlib.h include
+  * Fix various warnings reported by gcc 14 and clang 19 compilers
 
- -- Dustin Lundquist <dustin@m3-debian12.overthere.org>  Thu, 14 Dec 2023 09:40:47 -0800
+ -- Dustin Lundquist <dustin@null-ptr.net>  Thu, 04 Sep 2025 16:37:25 -0700
 
 sniproxy (0.6.1) unstable; urgency=high
 

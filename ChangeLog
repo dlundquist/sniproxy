@@ -1,3 +1,15 @@
+2025-09-04  Dustin Lundquist <dustin@null-ptr.net>
+	0.7.0 Release
+
+	* Deprecate project
+	* Cleanup autoconf
+	* Require autoconf 2.71
+	* Require explicit --enable-dns for DNS resolution functionality
+	* Add support for libpcre2 as an alternative to the older libpcre3
+	* Relax HTTP header parsing to accept CRLF or plain LF
+	* Fix missing stdlib.h include
+	* Fix various warnings reported by gcc 14 and clang 19 compilers
+
 2023-03-16  Dustin Lundquist <dustin@null-ptr.net>
 	0.6.1 Release
 

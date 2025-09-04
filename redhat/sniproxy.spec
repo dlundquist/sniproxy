@@ -1,5 +1,5 @@
 Name: sniproxy
-Version: 0.6.1
+Version: 0.7.0
 Release: 1%{?dist}
 Summary: Transparent TLS and HTTP layer 4 proxy with SNI support
 
@@ -46,7 +46,17 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Thu Mar 16 2023 Dustin Lundquist <dustin@null-ptr.net 0.6.1-1
+* Thu Sep 4 2024 Dustin Lundquist <dustin@null-ptr.net> 0.7.0-1
+- Deprecate project
+- Cleanup autoconf
+- Require autoconf 2.71
+- Require explicit --enable-dns for DNS resolution functionality
+- Add support for libpcre2 as an alternative to the older libpcre3
+- Relax HTTP header parsing to accept CRLF or plain LF
+- Fix missing stdlib.h include
+- Fix various warnings reported by gcc 14 and clang 19 compilers
+
+* Thu Mar 16 2023 Dustin Lundquist <dustin@null-ptr.net> 0.6.1-1
 - Fix buffer overflow in address module
 - Fix tests
 

@@ -63,7 +63,7 @@ For Debian or Fedora based Linux distributions see building packages below.
 
 **Install**
 
-    ./autogen.sh && ./checonfigure --enable-dns && make check && sudo make install
+    ./autogen.sh && ./configure --enable-dns && make check && sudo make install
 
 **Building Debian/Ubuntu package**
 
