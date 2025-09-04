@@ -145,7 +145,7 @@ Protocol defines how the client request should be parsed to obtain the
 requested hostname, two protocols are supported http and tls.
 
 Reuseport directive controls if the port is opened in SO_REUSEPORT mode,
-which allows to run several sniproxy instances on the same ip:port pair.
+which allows one to run several sniproxy instances on the same ip:port pair.
 This enables us to evenly load-balance incoming connections between these instances
 without the use of any external load-balancing proxy. Requires Linux kernel 3.9+.
 Setting reuseport to "yes" enables this functionality.
