@@ -40,7 +40,7 @@ Features
 + Supports HAProxy proxy protocol to propagate original source address to
   back-end servers.
 
-Usage
+Usage: Binary
 -----
 
     Usage: sniproxy [-c <config>] [-f] [-n <max file descriptor limit>] [-V]
@@ -49,6 +49,16 @@ Usage
         -n  specify file descriptor limit
         -V  print the version of SNIProxy and exit
 
+Usage: Docker
+-----
+
+    docker build -t sniproxy .
+
+    docker run \
+        -it \
+        --network host \
+        --volume /etc/sniproxy.conf:/etc/sniproxy.conf:ro \
+        sniproxy:latest -c /etc/sniproxy.conf
 
 Installation
 ------------
