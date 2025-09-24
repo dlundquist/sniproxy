@@ -176,6 +176,10 @@ listener_update(struct Listener *existing_listener, struct Listener *new_listene
     existing_listener->source_address = new_listener->source_address;
     new_listener->source_address = NULL;
 
+    free(existing_listener->embed_address);
+    existing_listener->embed_address = new_listener->embed_address;
+    new_listener->embed_address = NULL;
+
     existing_listener->protocol = new_listener->protocol;
 
     free(existing_listener->table_name);
@@ -212,6 +216,7 @@ new_listener(void) {
     listener->address = NULL;
     listener->fallback_address = NULL;
     listener->source_address = NULL;
+    listener->embed_address = NULL;
     listener->protocol = tls_protocol;
     listener->table_name = NULL;
     listener->access_log = NULL;
@@ -401,6 +406,40 @@ accept_listener_source_address(struct Listener *listener, const char *source) {
         err("Source address on listener %s set to non zero port, "
                 "this prevents multiple connection to each backend server.",
                 display_address(listener->address, address, sizeof(address)));
+    }
+
+    return 1;
+}
+
+int
+accept_listener_embed_address(struct Listener *listener, const char *embed) {
+    if (listener->embed_address != NULL) {
+        err("Duplicate embed address: %s", embed);
+        return 0;
+    }
+
+    listener->embed_address = new_address(embed);
+    if (listener->embed_address == NULL) {
+        err("Unable to parse embed address: %s", embed);
+        return 0;
+    }
+    if (!address_is_sockaddr(listener->embed_address)) {
+        err("Only embed socket addresses permitted");
+        free(listener->embed_address);
+        listener->embed_address = NULL;
+        return 0;
+    }
+    if (address_sa(listener->embed_address)->sa_family != AF_INET6) {
+        err("Embed address must be IPv6 prefix");
+        free(listener->embed_address);
+        listener->embed_address = NULL;
+        return 0;
+    }
+    if (address_port(listener->embed_address) != 0) {
+        err("Port on embed address not permitted");
+        free(listener->embed_address);
+        listener->embed_address = NULL;
+        return 0;
     }
 
     return 1;
@@ -707,6 +746,11 @@ print_listener_config(FILE *file, const struct Listener *listener) {
                 display_address(listener->source_address,
                     address, sizeof(address)));
 
+    if (listener->embed_address)
+        fprintf(file, "\tembed %s\n",
+                display_address(listener->embed_address,
+                    address, sizeof(address)));
+
     if (listener->reuseport)
         fprintf(file, "\treuseport on\n");
 
@@ -732,6 +776,7 @@ free_listener(struct Listener *listener) {
     free(listener->address);
     free(listener->fallback_address);
     free(listener->source_address);
+    free(listener->embed_address);
     free(listener->table_name);
 
     table_ref_put(listener->table);

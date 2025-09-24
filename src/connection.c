@@ -657,6 +657,35 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
             abort_connection(con);
             return;
         }
+    } else if (con->listener->embed_address
+                && con->client.addr.ss_family == AF_INET
+                && con->server.addr.ss_family == AF_INET6) {
+        struct sockaddr_in6 embedded_source;
+#ifdef IP_FREEBIND
+        int on = 1;
+        int result = setsockopt(sockfd, SOL_IP, IP_FREEBIND, &on, sizeof(on));
+        if (result < 0) {
+            warn("setsockopt IP_FREEBIND failed: %s", strerror(errno));
+            // May not be necessary if user has set sysctl net.ipv6.ip_nonlocal_bind
+        }
+#else
+        int result = -EPERM;
+#endif
+
+        memcpy(&embedded_source,
+                address_sa(con->listener->embed_address),
+                sizeof(embedded_source));
+        memcpy(&(embedded_source.sin6_addr.s6_addr[12]),
+                &((struct sockaddr_in*)(&con->client.addr))->sin_addr, 4);
+        // XXX: maybe optionally the source port in bits 80-95
+
+        result = bind(sockfd, &embedded_source, sizeof(embedded_source));
+        if (result < 0) {
+            err("bind failed: %s", strerror(errno));
+            close(sockfd);
+            abort_connection(con);
+            return;
+        }
     } else if (con->listener->source_address) {
         int on = 1;
         int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));

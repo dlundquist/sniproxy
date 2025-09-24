@@ -126,6 +126,10 @@ static const struct Keyword listener_stanza_grammar[] = {
         .parse_arg=(int(*)(void *, const char *))accept_listener_source_address,
     },
     {
+        .keyword="embed",
+        .parse_arg=(int(*)(void *, const char *))accept_listener_embed_address,
+    },
+    {
         .keyword="access_log",
         .create=(void *(*)(void))new_logger_builder,
         .parse_arg=(int(*)(void *, const char *))accept_logger_filename,
