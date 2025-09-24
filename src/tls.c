@@ -201,7 +201,7 @@ parse_extensions(const uint8_t *data, size_t data_len, char **hostname) {
         /* Check if it's a server name extension */
         if (data[pos] == 0x00 && data[pos + 1] == 0x00) {
             /* There can be only one extension of each type, so we break
-               our state and move p to beinnging of the extension here */
+               our state and move p to beginning of the extension here */
             if (pos + 4 + len > data_len)
                 return -5;
             return parse_server_name_extension(data + pos + 4, len, hostname);
