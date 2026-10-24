@@ -217,6 +217,9 @@ resolv_query(const char *hostname, int mode,
 
 void
 resolv_cancel(struct ResolvQuery *query_handle) {
+    if (query_handle == NULL)
+        return;
+
     struct ResolvQuery *cb_data = (struct ResolvQuery *)query_handle;
     struct dns_ctx *ctx = (struct dns_ctx *)resolv_io_watcher.data;
 

@@ -464,7 +464,14 @@ valid_hostname(const char *hostname) {
         return 0;
 
     size_t hostname_len = strlen(hostname);
-    if (hostname_len < 1 || hostname_len > 255)
+    /*
+     * A domain name is at most 255 octets on the wire (RFC 1035 2.3.4),
+     * which is at most 253 characters in presentation form: the wire
+     * encoding carries a length octet for every label plus a zero octet
+     * for the root label, two more than the dots in the dotted text form.
+     * Longer names are refused by the resolver as malformed queries.
+     */
+    if (hostname_len < 1 || hostname_len > 253)
         return 0;
 
     if (hostname[0] == '.')

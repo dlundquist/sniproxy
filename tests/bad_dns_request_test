@@ -45,6 +45,16 @@ my $bad_requests = [
         request => "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
         client => \&http_client_abort,
     },
+    {
+        # Overlong (254 character) hostname to a wildcard DNS backend,
+        # with the client aborting before the query resolves (issue #411).
+        # The name is too long to encode as a <=255 octet DNS name, so the
+        # resolver refuses the query; an unpatched sniproxy left the
+        # connection in RESOLVING with a NULL query handle and crashed in
+        # resolv_cancel(NULL) when the client closed.
+        request => "GET / HTTP/1.1\r\nHost: " . ('a' x 63 . '.') x 3 . 'a' x 62 . "\r\n\r\n",
+        client => \&http_client_abort,
+    },
 ];
 
 sub http_client($$) {

@@ -551,6 +551,19 @@ resolve_server_address(struct Connection *con, struct ev_loop *loop) {
                 resolv_mode, resolv_cb,
                 (void (*)(void *))free_resolv_cb_data, cb_data);
 
+        if (con->query_handle == NULL) {
+            /*
+             * resolv_query() failed to submit the query (and has already
+             * run free_resolv_cb_data on cb_data). Do not enter RESOLVING
+             * with a NULL query_handle: close_client_socket() would then
+             * call resolv_cancel(NULL) and dereference it.
+             */
+            notice("unable to submit DNS query for %s, closing connection",
+                    address_hostname(result.address));
+            abort_connection(con);
+            return;
+        }
+
         con->state = RESOLVING;
 #endif
     } else if (address_is_sockaddr(result.address)) {
